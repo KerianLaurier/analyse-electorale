@@ -1,0 +1,57 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# data pipeline (sources brutes regénérables via scripts/pipeline/all.sh)
+/data/
+
+# Les données servies (public/tiles, public/electoral, public/insee,
+# public/sondages/notices.json, public/search-index.json) SONT commitées
+# pour que le déploiement fonctionne sans relancer le pipeline lourd
+# (tippecanoe/duckdb absents sur Vercel). Le workflow GitHub Action met à jour
+# notices.json quotidiennement. À migrer vers un object store (R2/S3) si le
+# repo devient trop lourd.
+
+# Maquettes design (référence, lourdes) — on garde TOKENS.md
+/design/*.html
+
+# Outils macOS
+.DS_Store

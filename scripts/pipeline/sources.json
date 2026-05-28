@@ -1,0 +1,83 @@
+{
+  "geo": {
+    "regions": {
+      "url": "https://france-geojson.gregoiredavid.fr/repo/regions.geojson",
+      "license": "ODbL — Grégoire David / OpenStreetMap",
+      "approx_size_mb": 0.5,
+      "tile_layer": "regions",
+      "minzoom": 0,
+      "maxzoom": 8
+    },
+    "departements": {
+      "url": "https://france-geojson.gregoiredavid.fr/repo/departements.geojson",
+      "license": "ODbL — Grégoire David / OpenStreetMap",
+      "approx_size_mb": 1,
+      "tile_layer": "departements",
+      "minzoom": 0,
+      "maxzoom": 9
+    },
+    "circonscriptions": {
+      "url": "https://static.data.gouv.fr/resources/contours-geographiques-des-circonscriptions-legislatives/20240613-191506/circonscriptions-legislatives-p20.geojson",
+      "license": "Licence Ouverte 2.0 — data.gouv.fr",
+      "approx_size_mb": 10,
+      "tile_layer": "circonscriptions",
+      "minzoom": 0,
+      "maxzoom": 11
+    },
+    "communes": {
+      "url": "https://france-geojson.gregoiredavid.fr/repo/communes.geojson",
+      "license": "ODbL — Grégoire David / OpenStreetMap",
+      "approx_size_mb": 22,
+      "tile_layer": "communes",
+      "minzoom": 6,
+      "maxzoom": 13
+    }
+  },
+  "insee": {
+    "filosofi_2021": {
+      "url": "https://www.insee.fr/fr/statistiques/fichier/7756729/base-cc-filosofi-2021-geo2025_csv.zip",
+      "format": "zip-csv-semicolon-utf8",
+      "level": "commune",
+      "approx_size_mb": 4.8,
+      "license": "Licence Ouverte 2.0 — INSEE",
+      "description": "Dispositif Filosofi : niveau de vie médian, taux de pauvreté, structure des revenus, par commune (millésime 2021, géo 2025)."
+    }
+  },
+  "electoral": {
+    "presidentielle_2022_t1": {
+      "url": "https://static.data.gouv.fr/resources/election-presidentielle-des-10-et-24-avril-2022-resultats-definitifs-du-1er-tour/20220414-152542/resultats-par-niveau-burvot-t1-france-entiere.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 36,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "presidentielle_2022_t2": {
+      "url": "https://static.data.gouv.fr/resources/election-presidentielle-des-10-et-24-avril-2022-resultats-definitifs-du-2nd-tour/20220428-142237/resultats-par-niveau-burvot-t2-france-entiere.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 13,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "legislatives_2024_t1_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-30-juin-et-7-juillet-2024-resultats-definitifs-du-1er-tour/20240710-171445/resultats-definitifs-par-bureau-de-vote.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "bureau",
+      "approx_size_mb": 37,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "legislatives_2024_t2_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-30-juin-et-7-juillet-2024-resultats-definitifs-du-2nd-tour/20240710-170658/resultats-definitifs-par-bureau-de-vote.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "bureau",
+      "approx_size_mb": 17,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "legislatives_2024_t1_circo": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-30-juin-et-7-juillet-2024-resultats-definitifs-du-1er-tour/20240710-171413/resultats-definitifs-par-circonscriptions-legislatives.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "circonscription",
+      "approx_size_mb": 0.4,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    }
+  }
+}

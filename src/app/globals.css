@@ -1,0 +1,258 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-surface-soft: var(--surface-soft);
+  --color-on-dark: var(--on-dark);
+
+  --font-sans: var(--font-geist-sans), "Geist", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+  --font-heading: var(--font-geist-sans), "Geist", system-ui, sans-serif;
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-warm: var(--warm);
+  --color-bloc-navy: var(--bloc-navy);
+  --color-bloc-red: var(--bloc-red);
+  --color-success: var(--success);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-xs: 6px;
+  --radius-sm: 7px;
+  --radius-md: 9px;
+  --radius-lg: 11px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(10, 10, 12, 0.04), 0 0 0 1px rgba(10, 10, 12, 0.08);
+  --shadow-floating:
+    0 24px 64px -16px rgba(10, 10, 12, 0.16),
+    0 6px 18px rgba(10, 10, 12, 0.06);
+  --shadow-ring: 0 0 0 1px rgba(0, 0, 0, 0.1);
+  --shadow-ring-strong:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 0 3px rgba(10, 10, 12, 0.1);
+}
+
+:root {
+  /* ── Surfaces & texte (MOUVANCIA v3 modern) ─────────────────────────────── */
+  --canvas: #f4f3ef;
+  --surface: #ffffff;
+  --surface-alt: #fafaf8;
+  --surface-soft: #eceae4;
+  --on-dark: #0a0a0c;
+
+  --background: var(--canvas);
+  --foreground: #0a0a0c;
+
+  --card: #ffffff;
+  --card-foreground: #0a0a0c;
+
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0c;
+
+  /* primary = noir profond (CTA, header pill) */
+  --primary: #0a0a0c;
+  --primary-foreground: #fafaf8;
+
+  --secondary: #eceae4;
+  --secondary-foreground: #1f1f23;
+
+  --muted: #eceae4;
+  --muted-foreground: #8a8a93;
+
+  --accent: #fafaf8;
+  --accent-foreground: #1f1f23;
+
+  /* Accent chaud MOUVANCIA */
+  --warm: #f0a020;
+
+  /* Couleurs politiques de référence */
+  --bloc-navy: #2c4978;
+  --bloc-red: #b0212b;
+  --success: #2b7748;
+
+  --destructive: #b0212b;
+
+  --border: #c8c8cc;
+  --input: #e8e6e0;
+  --ring: rgba(10, 10, 12, 0.18);
+
+  /* Chart palette neutre (data viz par défaut) */
+  --chart-1: #0a0a0c;
+  --chart-2: #2c4978;
+  --chart-3: #f0a020;
+  --chart-4: #b0212b;
+  --chart-5: #8a8a93;
+
+  --radius: 11px;
+
+  --sidebar: #fafaf8;
+  --sidebar-foreground: #0a0a0c;
+  --sidebar-primary: #0a0a0c;
+  --sidebar-primary-foreground: #fafaf8;
+  --sidebar-accent: #eceae4;
+  --sidebar-accent-foreground: #1f1f23;
+  --sidebar-border: #c8c8cc;
+  --sidebar-ring: rgba(10, 10, 12, 0.18);
+}
+
+.dark {
+  /* Dark mode neutre (à raffiner plus tard — pas dans les maquettes v3) */
+  --canvas: #0a0a0c;
+  --surface: #15151a;
+  --surface-alt: #1a1a20;
+  --surface-soft: #232329;
+  --on-dark: #fafaf8;
+
+  --background: var(--canvas);
+  --foreground: #fafaf8;
+
+  --card: #15151a;
+  --card-foreground: #fafaf8;
+
+  --popover: #15151a;
+  --popover-foreground: #fafaf8;
+
+  --primary: #fafaf8;
+  --primary-foreground: #0a0a0c;
+
+  --secondary: #232329;
+  --secondary-foreground: #fafaf8;
+
+  --muted: #232329;
+  --muted-foreground: #8a8a93;
+
+  --accent: #1a1a20;
+  --accent-foreground: #fafaf8;
+
+  --warm: #f0a020;
+  --bloc-navy: #6b8acc;
+  --bloc-red: #e8525c;
+  --success: #5dbb7f;
+
+  --destructive: #e8525c;
+
+  --border: rgba(250, 250, 248, 0.12);
+  --input: rgba(250, 250, 248, 0.16);
+  --ring: rgba(250, 250, 248, 0.18);
+
+  --chart-1: #fafaf8;
+  --chart-2: #6b8acc;
+  --chart-3: #f0a020;
+  --chart-4: #e8525c;
+  --chart-5: #8a8a93;
+
+  --sidebar: #15151a;
+  --sidebar-foreground: #fafaf8;
+  --sidebar-primary: #fafaf8;
+  --sidebar-primary-foreground: #0a0a0c;
+  --sidebar-accent: #232329;
+  --sidebar-accent-foreground: #fafaf8;
+  --sidebar-border: rgba(250, 250, 248, 0.12);
+  --sidebar-ring: rgba(250, 250, 248, 0.18);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  /* On force `font-family` au niveau racine pour s'assurer que Geist est bien
+     appliquée partout (les variables next/font sont posées sur <html>). */
+  html {
+    font-family: var(--font-geist-sans), "Geist", system-ui, -apple-system,
+      "Segoe UI", "Helvetica Neue", sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: inherit;
+    font-feature-settings:
+      "ss01" on,
+      "cv11" on; /* Geist tabular + alt 1 */
+  }
+  /* Mode focus (touche F) — masque le chrome pour soirée électorale / présentation. */
+  html.focus-mode header,
+  html.focus-mode aside.app-sidebar {
+    display: none !important;
+  }
+
+  /* ── Animations utiles ─────────────────────────────────────────────── */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-in-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-in-down {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .anim-fade-in { animation: fade-in 320ms cubic-bezier(.22,.61,.36,1) both; }
+  .anim-slide-up { animation: slide-in-up 360ms cubic-bezier(.22,.61,.36,1) both; }
+  .anim-slide-down { animation: slide-in-down 320ms cubic-bezier(.22,.61,.36,1) both; }
+  .anim-pop-in { animation: pop-in 200ms cubic-bezier(.22,.61,.36,1) both; }
+
+  /* Petit délai en cascade quand on stagger des cards */
+  .anim-stagger > * { opacity: 0; animation: slide-in-up 360ms cubic-bezier(.22,.61,.36,1) both; }
+  .anim-stagger > *:nth-child(1) { animation-delay:  40ms; }
+  .anim-stagger > *:nth-child(2) { animation-delay:  80ms; }
+  .anim-stagger > *:nth-child(3) { animation-delay: 120ms; }
+  .anim-stagger > *:nth-child(4) { animation-delay: 160ms; }
+  .anim-stagger > *:nth-child(5) { animation-delay: 200ms; }
+  .anim-stagger > *:nth-child(6) { animation-delay: 240ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .anim-fade-in,
+    .anim-slide-up,
+    .anim-slide-down,
+    .anim-pop-in,
+    .anim-stagger > * {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
+}
