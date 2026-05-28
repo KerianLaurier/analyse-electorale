@@ -41,7 +41,7 @@ import {
 //  Catégories de suivi
 // ═══════════════════════════════════════════════════════════════════════════
 
-const PER_PAGE = 20;
+const PER_PAGE = 12;
 
 /** Pagine un tableau ; reset à la page 0 quand le contenu change (filtres). */
 function usePaged<T>(items: T[]) {
@@ -130,6 +130,19 @@ const SCRUTIN_ORDER: ScrutinCode[] = [
   "presidentielle", "municipales", "legislatives", "europeennes",
   "regionales", "departementales", "senatoriales", "referendum", "autre",
 ];
+
+// Texte explicatif adapté à la nature du sondage (tous ne portent pas sur des
+// intentions de vote : baromètres de popularité, enquêtes thématiques…).
+const NATURE_BLURB: Record<string, string> = {
+  intentions:
+    "Sondage d'intentions de vote. Les pourcentages par candidat / liste figurent dans la notice PDF officielle (parsing automatique à venir).",
+  popularite:
+    "Baromètre de popularité / cotes de personnalités — il ne s'agit pas d'intentions de vote. Les cotes détaillées figurent dans la notice PDF.",
+  barometre:
+    "Baromètre politique (climat, confiance, image). Les indicateurs détaillés figurent dans la notice PDF.",
+  thematique:
+    "Enquête d'opinion thématique (sujet de société ou d'actualité). Les résultats détaillés figurent dans la notice PDF.",
+};
 
 function SondagesView() {
   const { data, isLoading, error } = useNotices();
@@ -226,19 +239,25 @@ function NoticeDetail({ notice }: { notice: Notice }) {
     <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
       <Breadcrumb parts={["Suivre", "Sondages", meta.label]} />
       <div>
-        <Pill color={meta.color} icon={Icon}>{meta.label}</Pill>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Pill color={meta.color} icon={Icon}>{meta.label}</Pill>
+          <span className="rounded-pill bg-surface-soft px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {notice.nature_label}
+          </span>
+        </div>
         <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">{notice.institut ?? "Institut non communiqué"}</h2>
         <p className="mt-1.5 text-[13px] text-foreground/80">{cleanLabel(notice)}</p>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <KPI label="Date de dépôt" value={notice.date ? formatDateFr(notice.date) : "—"} hint={relativeFr(notice.date)} icon={Calendar} />
         <KPI label="N° notice" value={notice.numero ?? "—"} hint="Registre CNCS" />
-        <KPI label="Institut" value={notice.institut ?? "n.c."} />
+        <KPI label="Institut" value={notice.institut ?? "n.c."} icon={Building2} />
+        <KPI label="Média / commanditaire" value={notice.media ?? "n.c."} />
       </div>
       <div className="rounded-md border border-dashed border-border bg-surface-alt/50 p-4">
-        <p className="text-[12px] font-medium">Intentions de vote</p>
+        <p className="text-[12px] font-medium">{notice.nature_label}</p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-          Les chiffres détaillés figurent dans la notice PDF officielle. Le parsing automatique des résultats sera ajouté progressivement.
+          {NATURE_BLURB[notice.nature]}
         </p>
         <a href={notice.pdf} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90">
           <ExternalLink className="h-3.5 w-3.5" /> Ouvrir la notice PDF
@@ -435,14 +454,25 @@ function LoiDetail({ loi }: { loi: Loi }) {
           {loi.type ?? (projet ? "Projet de loi" : "Proposition de loi")}
         </Pill>
         <h2 className="mt-2 text-[20px] font-semibold leading-tight tracking-tight">{loi.titre}</h2>
-        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-          Dernier acte législatif : {loi.date ? formatDateFr(loi.date) : "—"}
-        </p>
+        {loi.stade && (
+          <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-foreground/80">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: projet ? "#2c4978" : "#f0a020" }} />
+            Stade actuel : {loi.stade}
+          </p>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-2">
+        <KPI label="Déposé le" value={loi.date_depot ? formatDateFr(loi.date_depot) : "—"} icon={Calendar} />
+        <KPI label="Dernière activité" value={loi.date ? formatDateFr(loi.date) : "—"} hint={relativeFr(loi.date)} />
         <KPI label="Type" value={projet ? "Projet (gouv.)" : "Proposition (parl.)"} />
-        <KPI label="Dernière activité" value={relativeFr(loi.date)} />
+        <KPI label="Étapes législatives" value={String(loi.n_actes)} hint="actes enregistrés" />
       </div>
+      {loi.url && (
+        <a href={loi.url} target="_blank" rel="noopener noreferrer"
+          className="inline-flex w-fit items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90">
+          <ExternalLink className="h-3.5 w-3.5" /> Suivre le dossier sur l&apos;Assemblée
+        </a>
+      )}
       <SourceNote>Assemblée nationale — dossiers législatifs (17e législature).</SourceNote>
     </div>
   );

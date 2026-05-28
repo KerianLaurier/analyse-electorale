@@ -13,12 +13,17 @@ export type ScrutinCode =
   | "referendum"
   | "autre";
 
+export type NatureCode = "intentions" | "popularite" | "barometre" | "thematique";
+
 export type Notice = {
   numero: string | null;
   label: string;
   scrutin: ScrutinCode;
   scrutin_label: string;
   institut: string | null;
+  media: string | null;
+  nature: NatureCode;
+  nature_label: string;
   date: string | null;
   pdf: string;
 };

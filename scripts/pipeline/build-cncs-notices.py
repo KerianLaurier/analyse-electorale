@@ -71,6 +71,43 @@ MONTHS = {
     "septembre": 9, "octobre": 10, "novembre": 11, "décembre": 12, "decembre": 12,
 }
 
+# Médias / commanditaires courants (matching insensible à la casse, plus longs
+# en premier).
+MEDIAS = [
+    "Le Figaro Magazine", "La Tribune Dimanche", "Le Journal du Dimanche",
+    "Paris Match", "Le Figaro", "Le Monde", "Le Parisien", "Les Echos",
+    "La Tribune", "Le Point", "L'Express", "L'Obs", "L'Opinion", "Libération",
+    "Challenges", "Marianne", "La Croix", "Ouest-France", "Valeurs Actuelles",
+    "Huffpost", "JDD", "BFMTV", "BFM", "LCI", "RTL", "RMC", "CNews",
+    "Europe 1", "France Info", "France Inter", "France 2", "France 3",
+    "TF1", "Public Sénat", "Sud Radio", "20 Minutes",
+]
+
+# Mots-clés → nature du sondage (pour adapter l'affichage).
+NATURE_RULES: list[tuple[re.Pattern, str, str]] = [
+    (re.compile(r"intention|si le .*tour|\b1er tour\b|\b2nd tour\b|2e tour|second tour", re.I),
+     "intentions", "Intentions de vote"),
+    (re.compile(r"populari|personnalit|cote|confiance|stature|\bTBD\b|tableau de bord", re.I),
+     "popularite", "Cote de popularité"),
+    (re.compile(r"barom|observatoire", re.I),
+     "barometre", "Baromètre politique"),
+]
+
+
+def detect_media(label: str) -> str | None:
+    low = label.lower()
+    for m in MEDIAS:
+        if m.lower() in low:
+            return m
+    return None
+
+
+def detect_nature(label: str) -> tuple[str, str]:
+    for rx, code, lbl in NATURE_RULES:
+        if rx.search(label):
+            return code, lbl
+    return "thematique", "Enquête thématique"
+
 
 def classify(label: str) -> tuple[str, str]:
     for rx, code, name in SCRUTIN_RULES:
@@ -135,6 +172,8 @@ def main() -> int:
 
         scrutin_code, scrutin_name = classify(text)
         institut = detect_institut(text)
+        media = detect_media(text)
+        nature_code, nature_label = detect_nature(text)
 
         # Datation : les notices sont listées de la plus récente à la plus
         # ancienne → on décrémente l'année au passage d'une frontière de mois.
@@ -152,6 +191,9 @@ def main() -> int:
                 "scrutin": scrutin_code,
                 "scrutin_label": scrutin_name,
                 "institut": institut,
+                "media": media,
+                "nature": nature_code,
+                "nature_label": nature_label,
                 "date": iso,
                 "pdf": BASE + href,
             }

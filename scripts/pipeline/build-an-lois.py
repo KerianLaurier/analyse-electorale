@@ -24,24 +24,50 @@ OUT = ROOT / "public" / "suivi" / "lois.json"
 SRC_URL = "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/dossiers_legislatifs/Dossiers_Legislatifs.json.zip"
 KEEP = 150
 
-DATE_RX = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
+AN_DOSSIER_URL = "https://www.assemblee-nationale.fr/dyn/17/dossiers/{chemin}"
 
 
-def max_date(obj) -> str | None:
-    """Renvoie la date ISO maximale trouvée récursivement dans la structure."""
-    best: str | None = None
-    stack = [obj]
-    while stack:
-        cur = stack.pop()
-        if isinstance(cur, dict):
-            stack.extend(cur.values())
-        elif isinstance(cur, list):
-            stack.extend(cur)
-        elif isinstance(cur, str):
-            m = DATE_RX.match(cur)
-            if m and (best is None or cur[:10] > best):
-                best = cur[:10]
-    return best
+def walk_actes(node, out: list[tuple[str, str]]) -> None:
+    """Collecte (dateActe, libellé de stade) récursivement dans l'arbre d'actes."""
+    if node is None:
+        return
+    if isinstance(node, list):
+        for x in node:
+            walk_actes(x, out)
+        return
+    if not isinstance(node, dict):
+        return
+    # Un acte = a dateActe + libelleActe ; descendre dans actesLegislatifs imbriqués.
+    date = node.get("dateActe")
+    lib = node.get("libelleActe")
+    if date:
+        libelle = None
+        if isinstance(lib, dict):
+            libelle = lib.get("libelleCourt") or lib.get("nomCanonique")
+        out.append((date[:10], libelle or ""))
+    # Descente récursive (le conteneur peut être {acteLegislatif: ...} ou direct).
+    child = node.get("actesLegislatifs")
+    if isinstance(child, dict):
+        walk_actes(child.get("acteLegislatif"), out)
+    elif isinstance(child, list):
+        walk_actes(child, out)
+    # Cas racine : node lui-même est {acteLegislatif: ...}
+    if "acteLegislatif" in node:
+        walk_actes(node.get("acteLegislatif"), out)
+
+
+def analyse_actes(actes) -> dict:
+    out: list[tuple[str, str]] = []
+    walk_actes(actes, out)
+    if not out:
+        return {"date": None, "date_depot": None, "stade": None, "n_actes": 0}
+    out.sort(key=lambda x: x[0])
+    return {
+        "date": out[-1][0],           # acte le plus récent
+        "date_depot": out[0][0],      # premier acte
+        "stade": out[-1][1] or None,  # libellé du stade courant
+        "n_actes": len(out),
+    }
 
 
 def main() -> int:
@@ -65,28 +91,24 @@ def main() -> int:
                 dp = json.loads(z.read(name)).get("dossierParlementaire", {})
             except Exception:  # noqa: BLE001
                 continue
-            titre = (dp.get("titreDossier") or {}).get("titre")
+            titre_dossier = dp.get("titreDossier") or {}
+            titre = titre_dossier.get("titre")
             if not titre:
                 continue
             proc = dp.get("procedureParlementaire") or {}
-            initiateur = dp.get("initiateur") or {}
-            # Initiateur : peut contenir acteurs/organes ; on garde un libellé court.
-            init_txt = None
-            if isinstance(initiateur, dict):
-                acteurs = initiateur.get("acteurs")
-                if isinstance(acteurs, dict):
-                    acteurs = acteurs.get("acteur")
-                if isinstance(acteurs, list) and acteurs:
-                    init_txt = "Initiative parlementaire"
-                elif acteurs:
-                    init_txt = "Initiative parlementaire"
+            chemin = titre_dossier.get("titreChemin")
+            info = analyse_actes(dp.get("actesLegislatifs"))
             lois.append(
                 {
                     "uid": dp.get("uid"),
                     "titre": titre,
                     "type_code": proc.get("code"),
                     "type": proc.get("libelle"),
-                    "date": max_date(dp.get("actesLegislatifs")),
+                    "date": info["date"],
+                    "date_depot": info["date_depot"],
+                    "stade": info["stade"],
+                    "n_actes": info["n_actes"],
+                    "url": AN_DOSSIER_URL.format(chemin=chemin) if chemin else None,
                 }
             )
 

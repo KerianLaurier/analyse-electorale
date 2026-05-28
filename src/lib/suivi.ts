@@ -49,6 +49,10 @@ export type Loi = {
   type_code: string | null;
   type: string | null;
   date: string | null;
+  date_depot: string | null;
+  stade: string | null;
+  n_actes: number;
+  url: string | null;
 };
 
 export type LoisData = {
