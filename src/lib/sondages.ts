@@ -83,10 +83,16 @@ export function relativeFr(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const days = Math.round((Date.now() - d.getTime()) / 86_400_000);
-  if (days <= 0) return "aujourd'hui";
-  if (days === 1) return "hier";
-  if (days < 31) return `il y a ${days} j`;
-  const months = Math.round(days / 30);
-  if (months < 12) return `il y a ${months} mois`;
-  return `il y a ${Math.round(months / 12)} an(s)`;
+  if (days === 0) return "aujourd'hui";
+
+  // Passé vs futur
+  const future = days < 0;
+  const n = Math.abs(days);
+  const fmt = (val: string) => (future ? `dans ${val}` : `il y a ${val}`);
+
+  if (n === 1) return future ? "demain" : "hier";
+  if (n < 31) return fmt(`${n} j`);
+  const months = Math.round(n / 30);
+  if (months < 12) return fmt(`${months} mois`);
+  return fmt(`${Math.round(months / 12)} an(s)`);
 }

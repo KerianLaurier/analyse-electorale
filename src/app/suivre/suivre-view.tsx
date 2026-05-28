@@ -3,15 +3,19 @@
 import { useMemo, useState } from "react";
 import {
   BarChart3,
-  Landmark,
-  Building2,
   Vote,
-  Flag,
+  FileText,
+  CalendarDays,
   Search,
   Loader2,
   ExternalLink,
-  FileText,
+  Building2,
   Calendar,
+  Flag,
+  Landmark,
+  CheckCircle2,
+  XCircle,
+  MinusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -22,8 +26,72 @@ import {
   type Notice,
   type ScrutinCode,
 } from "@/lib/sondages";
+import {
+  useVotesAN,
+  useLois,
+  useAgenda,
+  type VoteAN,
+  type Loi,
+  type AgendaEvent,
+} from "@/lib/suivi";
 
-// ─── Métadonnées scrutins ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+//  Catégories de suivi
+// ═══════════════════════════════════════════════════════════════════════════
+
+type Category = "sondages" | "votes" | "lois" | "agenda";
+
+const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
+  { id: "sondages", label: "Sondages", icon: BarChart3 },
+  { id: "votes", label: "Votes AN", icon: Vote },
+  { id: "lois", label: "Lois & PPL", icon: FileText },
+  { id: "agenda", label: "Agenda", icon: CalendarDays },
+];
+
+export function SuivreView() {
+  const [category, setCategory] = useState<Category>("sondages");
+
+  return (
+    <div className="flex h-full w-full min-h-0 min-w-0 flex-1 gap-3 overflow-hidden bg-canvas p-3">
+      {/* Rail catégories (commun) */}
+      <nav className="flex w-[180px] shrink-0 flex-col gap-1 rounded-lg bg-surface p-3 shadow-card">
+        <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          Suivi
+        </p>
+        {CATEGORIES.map((c) => {
+          const Icon = c.icon;
+          const active = category === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCategory(c.id)}
+              className={cn(
+                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : "text-foreground/70 hover:bg-surface-soft hover:text-foreground",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {c.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Contenu par catégorie */}
+      {category === "sondages" && <SondagesView />}
+      {category === "votes" && <VotesView />}
+      {category === "lois" && <LoisView />}
+      {category === "agenda" && <AgendaView />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SONDAGES (notices CNCS)
+// ═══════════════════════════════════════════════════════════════════════════
 
 const SCRUTIN_META: Record<
   ScrutinCode,
@@ -39,25 +107,14 @@ const SCRUTIN_META: Record<
   referendum: { label: "Référendum", icon: Vote, color: "#16a34a" },
   autre: { label: "Autre / popularité", icon: BarChart3, color: "#8a8a93" },
 };
-
-// Ordre d'affichage des scrutins dans la sidebar.
 const SCRUTIN_ORDER: ScrutinCode[] = [
-  "presidentielle",
-  "municipales",
-  "legislatives",
-  "europeennes",
-  "regionales",
-  "departementales",
-  "senatoriales",
-  "referendum",
-  "autre",
+  "presidentielle", "municipales", "legislatives", "europeennes",
+  "regionales", "departementales", "senatoriales", "referendum", "autre",
 ];
 
-type ScrutinFilter = "all" | ScrutinCode;
-
-export function SuivreView() {
+function SondagesView() {
   const { data, isLoading, error } = useNotices();
-  const [scrutin, setScrutin] = useState<ScrutinFilter>("all");
+  const [scrutin, setScrutin] = useState<"all" | ScrutinCode>("all");
   const [institut, setInstitut] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -67,17 +124,12 @@ export function SuivreView() {
   const scrutinsPresent = useMemo(() => {
     const counts = new Map<ScrutinCode, number>();
     for (const n of notices) counts.set(n.scrutin, (counts.get(n.scrutin) ?? 0) + 1);
-    return SCRUTIN_ORDER.filter((s) => counts.has(s)).map((s) => ({
-      code: s,
-      count: counts.get(s) ?? 0,
-    }));
+    return SCRUTIN_ORDER.filter((s) => counts.has(s)).map((s) => ({ code: s, count: counts.get(s) ?? 0 }));
   }, [notices]);
 
   const instituts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const n of notices) {
-      if (n.institut) m.set(n.institut, (m.get(n.institut) ?? 0) + 1);
-    }
+    for (const n of notices) if (n.institut) m.set(n.institut, (m.get(n.institut) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [notices]);
 
@@ -86,334 +138,522 @@ export function SuivreView() {
     return notices.filter((n) => {
       if (scrutin !== "all" && n.scrutin !== scrutin) return false;
       if (institut && n.institut !== institut) return false;
-      if (q) {
-        const hay = `${n.label} ${n.institut ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
+      if (q && !`${n.label} ${n.institut ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [notices, scrutin, institut, query]);
 
-  const selected = useMemo(() => {
-    if (selectedId) return notices.find((n) => n.pdf === selectedId) ?? null;
-    return items[0] ?? null;
-  }, [selectedId, notices, items]);
+  const selected = useMemo(
+    () => (selectedId ? notices.find((n) => n.pdf === selectedId) : items[0]) ?? null,
+    [selectedId, notices, items],
+  );
 
   return (
-    <div className="flex h-full w-full min-h-0 min-w-0 flex-1 gap-3 overflow-hidden bg-canvas p-3">
-      {/* ── Sidebar ── */}
-      <aside className="flex w-[268px] shrink-0 flex-col gap-5 overflow-y-auto rounded-lg bg-surface p-4 text-[13px] shadow-card">
-        <div className="flex h-8 items-center gap-2 rounded-md border border-border/80 bg-surface px-2 text-[12px] focus-within:border-foreground/30">
-          <Search className="h-3.5 w-3.5 text-muted-foreground" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filtrer (sujet, institut)…"
-            className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/70"
-          />
-        </div>
-
-        <section>
-          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Scrutins
-          </p>
-          <div className="-mx-1 mt-3 flex flex-col gap-0.5">
-            <button
-              type="button"
-              onClick={() => setScrutin("all")}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
-                scrutin === "all"
-                  ? "bg-surface-soft text-foreground"
-                  : "text-foreground/70 hover:bg-surface-soft hover:text-foreground",
-              )}
-            >
-              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="flex-1 font-medium">Tous les sondages</span>
-              <span className="text-[11px] text-muted-foreground tabular-nums">
-                {notices.length}
-              </span>
-            </button>
-            {scrutinsPresent.map(({ code, count }) => {
-              const meta = SCRUTIN_META[code];
-              const Icon = meta.icon;
-              const active = scrutin === code;
-              return (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setScrutin(code)}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
-                    active
-                      ? "bg-surface-soft text-foreground"
-                      : "text-foreground/70 hover:bg-surface-soft hover:text-foreground",
-                  )}
-                >
-                  <Icon
-                    className="h-3.5 w-3.5"
-                    style={{ color: meta.color }}
-                  />
-                  <span className="flex-1 font-medium">{meta.label}</span>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
+    <>
+      <FilterSidebar>
+        <SearchBox value={query} onChange={setQuery} placeholder="Filtrer (sujet, institut)…" />
+        <FilterSection label="Scrutins">
+          <FilterRow active={scrutin === "all"} label="Tous les sondages" count={notices.length} icon={FileText} onClick={() => setScrutin("all")} />
+          {scrutinsPresent.map(({ code, count }) => {
+            const meta = SCRUTIN_META[code];
+            return <FilterRow key={code} active={scrutin === code} label={meta.label} count={count} icon={meta.icon} color={meta.color} onClick={() => setScrutin(code)} />;
+          })}
+        </FilterSection>
         {instituts.length > 0 && (
-          <section>
-            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-              Instituts
-            </p>
-            <div className="-mx-1 mt-3 flex flex-col gap-0.5">
-              <button
-                type="button"
-                onClick={() => setInstitut(null)}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
-                  institut === null
-                    ? "bg-surface-soft text-foreground"
-                    : "text-foreground/70 hover:bg-surface-soft hover:text-foreground",
-                )}
-              >
-                <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="flex-1 font-medium">Tous les instituts</span>
-              </button>
-              {instituts.map(([name, n]) => (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setInstitut(institut === name ? null : name)}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
-                    institut === name
-                      ? "bg-surface-soft text-foreground"
-                      : "text-foreground/70 hover:bg-surface-soft hover:text-foreground",
-                  )}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-border" />
-                  <span className="flex-1 truncate font-medium">{name}</span>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {n}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-      </aside>
-
-      {/* ── Liste ── */}
-      <section className="flex w-[400px] shrink-0 flex-col overflow-hidden rounded-lg bg-surface shadow-card">
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/60 px-4">
-          <div className="flex flex-col leading-tight">
-            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-              Commission des sondages
-            </p>
-            <p className="text-[13px] font-medium">
-              {scrutin === "all"
-                ? "Toutes les notices"
-                : SCRUTIN_META[scrutin].label}{" "}
-              · {items.length}
-            </p>
-          </div>
-          {data?.generated_at && (
-            <span className="ml-auto text-[10.5px] text-muted-foreground">
-              maj {relativeFr(data.generated_at)}
-            </span>
-          )}
-        </header>
-
-        {isLoading ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-[12px] text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement des notices…
-          </div>
-        ) : error ? (
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-[12px] text-destructive">
-            Erreur de chargement des notices CNCS.
-          </div>
-        ) : (
-          <ul className="anim-stagger flex-1 divide-y divide-border/40 overflow-y-auto">
-            {items.map((notice) => (
-              <NoticeRow
-                key={notice.pdf}
-                notice={notice}
-                active={selected?.pdf === notice.pdf}
-                onClick={() => setSelectedId(notice.pdf)}
-              />
+          <FilterSection label="Instituts">
+            <FilterRow active={institut === null} label="Tous les instituts" icon={Building2} onClick={() => setInstitut(null)} />
+            {instituts.map(([name, n]) => (
+              <FilterRow key={name} active={institut === name} label={name} count={n} dot onClick={() => setInstitut(institut === name ? null : name)} />
             ))}
-            {items.length === 0 && (
-              <li className="px-4 py-8 text-center text-[12px] text-muted-foreground">
-                Aucune notice.
-              </li>
-            )}
-          </ul>
+          </FilterSection>
         )}
-      </section>
+      </FilterSidebar>
 
-      {/* ── Détail ── */}
-      <section
-        key={selected?.pdf ?? "empty"}
-        className="anim-fade-in flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-card"
+      <ListColumn
+        eyebrow={`${data?.source ?? "Commission des sondages"}`}
+        title={`${scrutin === "all" ? "Toutes les notices" : SCRUTIN_META[scrutin].label} · ${items.length}`}
+        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined}
+        loading={isLoading}
+        error={!!error}
       >
-        {selected ? (
-          <NoticeDetail notice={selected} />
-        ) : (
-          <div className="grid h-full place-items-center text-[12px] text-muted-foreground">
-            Sélectionne une notice pour ouvrir le détail.
-          </div>
-        )}
-      </section>
-    </div>
+        {items.map((notice) => (
+          <NoticeRow key={notice.pdf} notice={notice} active={selected?.pdf === notice.pdf} onClick={() => setSelectedId(notice.pdf)} />
+        ))}
+        {!isLoading && items.length === 0 && <EmptyRow />}
+      </ListColumn>
+
+      <DetailColumn k={selected?.pdf}>
+        {selected ? <NoticeDetail notice={selected} /> : <DetailEmpty label="une notice" />}
+      </DetailColumn>
+    </>
   );
 }
 
-// ─── Ligne de notice ───────────────────────────────────────────────────────
-
-function NoticeRow({
-  notice,
-  active,
-  onClick,
-}: {
-  notice: Notice;
-  active: boolean;
-  onClick: () => void;
-}) {
+function NoticeRow({ notice, active, onClick }: { notice: Notice; active: boolean; onClick: () => void }) {
   const meta = SCRUTIN_META[notice.scrutin];
   const Icon = meta.icon;
   return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors",
-          active ? "bg-surface-soft/70" : "hover:bg-surface-soft/40",
-        )}
-      >
-        <span
-          className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md"
-          style={{ background: `${meta.color}1a`, color: meta.color }}
-        >
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="truncate text-[13px] font-medium">
-              {notice.institut ?? "Institut n.c."}
-            </p>
-            <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
-              {relativeFr(notice.date)}
-            </span>
-          </div>
-          <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
-            {cleanLabel(notice)}
-          </p>
-        </div>
-      </button>
-    </li>
+    <FeedItem active={active} onClick={onClick} iconColor={meta.color} icon={Icon}
+      title={notice.institut ?? "Institut n.c."} time={relativeFr(notice.date)} subtitle={cleanLabel(notice)} />
   );
 }
-
-// ─── Détail de notice ──────────────────────────────────────────────────────
 
 function NoticeDetail({ notice }: { notice: Notice }) {
   const meta = SCRUTIN_META[notice.scrutin];
   const Icon = meta.icon;
   return (
     <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
-      <p className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        Suivre <span className="mx-1.5 text-muted-foreground/50">/</span> Sondages{" "}
-        <span className="mx-1.5 text-muted-foreground/50">/</span>{" "}
-        {meta.label}
-      </p>
-
+      <Breadcrumb parts={["Suivre", "Sondages", meta.label]} />
       <div>
-        <span
-          className="inline-flex items-center gap-1.5 rounded-pill px-2 py-0.5 text-[11px] font-medium"
-          style={{ background: `${meta.color}1a`, color: meta.color }}
-        >
-          <Icon className="h-3 w-3" /> {meta.label}
-        </span>
-        <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">
-          {notice.institut ?? "Institut non communiqué"}
-        </h2>
+        <Pill color={meta.color} icon={Icon}>{meta.label}</Pill>
+        <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">{notice.institut ?? "Institut non communiqué"}</h2>
         <p className="mt-1.5 text-[13px] text-foreground/80">{cleanLabel(notice)}</p>
       </div>
-
       <div className="grid grid-cols-3 gap-2">
-        <DetailKPI
-          label="Date de dépôt"
-          value={notice.date ? formatDateFr(notice.date) : "—"}
-          hint={relativeFr(notice.date)}
-          icon={Calendar}
-        />
-        <DetailKPI
-          label="N° notice"
-          value={notice.numero ?? "—"}
-          hint="Registre CNCS"
-        />
-        <DetailKPI
-          label="Institut"
-          value={notice.institut ?? "n.c."}
-          hint={null}
-        />
+        <KPI label="Date de dépôt" value={notice.date ? formatDateFr(notice.date) : "—"} hint={relativeFr(notice.date)} icon={Calendar} />
+        <KPI label="N° notice" value={notice.numero ?? "—"} hint="Registre CNCS" />
+        <KPI label="Institut" value={notice.institut ?? "n.c."} />
       </div>
-
       <div className="rounded-md border border-dashed border-border bg-surface-alt/50 p-4">
         <p className="text-[12px] font-medium">Intentions de vote</p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-          Les chiffres détaillés figurent dans la notice PDF officielle. Le
-          parsing automatique des résultats (par institut) sera ajouté
-          progressivement.
+          Les chiffres détaillés figurent dans la notice PDF officielle. Le parsing automatique des résultats sera ajouté progressivement.
         </p>
-        <a
-          href={notice.pdf}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          Ouvrir la notice PDF
+        <a href={notice.pdf} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90">
+          <ExternalLink className="h-3.5 w-3.5" /> Ouvrir la notice PDF
         </a>
       </div>
-
-      <p className="text-[10.5px] text-muted-foreground/70">
-        Source : Commission des sondages — registre public des notices. Mise à
-        jour quotidienne automatique.
-      </p>
+      <SourceNote>Commission des sondages — registre public. Mise à jour quotidienne automatique.</SourceNote>
     </div>
   );
 }
 
-function DetailKPI({
-  label,
-  value,
-  hint,
-  icon: Icon,
+// ═══════════════════════════════════════════════════════════════════════════
+//  VOTES AN
+// ═══════════════════════════════════════════════════════════════════════════
+
+function VotesView() {
+  const { data, isLoading, error } = useVotesAN();
+  const [sortFilter, setSortFilter] = useState<"all" | "adopte" | "rejete">("all");
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const votes = data?.votes ?? [];
+  const items = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return votes.filter((v) => {
+      const isAdopte = (v.sort ?? "").toLowerCase().includes("adopt");
+      if (sortFilter === "adopte" && !isAdopte) return false;
+      if (sortFilter === "rejete" && isAdopte) return false;
+      if (q && !(v.titre ?? "").toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [votes, sortFilter, query]);
+
+  const selected = useMemo(
+    () => (selectedId ? votes.find((v) => v.numero === selectedId) : items[0]) ?? null,
+    [selectedId, votes, items],
+  );
+
+  return (
+    <>
+      <FilterSidebar>
+        <SearchBox value={query} onChange={setQuery} placeholder="Filtrer un scrutin…" />
+        <FilterSection label="Issue du vote">
+          <FilterRow active={sortFilter === "all"} label="Tous" count={votes.length} icon={Vote} onClick={() => setSortFilter("all")} />
+          <FilterRow active={sortFilter === "adopte"} label="Adoptés" icon={CheckCircle2} color="#2b7748" onClick={() => setSortFilter("adopte")} />
+          <FilterRow active={sortFilter === "rejete"} label="Rejetés" icon={XCircle} color="#b0212b" onClick={() => setSortFilter("rejete")} />
+        </FilterSection>
+      </FilterSidebar>
+
+      <ListColumn eyebrow="Assemblée nationale · 17e lég." title={`Scrutins publics · ${items.length}`}
+        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}>
+        {items.map((v) => <VoteRow key={v.numero} vote={v} active={selected?.numero === v.numero} onClick={() => setSelectedId(v.numero)} />)}
+        {!isLoading && items.length === 0 && <EmptyRow />}
+      </ListColumn>
+
+      <DetailColumn k={selected?.numero}>
+        {selected ? <VoteDetail vote={selected} /> : <DetailEmpty label="un scrutin" />}
+      </DetailColumn>
+    </>
+  );
+}
+
+function voteAdopted(v: VoteAN): boolean {
+  return (v.sort ?? "").toLowerCase().includes("adopt");
+}
+
+function VoteRow({ vote, active, onClick }: { vote: VoteAN; active: boolean; onClick: () => void }) {
+  const adopted = voteAdopted(vote);
+  return (
+    <FeedItem active={active} onClick={onClick}
+      icon={adopted ? CheckCircle2 : XCircle} iconColor={adopted ? "#2b7748" : "#b0212b"}
+      title={vote.sort_libelle ?? (adopted ? "Adopté" : "Rejeté")}
+      time={relativeFr(vote.date)}
+      subtitle={vote.titre ?? "—"} />
+  );
+}
+
+function VoteDetail({ vote }: { vote: VoteAN }) {
+  const adopted = voteAdopted(vote);
+  const total = Math.max(vote.pour + vote.contre + vote.abstentions, 1);
+  return (
+    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+      <Breadcrumb parts={["Suivre", "Votes AN", `Scrutin n°${vote.numero}`]} />
+      <div>
+        <Pill color={adopted ? "#2b7748" : "#b0212b"} icon={adopted ? CheckCircle2 : XCircle}>
+          {vote.sort_libelle ?? (adopted ? "Adopté" : "Rejeté")}
+        </Pill>
+        <h2 className="mt-2 text-[20px] font-semibold leading-tight tracking-tight">{vote.titre}</h2>
+        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+          {formatDateFr(vote.date)} · {vote.type ?? "scrutin public"}
+          {vote.demandeur ? ` · ${vote.demandeur}` : ""}
+        </p>
+      </div>
+
+      {/* Barre pour/contre/abstention */}
+      <div>
+        <div className="flex h-3 overflow-hidden rounded-pill">
+          <div style={{ width: `${(vote.pour / total) * 100}%`, background: "#2b7748" }} />
+          <div style={{ width: `${(vote.contre / total) * 100}%`, background: "#b0212b" }} />
+          <div style={{ width: `${(vote.abstentions / total) * 100}%`, background: "#c8c8cc" }} />
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <KPI label="Pour" value={String(vote.pour)} icon={CheckCircle2} />
+          <KPI label="Contre" value={String(vote.contre)} icon={XCircle} />
+          <KPI label="Abstentions" value={String(vote.abstentions)} icon={MinusCircle} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <KPI label="Votants" value={String(vote.votants)} />
+        <KPI label="Exprimés" value={String(vote.exprimes)} />
+      </div>
+
+      <SourceNote>Assemblée nationale — open data officiel (17e législature).</SourceNote>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  LOIS & PPL
+// ═══════════════════════════════════════════════════════════════════════════
+
+function LoisView() {
+  const { data, isLoading, error } = useLois();
+  const [typeFilter, setTypeFilter] = useState<"all" | "projet" | "proposition">("all");
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const lois = data?.lois ?? [];
+  const items = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return lois.filter((l) => {
+      const t = (l.type ?? "").toLowerCase();
+      if (typeFilter === "projet" && !t.includes("projet")) return false;
+      if (typeFilter === "proposition" && !t.includes("proposition")) return false;
+      if (q && !l.titre.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [lois, typeFilter, query]);
+
+  const selected = useMemo(
+    () => (selectedId ? lois.find((l) => l.uid === selectedId) : items[0]) ?? null,
+    [selectedId, lois, items],
+  );
+
+  return (
+    <>
+      <FilterSidebar>
+        <SearchBox value={query} onChange={setQuery} placeholder="Filtrer un texte…" />
+        <FilterSection label="Type de texte">
+          <FilterRow active={typeFilter === "all"} label="Tous" count={lois.length} icon={FileText} onClick={() => setTypeFilter("all")} />
+          <FilterRow active={typeFilter === "projet"} label="Projets de loi (gouv.)" icon={Landmark} color="#2c4978" onClick={() => setTypeFilter("projet")} />
+          <FilterRow active={typeFilter === "proposition"} label="Propositions (parl.)" icon={FileText} color="#f0a020" onClick={() => setTypeFilter("proposition")} />
+        </FilterSection>
+      </FilterSidebar>
+
+      <ListColumn eyebrow="Assemblée nationale · 17e lég." title={`Dossiers législatifs · ${items.length}`}
+        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}>
+        {items.map((l) => <LoiRow key={l.uid} loi={l} active={selected?.uid === l.uid} onClick={() => setSelectedId(l.uid)} />)}
+        {!isLoading && items.length === 0 && <EmptyRow />}
+      </ListColumn>
+
+      <DetailColumn k={selected?.uid}>
+        {selected ? <LoiDetail loi={selected} /> : <DetailEmpty label="un texte" />}
+      </DetailColumn>
+    </>
+  );
+}
+
+function isProjet(l: Loi): boolean {
+  return (l.type ?? "").toLowerCase().includes("projet");
+}
+
+function LoiRow({ loi, active, onClick }: { loi: Loi; active: boolean; onClick: () => void }) {
+  const projet = isProjet(loi);
+  return (
+    <FeedItem active={active} onClick={onClick}
+      icon={projet ? Landmark : FileText} iconColor={projet ? "#2c4978" : "#f0a020"}
+      title={projet ? "Projet de loi" : "Proposition de loi"}
+      time={relativeFr(loi.date)} subtitle={loi.titre} />
+  );
+}
+
+function LoiDetail({ loi }: { loi: Loi }) {
+  const projet = isProjet(loi);
+  return (
+    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+      <Breadcrumb parts={["Suivre", "Lois & PPL", projet ? "Projet de loi" : "Proposition de loi"]} />
+      <div>
+        <Pill color={projet ? "#2c4978" : "#f0a020"} icon={projet ? Landmark : FileText}>
+          {loi.type ?? (projet ? "Projet de loi" : "Proposition de loi")}
+        </Pill>
+        <h2 className="mt-2 text-[20px] font-semibold leading-tight tracking-tight">{loi.titre}</h2>
+        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+          Dernier acte législatif : {loi.date ? formatDateFr(loi.date) : "—"}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <KPI label="Type" value={projet ? "Projet (gouv.)" : "Proposition (parl.)"} />
+        <KPI label="Dernière activité" value={relativeFr(loi.date)} />
+      </div>
+      <SourceNote>Assemblée nationale — dossiers législatifs (17e législature).</SourceNote>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AGENDA
+// ═══════════════════════════════════════════════════════════════════════════
+
+const AGENDA_TYPE_COLOR: Record<string, string> = {
+  scrutin: "#f0a020",
+  echeance: "#2c4978",
+  campagne: "#16a34a",
+};
+
+function AgendaView() {
+  const { data, isLoading, error } = useAgenda();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const events = data?.evenements ?? [];
+  const selected = useMemo(
+    () => (selectedId ? events.find((e) => e.date + e.titre === selectedId) : events.find((e) => !e.passe) ?? events[0]) ?? null,
+    [selectedId, events],
+  );
+
+  return (
+    <>
+      <FilterSidebar>
+        <FilterSection label="Légende">
+          <LegendRow color={AGENDA_TYPE_COLOR.scrutin} label="Scrutin" />
+          <LegendRow color={AGENDA_TYPE_COLOR.echeance} label="Échéance" />
+          <LegendRow color={AGENDA_TYPE_COLOR.campagne} label="Campagne" />
+        </FilterSection>
+      </FilterSidebar>
+
+      <ListColumn eyebrow="Calendrier électoral" title={`Échéances · ${events.length}`}
+        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}>
+        {events.map((e) => (
+          <AgendaRow key={e.date + e.titre} event={e} active={selected?.date + (selected?.titre ?? "") === e.date + e.titre} onClick={() => setSelectedId(e.date + e.titre)} />
+        ))}
+        {!isLoading && events.length === 0 && <EmptyRow />}
+      </ListColumn>
+
+      <DetailColumn k={selected ? selected.date + selected.titre : undefined}>
+        {selected ? <AgendaDetail event={selected} /> : <DetailEmpty label="une échéance" />}
+      </DetailColumn>
+    </>
+  );
+}
+
+function AgendaRow({ event, active, onClick }: { event: AgendaEvent; active: boolean; onClick: () => void }) {
+  const color = AGENDA_TYPE_COLOR[event.type] ?? "#8a8a93";
+  return (
+    <FeedItem active={active} onClick={onClick} icon={CalendarDays} iconColor={color}
+      title={event.titre} time={event.passe ? "passé" : relativeFr(event.date)}
+      subtitle={formatDateFr(event.date)} dim={event.passe} />
+  );
+}
+
+function AgendaDetail({ event }: { event: AgendaEvent }) {
+  const color = AGENDA_TYPE_COLOR[event.type] ?? "#8a8a93";
+  return (
+    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+      <Breadcrumb parts={["Suivre", "Agenda", event.titre]} />
+      <div>
+        <Pill color={color} icon={CalendarDays}>{event.type}</Pill>
+        <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">{event.titre}</h2>
+        <p className="mt-1.5 text-[13px] text-foreground/80">{formatDateFr(event.date)}{event.passe ? " · passé" : ` · ${relativeFr(event.date)}`}</p>
+      </div>
+      {event.detail && <p className="text-[13px] leading-relaxed text-foreground/80">{event.detail}</p>}
+      <SourceNote>Calendrier curé (Code électoral / décrets de convocation). Enrichissement JORF à venir.</SourceNote>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Primitives partagées
+// ═══════════════════════════════════════════════════════════════════════════
+
+function FilterSidebar({ children }: { children: React.ReactNode }) {
+  return (
+    <aside className="flex w-[248px] shrink-0 flex-col gap-5 overflow-y-auto rounded-lg bg-surface p-4 text-[13px] shadow-card">
+      {children}
+    </aside>
+  );
+}
+
+function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <div className="flex h-8 items-center gap-2 rounded-md border border-border/80 bg-surface px-2 text-[12px] focus-within:border-foreground/30">
+      <Search className="h-3.5 w-3.5 text-muted-foreground" />
+      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/70" />
+    </div>
+  );
+}
+
+function FilterSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <div className="-mx-1 mt-3 flex flex-col gap-0.5">{children}</div>
+    </section>
+  );
+}
+
+function FilterRow({
+  active, label, count, icon: Icon, color, dot, onClick,
 }: {
-  label: string;
-  value: string;
-  hint?: string | null;
-  icon?: typeof Calendar;
+  active: boolean; label: string; count?: number; icon?: typeof Vote; color?: string; dot?: boolean; onClick: () => void;
 }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={cn(
+        "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
+        active ? "bg-surface-soft text-foreground" : "text-foreground/70 hover:bg-surface-soft hover:text-foreground",
+      )}>
+      {Icon ? <Icon className="h-3.5 w-3.5" style={color ? { color } : undefined} /> : null}
+      {dot ? <span className="h-1.5 w-1.5 rounded-full bg-border" /> : null}
+      <span className="flex-1 truncate font-medium">{label}</span>
+      {count !== undefined && <span className="text-[11px] text-muted-foreground tabular-nums">{count}</span>}
+    </button>
+  );
+}
+
+function LegendRow({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2.5 px-2 py-1.5 text-[13px] text-foreground/70">
+      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
+      {label}
+    </div>
+  );
+}
+
+function ListColumn({
+  eyebrow, title, meta, loading, error, children,
+}: {
+  eyebrow: string; title: string; meta?: string; loading?: boolean; error?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <section className="flex w-[400px] shrink-0 flex-col overflow-hidden rounded-lg bg-surface shadow-card">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/60 px-4">
+        <div className="flex flex-col leading-tight">
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{eyebrow}</p>
+          <p className="text-[13px] font-medium">{title}</p>
+        </div>
+        {meta && <span className="ml-auto text-[10.5px] text-muted-foreground">{meta}</span>}
+      </header>
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center gap-2 text-[12px] text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement…
+        </div>
+      ) : error ? (
+        <div className="flex flex-1 items-center justify-center px-6 text-center text-[12px] text-destructive">
+          Erreur de chargement.
+        </div>
+      ) : (
+        <ul className="anim-stagger flex-1 divide-y divide-border/40 overflow-y-auto">{children}</ul>
+      )}
+    </section>
+  );
+}
+
+function DetailColumn({ k, children }: { k?: string | null; children: React.ReactNode }) {
+  return (
+    <section key={k ?? "empty"} className="anim-fade-in flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-card">
+      {children}
+    </section>
+  );
+}
+
+function FeedItem({
+  active, onClick, icon: Icon, iconColor, title, time, subtitle, dim,
+}: {
+  active: boolean; onClick: () => void; icon: typeof Vote; iconColor: string;
+  title: string; time: string; subtitle: string; dim?: boolean;
+}) {
+  return (
+    <li>
+      <button type="button" onClick={onClick}
+        className={cn("flex w-full items-start gap-3 px-4 py-3 text-left transition-colors", active ? "bg-surface-soft/70" : "hover:bg-surface-soft/40")}>
+        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md" style={{ background: `${iconColor}1a`, color: iconColor }}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <div className={cn("min-w-0 flex-1", dim && "opacity-60")}>
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="truncate text-[13px] font-medium">{title}</p>
+            <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">{time}</span>
+          </div>
+          <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{subtitle}</p>
+        </div>
+      </button>
+    </li>
+  );
+}
+
+function EmptyRow() {
+  return <li className="px-4 py-8 text-center text-[12px] text-muted-foreground">Aucun élément.</li>;
+}
+
+function DetailEmpty({ label }: { label: string }) {
+  return <div className="grid h-full place-items-center text-[12px] text-muted-foreground">Sélectionne {label} pour ouvrir le détail.</div>;
+}
+
+function Breadcrumb({ parts }: { parts: string[] }) {
+  return (
+    <p className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      {parts.map((p, i) => (
+        <span key={i}>
+          {i > 0 && <span className="mx-1.5 text-muted-foreground/50">/</span>}
+          {p}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+function Pill({ color, icon: Icon, children }: { color: string; icon: typeof Vote; children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-pill px-2 py-0.5 text-[11px] font-medium" style={{ background: `${color}1a`, color }}>
+      <Icon className="h-3 w-3" /> {children}
+    </span>
+  );
+}
+
+function KPI({ label, value, hint, icon: Icon }: { label: string; value: string; hint?: string; icon?: typeof Calendar }) {
   return (
     <div className="rounded-md border border-border/70 bg-surface-alt p-3">
       <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-        {Icon && <Icon className="h-3 w-3" />}
-        {label}
+        {Icon && <Icon className="h-3 w-3" />}{label}
       </p>
-      <p className="mt-1 truncate text-[15px] font-semibold">{value}</p>
-      {hint && (
-        <p className="mt-0.5 truncate text-[10.5px] text-muted-foreground/80">
-          {hint}
-        </p>
-      )}
+      <p className="mt-1 truncate text-[16px] font-semibold tabular-nums">{value}</p>
+      {hint && <p className="mt-0.5 truncate text-[10.5px] text-muted-foreground/80">{hint}</p>}
     </div>
   );
+}
+
+function SourceNote({ children }: { children: React.ReactNode }) {
+  return <p className="mt-auto pt-2 text-[10.5px] text-muted-foreground/70">Source : {children}</p>;
 }

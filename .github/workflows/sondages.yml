@@ -1,16 +1,19 @@
-name: Sondages — refresh notices CNCS
+name: Suivi — refresh données quotidiennes
 
-# Rafraîchit quotidiennement le registre des notices de la Commission des
-# sondages et commit le JSON si quelque chose a changé.
+# Rafraîchit chaque jour les flux du module Suivre :
+#   - notices de sondages (Commission des sondages)
+#   - scrutins publics (Assemblée nationale, 17e législature)
+#   - dossiers législatifs (Assemblée nationale)
+#   - agenda électoral (curé)
+# Commit les JSON dans public/suivi + public/sondages s'ils ont changé.
 #
-# Activation : nécessite que le repo soit sur GitHub. Le GITHUB_TOKEN par défaut
-# suffit (permission contents: write ci-dessous). Aucune action manuelle ensuite.
+# Activation : repo sur GitHub + Settings → Actions → "Read and write
+# permissions". Le GITHUB_TOKEN par défaut suffit (permission ci-dessous).
 
 on:
   schedule:
-    # Tous les jours à 06:30 UTC (08:30 Paris l'été, 07:30 l'hiver)
-    - cron: "30 6 * * *"
-  workflow_dispatch: {} # permet un déclenchement manuel depuis l'onglet Actions
+    - cron: "30 6 * * *" # tous les jours 06:30 UTC
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -27,18 +30,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Scrape CNCS notices
-        run: python3 scripts/pipeline/build-cncs-notices.py
+      - name: Refresh feeds
+        run: |
+          python3 scripts/pipeline/build-cncs-notices.py
+          python3 scripts/pipeline/build-an-votes.py
+          python3 scripts/pipeline/build-an-lois.py
+          python3 scripts/pipeline/build-agenda.py
 
       - name: Commit if changed
         run: |
-          if [[ -n "$(git status --porcelain public/sondages/notices.json)" ]]; then
+          CHANGED=$(git status --porcelain public/sondages public/suivi)
+          if [[ -n "$CHANGED" ]]; then
             git config user.name "mouvancia-bot"
             git config user.email "bot@mouvancia.app"
-            git add public/sondages/notices.json
-            git commit -m "chore(sondages): refresh notices CNCS $(date -u +%Y-%m-%d)"
+            git add public/sondages public/suivi
+            git commit -m "chore(suivi): refresh données $(date -u +%Y-%m-%d)"
             git push
-            echo "✓ notices mises à jour"
+            echo "✓ données mises à jour"
           else
-            echo "= aucune nouvelle notice"
+            echo "= aucun changement"
           fi
