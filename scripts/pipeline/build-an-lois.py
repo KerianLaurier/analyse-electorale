@@ -27,8 +27,43 @@ KEEP = 150
 AN_DOSSIER_URL = "https://www.assemblee-nationale.fr/dyn/17/dossiers/{chemin}"
 
 
-def walk_actes(node, out: list[tuple[str, str]]) -> None:
-    """Collecte (dateActe, libellé de stade) récursivement dans l'arbre d'actes."""
+def phase_for(code: str | None) -> str:
+    """Catégorise un acte législatif à partir de son codeActe."""
+    c = (code or "").upper()
+    if "DEPOT" in c:
+        return "depot"
+    if "PROM" in c:
+        return "promulgation"
+    if "CC" in c or "SAISINE-CONSEIL" in c:
+        return "conseil"
+    if "CMP" in c:
+        return "cmp"
+    if "COM" in c:
+        return "commission"
+    if "SEANCE" in c or "DEBATS" in c or "DISCUSSION" in c:
+        return "seance"
+    if "DECISION" in c or "ADOPTION" in c or "REJET" in c:
+        return "decision"
+    return "autre"
+
+
+def chamber_for(code: str | None) -> str | None:
+    c = (code or "").upper()
+    if c.startswith("AN"):
+        return "Assemblée nationale"
+    if c.startswith("SN"):
+        return "Sénat"
+    if c.startswith("CMP"):
+        return "Commission mixte paritaire"
+    if c.startswith("CC"):
+        return "Conseil constitutionnel"
+    if "PROM" in c:
+        return "Gouvernement"
+    return None
+
+
+def walk_actes(node, out: list[dict]) -> None:
+    """Collecte les actes (date, code, libellé) récursivement."""
     if node is None:
         return
     if isinstance(node, list):
@@ -37,36 +72,64 @@ def walk_actes(node, out: list[tuple[str, str]]) -> None:
         return
     if not isinstance(node, dict):
         return
-    # Un acte = a dateActe + libelleActe ; descendre dans actesLegislatifs imbriqués.
     date = node.get("dateActe")
     lib = node.get("libelleActe")
+    code = node.get("codeActe")
     if date:
         libelle = None
         if isinstance(lib, dict):
-            libelle = lib.get("libelleCourt") or lib.get("nomCanonique")
-        out.append((date[:10], libelle or ""))
-    # Descente récursive (le conteneur peut être {acteLegislatif: ...} ou direct).
+            libelle = lib.get("nomCanonique") or lib.get("libelleCourt")
+        out.append({"date": date[:10], "code": code, "libelle": libelle or ""})
     child = node.get("actesLegislatifs")
     if isinstance(child, dict):
         walk_actes(child.get("acteLegislatif"), out)
     elif isinstance(child, list):
         walk_actes(child, out)
-    # Cas racine : node lui-même est {acteLegislatif: ...}
     if "acteLegislatif" in node:
         walk_actes(node.get("acteLegislatif"), out)
 
 
 def analyse_actes(actes) -> dict:
-    out: list[tuple[str, str]] = []
-    walk_actes(actes, out)
-    if not out:
-        return {"date": None, "date_depot": None, "stade": None, "n_actes": 0}
-    out.sort(key=lambda x: x[0])
+    raw: list[dict] = []
+    walk_actes(actes, raw)
+    if not raw:
+        return {"date": None, "date_depot": None, "stade": None, "n_actes": 0, "timeline": []}
+    raw.sort(key=lambda x: x["date"])
+
+    # Frise : dédoublonnage (date+libellé), enrichie phase/chambre.
+    seen = set()
+    steps = []
+    for a in raw:
+        key = (a["date"], a["libelle"])
+        if key in seen:
+            continue
+        seen.add(key)
+        steps.append(
+            {
+                "date": a["date"],
+                "libelle": a["libelle"],
+                "phase": phase_for(a["code"]),
+                "chambre": chamber_for(a["code"]),
+            }
+        )
+
+    # Condense les étapes consécutives identiques (même libellé + chambre) en un
+    # jalon unique avec plage de dates + nombre de séances.
+    timeline = []
+    for s in steps:
+        last = timeline[-1] if timeline else None
+        if last and last["libelle"] == s["libelle"] and last["chambre"] == s["chambre"]:
+            last["date_fin"] = s["date"]
+            last["count"] += 1
+        else:
+            timeline.append({**s, "date_fin": s["date"], "count": 1})
+
     return {
-        "date": out[-1][0],           # acte le plus récent
-        "date_depot": out[0][0],      # premier acte
-        "stade": out[-1][1] or None,  # libellé du stade courant
-        "n_actes": len(out),
+        "date": raw[-1]["date"],
+        "date_depot": raw[0]["date"],
+        "stade": raw[-1]["libelle"] or None,
+        "n_actes": len(raw),
+        "timeline": timeline,
     }
 
 
@@ -108,6 +171,7 @@ def main() -> int:
                     "date_depot": info["date_depot"],
                     "stade": info["stade"],
                     "n_actes": info["n_actes"],
+                    "timeline": info["timeline"],
                     "url": AN_DOSSIER_URL.format(chemin=chemin) if chemin else None,
                 }
             )

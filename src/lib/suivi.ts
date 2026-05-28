@@ -43,6 +43,15 @@ export function useVotesAN() {
 
 // ─── Lois & PPL ─────────────────────────────────────────────────────────────
 
+export type LoiStep = {
+  date: string;
+  date_fin: string;
+  count: number;
+  libelle: string;
+  phase: string;
+  chambre: string | null;
+};
+
 export type Loi = {
   uid: string | null;
   titre: string;
@@ -52,6 +61,7 @@ export type Loi = {
   date_depot: string | null;
   stade: string | null;
   n_actes: number;
+  timeline: LoiStep[];
   url: string | null;
 };
 
@@ -104,5 +114,34 @@ export function useAgenda() {
       return (await res.json()) as AgendaData;
     },
     staleTime: 12 * 60 * 60 * 1000,
+  });
+}
+
+// ─── Veille média (RSS) ───────────────────────────────────────────────────────
+
+export type Article = {
+  source: string;
+  titre: string;
+  lien: string;
+  resume: string;
+  date: string | null;
+};
+
+export type VeilleData = {
+  source: string;
+  generated_at: string;
+  n: number;
+  articles: Article[];
+};
+
+export function useVeille() {
+  return useQuery({
+    queryKey: ["suivi", "veille"],
+    queryFn: async (): Promise<VeilleData> => {
+      const res = await fetch("/suivi/veille.json");
+      if (!res.ok) throw new Error("Veille introuvable");
+      return (await res.json()) as VeilleData;
+    },
+    staleTime: 30 * 60 * 1000,
   });
 }

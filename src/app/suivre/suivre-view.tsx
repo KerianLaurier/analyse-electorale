@@ -18,6 +18,7 @@ import {
   MinusCircle,
   ChevronLeft,
   ChevronRight,
+  Newspaper,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -32,9 +33,12 @@ import {
   useVotesAN,
   useLois,
   useAgenda,
+  useVeille,
   type VoteAN,
   type Loi,
+  type LoiStep,
   type AgendaEvent,
+  type Article,
 } from "@/lib/suivi";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -58,9 +62,10 @@ function usePaged<T>(items: T[]) {
   return { pageItems, page: safePage, setPage, pageCount, total: items.length };
 }
 
-type Category = "sondages" | "votes" | "lois" | "agenda";
+type Category = "actualite" | "sondages" | "votes" | "lois" | "agenda";
 
 const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
+  { id: "actualite", label: "Actualité", icon: Newspaper },
   { id: "sondages", label: "Sondages", icon: BarChart3 },
   { id: "votes", label: "Votes AN", icon: Vote },
   { id: "lois", label: "Lois & PPL", icon: FileText },
@@ -68,7 +73,7 @@ const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
 ];
 
 export function SuivreView() {
-  const [category, setCategory] = useState<Category>("sondages");
+  const [category, setCategory] = useState<Category>("actualite");
 
   return (
     <div className="flex h-full w-full min-h-0 min-w-0 flex-1 gap-3 overflow-hidden bg-canvas p-3">
@@ -100,10 +105,104 @@ export function SuivreView() {
       </nav>
 
       {/* Contenu par catégorie */}
+      {category === "actualite" && <ActualiteView />}
       {category === "sondages" && <SondagesView />}
       {category === "votes" && <VotesView />}
       {category === "lois" && <LoisView />}
       {category === "agenda" && <AgendaView />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ACTUALITÉ (veille RSS)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SOURCE_COLOR: Record<string, string> = {
+  "Le Monde": "#b0212b",
+  "Le Figaro": "#2c4978",
+  "Libération": "#0a0a0c",
+  "France Info": "#f0a020",
+};
+
+function ActualiteView() {
+  const { data, isLoading, error } = useVeille();
+  const [source, setSource] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const articles = data?.articles ?? [];
+  const sources = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of articles) m.set(a.source, (m.get(a.source) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [articles]);
+
+  const items = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return articles.filter((a) => {
+      if (source && a.source !== source) return false;
+      if (q && !`${a.titre} ${a.resume}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [articles, source, query]);
+
+  const selected = useMemo(
+    () => (selectedId ? articles.find((a) => a.lien === selectedId) : items[0]) ?? null,
+    [selectedId, articles, items],
+  );
+  const { pageItems, page, setPage, pageCount, total } = usePaged(items);
+
+  return (
+    <>
+      <FilterSidebar>
+        <SearchBox value={query} onChange={setQuery} placeholder="Filtrer un article…" />
+        <FilterSection label="Sources">
+          <FilterRow active={source === null} label="Tous les titres" count={articles.length} icon={Newspaper} onClick={() => setSource(null)} />
+          {sources.map(([name, n]) => (
+            <FilterRow key={name} active={source === name} label={name} count={n} dot onClick={() => setSource(source === name ? null : name)} />
+          ))}
+        </FilterSection>
+      </FilterSidebar>
+
+      <ListColumn eyebrow="Veille média · politique" title={`Articles · ${items.length}`}
+        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}
+        pager={{ page, pageCount, total, onPage: setPage }}>
+        {pageItems.map((a) => (
+          <FeedItem key={a.lien} active={selected?.lien === a.lien} onClick={() => setSelectedId(a.lien)}
+            icon={Newspaper} iconColor={SOURCE_COLOR[a.source] ?? "#8a8a93"}
+            title={a.source} time={relativeFr(a.date)} subtitle={a.titre} />
+        ))}
+        {!isLoading && items.length === 0 && <EmptyRow />}
+      </ListColumn>
+
+      <DetailColumn k={selected?.lien}>
+        {selected ? <ArticleDetail article={selected} /> : <DetailEmpty label="un article" />}
+      </DetailColumn>
+    </>
+  );
+}
+
+function ArticleDetail({ article }: { article: Article }) {
+  const color = SOURCE_COLOR[article.source] ?? "#8a8a93";
+  return (
+    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+      <Breadcrumb parts={["Suivre", "Actualité", article.source]} />
+      <div>
+        <Pill color={color} icon={Newspaper}>{article.source}</Pill>
+        <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">{article.titre}</h2>
+        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+          {article.date ? `${formatDateFr(article.date)} · ${relativeFr(article.date)}` : "—"}
+        </p>
+      </div>
+      {article.resume && (
+        <p className="text-[13px] leading-relaxed text-foreground/80">{article.resume}</p>
+      )}
+      <a href={article.lien} target="_blank" rel="noopener noreferrer"
+        className="inline-flex w-fit items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90">
+        <ExternalLink className="h-3.5 w-3.5" /> Lire l&apos;article complet
+      </a>
+      <SourceNote>Flux RSS des rédactions — rubriques politique. Rafraîchi en continu.</SourceNote>
     </div>
   );
 }
@@ -467,6 +566,10 @@ function LoiDetail({ loi }: { loi: Loi }) {
         <KPI label="Type" value={projet ? "Projet (gouv.)" : "Proposition (parl.)"} />
         <KPI label="Étapes législatives" value={String(loi.n_actes)} hint="actes enregistrés" />
       </div>
+      {loi.timeline && loi.timeline.length > 0 && (
+        <LoiTimeline steps={loi.timeline} />
+      )}
+
       {loi.url && (
         <a href={loi.url} target="_blank" rel="noopener noreferrer"
           className="inline-flex w-fit items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90">
@@ -474,6 +577,68 @@ function LoiDetail({ loi }: { loi: Loi }) {
         </a>
       )}
       <SourceNote>Assemblée nationale — dossiers législatifs (17e législature).</SourceNote>
+    </div>
+  );
+}
+
+const PHASE_META: Record<string, { color: string; label: string }> = {
+  depot: { color: "#8a8a93", label: "Dépôt" },
+  commission: { color: "#2c4978", label: "Commission" },
+  seance: { color: "#f0a020", label: "Séance" },
+  decision: { color: "#7c3aed", label: "Décision" },
+  cmp: { color: "#0ea5e9", label: "CMP" },
+  conseil: { color: "#525252", label: "Conseil const." },
+  promulgation: { color: "#16a34a", label: "Promulgation" },
+  autre: { color: "#c8c8cc", label: "Étape" },
+};
+
+function LoiTimeline({ steps }: { steps: LoiStep[] }) {
+  return (
+    <div>
+      <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        Parcours législatif · {steps.length} étapes
+      </p>
+      <ol className="flex flex-col">
+        {steps.map((s, i) => {
+          const meta = PHASE_META[s.phase] ?? PHASE_META.autre;
+          const last = i === steps.length - 1;
+          const range =
+            s.count > 1 && s.date_fin !== s.date
+              ? `${formatDateFr(s.date)} → ${formatDateFr(s.date_fin)}`
+              : formatDateFr(s.date);
+          return (
+            <li key={i} className="flex gap-3">
+              {/* Rail */}
+              <div className="flex flex-col items-center">
+                <span
+                  className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-surface"
+                  style={{ background: meta.color }}
+                />
+                {!last && (
+                  <span className="w-px flex-1 bg-border" style={{ minHeight: 18 }} />
+                )}
+              </div>
+              {/* Contenu */}
+              <div className={cn("pb-3", last && "pb-0")}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[12.5px] font-medium leading-tight">
+                    {s.libelle}
+                  </span>
+                  {s.count > 1 && (
+                    <span className="rounded-pill bg-surface-soft px-1.5 text-[10px] font-medium text-muted-foreground">
+                      ×{s.count}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {s.chambre ? `${s.chambre} · ` : ""}
+                  {range}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

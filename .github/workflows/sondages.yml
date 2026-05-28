@@ -36,6 +36,7 @@ jobs:
           python3 scripts/pipeline/build-an-votes.py
           python3 scripts/pipeline/build-an-lois.py
           python3 scripts/pipeline/build-agenda.py
+          python3 scripts/pipeline/build-veille.py
 
       - name: Commit if changed
         run: |
