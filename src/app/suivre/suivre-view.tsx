@@ -76,7 +76,7 @@ export function SuivreView() {
   const [category, setCategory] = useState<Category>("actualite");
 
   return (
-    <div className="flex h-full w-full min-h-0 min-w-0 flex-1 gap-3 overflow-hidden bg-canvas p-3">
+    <div className="flex h-[calc(100dvh-3.5rem)] w-full min-w-0 gap-3 overflow-hidden bg-canvas p-3">
       {/* Rail catégories (commun) */}
       <nav className="flex w-[180px] shrink-0 flex-col gap-1 rounded-lg bg-surface p-3 shadow-card">
         <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -186,7 +186,7 @@ function ActualiteView() {
 function ArticleDetail({ article }: { article: Article }) {
   const color = SOURCE_COLOR[article.source] ?? "#8a8a93";
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+    <div className="flex flex-col gap-5 p-6 text-[13px]">
       <Breadcrumb parts={["Suivre", "Actualité", article.source]} />
       <div>
         <Pill color={color} icon={Newspaper}>{article.source}</Pill>
@@ -327,7 +327,8 @@ function NoticeRow({ notice, active, onClick }: { notice: Notice; active: boolea
   const Icon = meta.icon;
   return (
     <FeedItem active={active} onClick={onClick} iconColor={meta.color} icon={Icon}
-      title={notice.institut ?? "Institut n.c."} time={relativeFr(notice.date)} subtitle={cleanLabel(notice)} />
+      title={notice.institut ?? "Institut n.c."} time={relativeFr(notice.date)} subtitle={cleanLabel(notice)}
+      badge={{ label: notice.nature_label, color: meta.color }} />
   );
 }
 
@@ -335,7 +336,7 @@ function NoticeDetail({ notice }: { notice: Notice }) {
   const meta = SCRUTIN_META[notice.scrutin];
   const Icon = meta.icon;
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+    <div className="flex flex-col gap-5 p-6 text-[13px]">
       <Breadcrumb parts={["Suivre", "Sondages", meta.label]} />
       <div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -431,7 +432,8 @@ function VoteRow({ vote, active, onClick }: { vote: VoteAN; active: boolean; onC
       icon={adopted ? CheckCircle2 : XCircle} iconColor={adopted ? "#2b7748" : "#b0212b"}
       title={vote.sort_libelle ?? (adopted ? "Adopté" : "Rejeté")}
       time={relativeFr(vote.date)}
-      subtitle={vote.titre ?? "—"} />
+      subtitle={vote.titre ?? "—"}
+      badge={{ label: `${vote.pour} pour · ${vote.contre} contre`, color: adopted ? "#2b7748" : "#b0212b" }} />
   );
 }
 
@@ -439,7 +441,7 @@ function VoteDetail({ vote }: { vote: VoteAN }) {
   const adopted = voteAdopted(vote);
   const total = Math.max(vote.pour + vote.contre + vote.abstentions, 1);
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+    <div className="flex flex-col gap-5 p-6 text-[13px]">
       <Breadcrumb parts={["Suivre", "Votes AN", `Scrutin n°${vote.numero}`]} />
       <div>
         <Pill color={adopted ? "#2b7748" : "#b0212b"} icon={adopted ? CheckCircle2 : XCircle}>
@@ -539,14 +541,15 @@ function LoiRow({ loi, active, onClick }: { loi: Loi; active: boolean; onClick: 
     <FeedItem active={active} onClick={onClick}
       icon={projet ? Landmark : FileText} iconColor={projet ? "#2c4978" : "#f0a020"}
       title={projet ? "Projet de loi" : "Proposition de loi"}
-      time={relativeFr(loi.date)} subtitle={loi.titre} />
+      time={relativeFr(loi.date)} subtitle={loi.titre}
+      badge={loi.stade ? { label: loi.stade, color: projet ? "#2c4978" : "#f0a020" } : undefined} />
   );
 }
 
 function LoiDetail({ loi }: { loi: Loi }) {
   const projet = isProjet(loi);
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+    <div className="flex flex-col gap-5 p-6 text-[13px]">
       <Breadcrumb parts={["Suivre", "Lois & PPL", projet ? "Projet de loi" : "Proposition de loi"]} />
       <div>
         <Pill color={projet ? "#2c4978" : "#f0a020"} icon={projet ? Landmark : FileText}>
@@ -692,14 +695,15 @@ function AgendaRow({ event, active, onClick }: { event: AgendaEvent; active: boo
   return (
     <FeedItem active={active} onClick={onClick} icon={CalendarDays} iconColor={color}
       title={event.titre} time={event.passe ? "passé" : relativeFr(event.date)}
-      subtitle={formatDateFr(event.date)} dim={event.passe} />
+      subtitle={formatDateFr(event.date)} dim={event.passe}
+      badge={{ label: event.type, color }} />
   );
 }
 
 function AgendaDetail({ event }: { event: AgendaEvent }) {
   const color = AGENDA_TYPE_COLOR[event.type] ?? "#8a8a93";
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto p-6 text-[13px]">
+    <div className="flex flex-col gap-5 p-6 text-[13px]">
       <Breadcrumb parts={["Suivre", "Agenda", event.titre]} />
       <div>
         <Pill color={color} icon={CalendarDays}>{event.type}</Pill>
@@ -846,22 +850,36 @@ function Pager({
 
 function DetailColumn({ k, children }: { k?: string | null; children: React.ReactNode }) {
   return (
-    <section key={k ?? "empty"} className="anim-fade-in flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-card">
-      {children}
+    <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-card">
+      <div key={k ?? "empty"} className="anim-fade-in min-h-0 flex-1 overflow-y-auto">
+        {children}
+      </div>
     </section>
   );
 }
 
 function FeedItem({
-  active, onClick, icon: Icon, iconColor, title, time, subtitle, dim,
+  active, onClick, icon: Icon, iconColor, title, time, subtitle, dim, badge,
 }: {
   active: boolean; onClick: () => void; icon: typeof Vote; iconColor: string;
   title: string; time: string; subtitle: string; dim?: boolean;
+  badge?: { label: string; color?: string };
 }) {
   return (
     <li>
-      <button type="button" onClick={onClick}
-        className={cn("flex w-full items-start gap-3 px-4 py-3 text-left transition-colors", active ? "bg-surface-soft/70" : "hover:bg-surface-soft/40")}>
+      <button
+        type="button"
+        onClick={onClick}
+        data-active={active ? "" : undefined}
+        className={cn(
+          "relative flex w-full items-start gap-3 py-3 pl-4 pr-4 text-left transition-colors",
+          active ? "bg-surface-soft/70" : "hover:bg-surface-soft/40",
+        )}
+      >
+        {/* Accent latéral quand actif */}
+        {active && (
+          <span className="absolute inset-y-0 left-0 w-[3px] rounded-r" style={{ background: iconColor }} />
+        )}
         <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md" style={{ background: `${iconColor}1a`, color: iconColor }}>
           <Icon className="h-3.5 w-3.5" />
         </span>
@@ -871,6 +889,17 @@ function FeedItem({
             <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">{time}</span>
           </div>
           <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{subtitle}</p>
+          {badge && (
+            <span
+              className="mt-1.5 inline-flex items-center rounded-pill px-1.5 py-0.5 text-[9.5px] font-medium"
+              style={{
+                background: badge.color ? `${badge.color}1a` : "var(--surface-soft)",
+                color: badge.color ?? "var(--muted-foreground)",
+              }}
+            >
+              {badge.label}
+            </span>
+          )}
         </div>
       </button>
     </li>
