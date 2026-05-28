@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Vote,
@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   XCircle,
   MinusCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -38,6 +40,23 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 //  Catégories de suivi
 // ═══════════════════════════════════════════════════════════════════════════
+
+const PER_PAGE = 20;
+
+/** Pagine un tableau ; reset à la page 0 quand le contenu change (filtres). */
+function usePaged<T>(items: T[]) {
+  const [page, setPage] = useState(0);
+  useEffect(() => {
+    setPage(0);
+  }, [items]);
+  const pageCount = Math.max(1, Math.ceil(items.length / PER_PAGE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageItems = items.slice(
+    safePage * PER_PAGE,
+    safePage * PER_PAGE + PER_PAGE,
+  );
+  return { pageItems, page: safePage, setPage, pageCount, total: items.length };
+}
 
 type Category = "sondages" | "votes" | "lois" | "agenda";
 
@@ -147,6 +166,7 @@ function SondagesView() {
     () => (selectedId ? notices.find((n) => n.pdf === selectedId) : items[0]) ?? null,
     [selectedId, notices, items],
   );
+  const { pageItems, page, setPage, pageCount, total } = usePaged(items);
 
   return (
     <>
@@ -175,8 +195,9 @@ function SondagesView() {
         meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined}
         loading={isLoading}
         error={!!error}
+        pager={{ page, pageCount, total, onPage: setPage }}
       >
-        {items.map((notice) => (
+        {pageItems.map((notice) => (
           <NoticeRow key={notice.pdf} notice={notice} active={selected?.pdf === notice.pdf} onClick={() => setSelectedId(notice.pdf)} />
         ))}
         {!isLoading && items.length === 0 && <EmptyRow />}
@@ -254,6 +275,7 @@ function VotesView() {
     () => (selectedId ? votes.find((v) => v.numero === selectedId) : items[0]) ?? null,
     [selectedId, votes, items],
   );
+  const { pageItems, page, setPage, pageCount, total } = usePaged(items);
 
   return (
     <>
@@ -267,8 +289,9 @@ function VotesView() {
       </FilterSidebar>
 
       <ListColumn eyebrow="Assemblée nationale · 17e lég." title={`Scrutins publics · ${items.length}`}
-        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}>
-        {items.map((v) => <VoteRow key={v.numero} vote={v} active={selected?.numero === v.numero} onClick={() => setSelectedId(v.numero)} />)}
+        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}
+        pager={{ page, pageCount, total, onPage: setPage }}>
+        {pageItems.map((v) => <VoteRow key={v.numero} vote={v} active={selected?.numero === v.numero} onClick={() => setSelectedId(v.numero)} />)}
         {!isLoading && items.length === 0 && <EmptyRow />}
       </ListColumn>
 
@@ -361,6 +384,7 @@ function LoisView() {
     () => (selectedId ? lois.find((l) => l.uid === selectedId) : items[0]) ?? null,
     [selectedId, lois, items],
   );
+  const { pageItems, page, setPage, pageCount, total } = usePaged(items);
 
   return (
     <>
@@ -374,8 +398,9 @@ function LoisView() {
       </FilterSidebar>
 
       <ListColumn eyebrow="Assemblée nationale · 17e lég." title={`Dossiers législatifs · ${items.length}`}
-        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}>
-        {items.map((l) => <LoiRow key={l.uid} loi={l} active={selected?.uid === l.uid} onClick={() => setSelectedId(l.uid)} />)}
+        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}
+        pager={{ page, pageCount, total, onPage: setPage }}>
+        {pageItems.map((l) => <LoiRow key={l.uid} loi={l} active={selected?.uid === l.uid} onClick={() => setSelectedId(l.uid)} />)}
         {!isLoading && items.length === 0 && <EmptyRow />}
       </ListColumn>
 
@@ -552,9 +577,11 @@ function LegendRow({ color, label }: { color: string; label: string }) {
 }
 
 function ListColumn({
-  eyebrow, title, meta, loading, error, children,
+  eyebrow, title, meta, loading, error, children, pager,
 }: {
-  eyebrow: string; title: string; meta?: string; loading?: boolean; error?: boolean; children: React.ReactNode;
+  eyebrow: string; title: string; meta?: string; loading?: boolean; error?: boolean;
+  children: React.ReactNode;
+  pager?: { page: number; pageCount: number; total: number; onPage: (p: number) => void };
 }) {
   return (
     <section className="flex w-[400px] shrink-0 flex-col overflow-hidden rounded-lg bg-surface shadow-card">
@@ -574,9 +601,51 @@ function ListColumn({
           Erreur de chargement.
         </div>
       ) : (
-        <ul className="anim-stagger flex-1 divide-y divide-border/40 overflow-y-auto">{children}</ul>
+        <ul key={pager?.page} className="anim-stagger flex-1 divide-y divide-border/40 overflow-y-auto">
+          {children}
+        </ul>
       )}
+      {pager && pager.total > 0 && <Pager {...pager} />}
     </section>
+  );
+}
+
+function Pager({
+  page, pageCount, total, onPage,
+}: {
+  page: number; pageCount: number; total: number; onPage: (p: number) => void;
+}) {
+  const from = page * PER_PAGE + 1;
+  const to = Math.min((page + 1) * PER_PAGE, total);
+  return (
+    <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-t border-border/60 px-3 text-[11.5px]">
+      <span className="text-muted-foreground tabular-nums">
+        {from}–{to} sur {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onPage(page - 1)}
+          disabled={page <= 0}
+          className="grid h-7 w-7 place-items-center rounded-md border border-border bg-surface text-foreground/70 transition-colors hover:bg-surface-soft disabled:opacity-40 disabled:hover:bg-surface"
+          aria-label="Page précédente"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+        <span className="px-1 tabular-nums text-muted-foreground">
+          {page + 1} / {pageCount}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPage(page + 1)}
+          disabled={page >= pageCount - 1}
+          className="grid h-7 w-7 place-items-center rounded-md border border-border bg-surface text-foreground/70 transition-colors hover:bg-surface-soft disabled:opacity-40 disabled:hover:bg-surface"
+          aria-label="Page suivante"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
   );
 }
 
