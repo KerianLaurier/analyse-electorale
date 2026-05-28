@@ -139,6 +139,75 @@ export type CommuneSociologie = {
   revenuMedian: number | null;
   tauxPauvrete: number | null;
 };
+export type CommuneDetail = {
+  code: string;
+  libelle: string;
+  inscrits: number;
+  votants: number;
+  exprimes: number;
+  participation: number;
+  candidates: { nom: string; voix: number; pct: number }[];
+};
+
+/**
+ * Détail présidentielle 2022 (1er tour) pour une commune : chiffres clés +
+ * tous les candidats agrégés depuis les bureaux de vote de la commune.
+ */
+export function useCommuneDetail(code: string | null) {
+  return useQuery({
+    enabled: !!code,
+    queryKey: ["commune-detail-presid", code],
+    queryFn: async (): Promise<CommuneDetail | null> => {
+      if (!code) return null;
+      const url = parquetUrl(PRESID_T1_PARQUET);
+
+      const headerRows = await query<{
+        libelle: string;
+        inscrits: number;
+        votants: number;
+        exprimes: number;
+      }>(`
+        SELECT
+          any_value("Libellé de la commune") AS libelle,
+          SUM(TRY_CAST(replace("Inscrits", ' ', '') AS BIGINT)) AS inscrits,
+          SUM(TRY_CAST(replace("Votants",  ' ', '') AS BIGINT)) AS votants,
+          SUM(TRY_CAST(replace("Exprimés", ' ', '') AS BIGINT)) AS exprimes
+        FROM read_parquet('${url}')
+        WHERE ${COMMUNE_INSEE_SQL} = '${code}'
+      `);
+      if (headerRows.length === 0 || !headerRows[0].inscrits) return null;
+      const h = headerRows[0];
+      const exprimes = Number(h.exprimes ?? 0);
+
+      const candRows = await query<{ nom: string; voix: number }>(`
+        WITH bureau AS (${buildPresid2022T1CandidatesUnion(url)}),
+        agg AS (
+          SELECT nom, SUM(voix) AS voix
+          FROM bureau
+          WHERE commune = '${code}'
+          GROUP BY nom
+        )
+        SELECT nom, voix FROM agg WHERE voix IS NOT NULL ORDER BY voix DESC
+      `);
+
+      return {
+        code,
+        libelle: String(h.libelle ?? ""),
+        inscrits: Number(h.inscrits ?? 0),
+        votants: Number(h.votants ?? 0),
+        exprimes,
+        participation:
+          Number(h.inscrits) > 0 ? Number(h.votants) / Number(h.inscrits) : 0,
+        candidates: candRows.map((c) => ({
+          nom: String(c.nom ?? ""),
+          voix: Number(c.voix ?? 0),
+          pct: exprimes > 0 ? Number(c.voix) / exprimes : 0,
+        })),
+      };
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+}
 
 /** Participation présidentielle 2022 T1 — agrégée à la commune. */
 export function useParticipationCommunePresid2022T1(enabled = true) {

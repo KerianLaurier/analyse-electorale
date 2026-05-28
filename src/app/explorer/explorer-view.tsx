@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Loader2, X, Search, ArrowRight } from "lucide-react";
+import { Loader2, X, Search, BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   type Maille,
@@ -18,6 +18,7 @@ import {
   useTauxPauvreteCommune,
   useSociologieCommune,
   useCircoDetail,
+  useCommuneDetail,
   type WinningNuanceRow,
   type CommuneNumericRow,
 } from "@/lib/queries";
@@ -526,7 +527,6 @@ function MapTopBar({
   coloration: Coloration;
   maille: Maille;
 }) {
-  const title = `${SCRUTIN_LABELS[scrutin].long} · ${COLORATION_LABEL[coloration]}`;
   return (
     <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border/60 px-4">
       <div className="flex flex-col leading-tight">
@@ -538,24 +538,6 @@ function MapTopBar({
         </p>
       </div>
 
-      <div className="ml-auto flex items-center gap-1 rounded-pill bg-surface-soft/80 p-0.5 text-[12px]">
-        {["Carte", "Tableau", "Liste"].map((label) => (
-          <button
-            key={label}
-            type="button"
-            disabled={label !== "Carte"}
-            className={cn(
-              "rounded-pill px-2.5 py-1 font-medium transition-colors",
-              label === "Carte"
-                ? "bg-surface text-foreground shadow-[0_1px_2px_rgba(10,10,12,0.06)]"
-                : "text-muted-foreground hover:text-foreground disabled:opacity-50",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       <button
         type="button"
         onClick={() => {
@@ -563,7 +545,7 @@ function MapTopBar({
             new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
           );
         }}
-        className="ml-2 flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-[12px] text-muted-foreground hover:bg-surface-soft hover:text-foreground"
+        className="ml-auto flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-[12px] text-muted-foreground hover:bg-surface-soft hover:text-foreground"
       >
         <Search className="h-3.5 w-3.5" />
         <span>Commune, circo, code…</span>
@@ -672,11 +654,27 @@ function ContinuousMiniLegend({
 
 // ─── Fiche territoire ──────────────────────────────────────────────────────
 
+// Références nationales (pour la comparaison "vs France").
+const FR = {
+  presidT1Participation: 0.7369, // Prés. 2022 T1
+  legis2024T1Participation: 0.6671, // Légis. 2024 T1
+  revenuMedian: 22040, // Filosofi 2021 (France)
+  tauxPauvrete: 14.4, // %
+};
+
+type FicheTab = "resultats" | "socio" | "france";
+
+type BarCandidate = {
+  label: string;
+  nuance: string | null;
+  pct: number;
+  voix: number;
+  elu?: boolean;
+};
+
 function FicheTerritoire({
   maille,
   code,
-  scrutin,
-  coloration,
   lastClicked,
   onClear,
 }: {
@@ -687,11 +685,19 @@ function FicheTerritoire({
   lastClicked: { code: string; name: string; maille: Maille } | null;
   onClear: () => void;
 }) {
+  const [tab, setTab] = useState<FicheTab>("resultats");
+
   const effectiveMaille = lastClicked?.code === code ? lastClicked.maille : maille;
   const isCirco = effectiveMaille === "circonscriptions";
   const isCommune = effectiveMaille === "communes";
+
   const circoDetail = useCircoDetail(isCirco ? code : null);
+  const communeDetail = useCommuneDetail(isCommune ? code : null);
   const sociologie = useSociologieCommune(isCommune ? code : null);
+
+  useEffect(() => {
+    setTab("resultats");
+  }, [code]);
 
   if (!code) {
     return (
@@ -707,18 +713,21 @@ function FicheTerritoire({
   }
 
   const cachedName = lastClicked?.code === code ? lastClicked.name : null;
-  const queryName = circoDetail.data
-    ? `${circoDetail.data.libelle} (${circoDetail.data.departement})`
-    : null;
-  const displayName = cachedName ?? queryName ?? `Code ${code}`;
+  const displayName =
+    cachedName ??
+    (circoDetail.data ? `${circoDetail.data.libelle} (${circoDetail.data.departement})` : null) ??
+    communeDetail.data?.libelle ??
+    `Code ${code}`;
   const mailleBadge = MAILLE_LABELS[effectiveMaille].toUpperCase();
 
-  const subheading =
-    coloration === "vainqueur"
-      ? `${SCRUTIN_LABELS[scrutin].long} · VAINQUEUR`
-      : coloration === "score"
-        ? `${SCRUTIN_LABELS[scrutin].long} · % SCORE`
-        : SCRUTIN_LABELS[scrutin].long;
+  const hasSocio = isCommune;
+  const supported = isCirco || isCommune;
+
+  const TABS: { id: FicheTab; label: string; enabled: boolean }[] = [
+    { id: "resultats", label: "Résultats", enabled: supported },
+    { id: "socio", label: "Socio-démo", enabled: hasSocio },
+    { id: "france", label: "vs France", enabled: supported },
+  ];
 
   return (
     <>
@@ -740,195 +749,292 @@ function FicheTerritoire({
       </div>
 
       <div className="mt-3 flex items-center gap-1 rounded-pill bg-surface-soft/70 p-0.5 text-[12px]">
-        {["Résultats", "Socio-démo", "vs. France"].map((label) => (
+        {TABS.map((t) => (
           <button
-            key={label}
+            key={t.id}
             type="button"
-            disabled={label !== "Résultats"}
+            disabled={!t.enabled}
+            onClick={() => setTab(t.id)}
             className={cn(
               "flex-1 rounded-pill px-2 py-1 font-medium transition-colors",
-              label === "Résultats"
+              tab === t.id
                 ? "bg-surface text-foreground shadow-[0_1px_2px_rgba(10,10,12,0.06)]"
-                : "text-muted-foreground hover:text-foreground disabled:opacity-50",
+                : "text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted-foreground",
             )}
           >
-            {label}
+            {t.label}
           </button>
         ))}
       </div>
 
-      <p className="mt-4 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        {subheading}
-      </p>
-
-      {isCirco && circoDetail.data ? (
-        <CircoFiche data={circoDetail.data} />
-      ) : isCirco && circoDetail.isLoading ? (
-        <FicheLoading />
-      ) : isCommune && sociologie.data ? (
-        <CommuneFiche
-          name={displayName}
-          revenu={sociologie.data.revenuMedian}
-          pauvrete={sociologie.data.tauxPauvrete}
-        />
-      ) : isCommune && sociologie.isLoading ? (
-        <FicheLoading />
-      ) : (
-        <p className="mt-3 text-[12px] text-muted-foreground">
-          Fiche détaillée disponible pour les communes et circonscriptions.
-        </p>
-      )}
-
-      <div className="mt-5 flex items-center gap-2 border-t border-border/70 pt-4">
-        <button
-          type="button"
-          disabled
-          className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-[12px] font-medium text-foreground/70 hover:bg-surface-soft disabled:opacity-50"
-        >
-          Comparer
-        </button>
-        <button
-          type="button"
-          disabled
-          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          Détails <ArrowRight className="h-3 w-3" />
-        </button>
+      <div className="mt-4">
+        {!supported ? (
+          <p className="text-[12px] text-muted-foreground">
+            Fiche détaillée disponible aux mailles{" "}
+            <span className="font-medium text-foreground">commune</span> et{" "}
+            <span className="font-medium text-foreground">circonscription</span>.
+            Sélectionne une de ces mailles.
+          </p>
+        ) : tab === "resultats" ? (
+          isCirco ? (
+            circoDetail.isLoading ? <FicheLoading /> :
+            circoDetail.data ? <CircoResults data={circoDetail.data} /> :
+            <FicheEmpty label="résultats" />
+          ) : (
+            communeDetail.isLoading ? <FicheLoading /> :
+            communeDetail.data ? <CommuneResults data={communeDetail.data} /> :
+            <FicheEmpty label="résultats présidentielle" />
+          )
+        ) : tab === "socio" ? (
+          sociologie.isLoading ? <FicheLoading /> :
+          sociologie.data ? (
+            <SocioBlock revenu={sociologie.data.revenuMedian} pauvrete={sociologie.data.tauxPauvrete} />
+          ) : <FicheEmpty label="données sociologiques" />
+        ) : (
+          <FranceBlock
+            isCirco={isCirco}
+            participation={isCirco ? circoDetail.data?.participation : communeDetail.data?.participation}
+            revenu={sociologie.data?.revenuMedian ?? null}
+            pauvrete={sociologie.data?.tauxPauvrete ?? null}
+          />
+        )}
       </div>
+
     </>
   );
 }
 
 function FicheLoading() {
   return (
-    <div className="mt-4 flex items-center gap-2 text-[12px] text-muted-foreground">
+    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
       <Loader2 className="h-3 w-3 animate-spin" /> Chargement…
     </div>
   );
 }
 
-function CircoFiche({
-  data,
-}: {
-  data: NonNullable<ReturnType<typeof useCircoDetail>["data"]>;
-}) {
-  const top2 = data.candidates.slice(0, 2);
-  const winner = top2[0];
-  const max = Math.max(...top2.map((c) => c.pct_exp), 0.01);
-  const winnerColor = nuanceColor(winner?.nuance);
-  const elu = data.candidates.find((c) => c.elu);
+function FicheEmpty({ label }: { label: string }) {
+  return (
+    <p className="text-[12px] text-muted-foreground">
+      Pas de {label} disponible pour ce territoire.
+    </p>
+  );
+}
 
+/** Bloc résultats générique : gros score gagnant + barres + chiffres clés. */
+function ResultsBlock({
+  scrutinLabel,
+  candidates,
+  inscrits,
+  votants,
+  exprimes,
+  participation,
+  elu,
+}: {
+  scrutinLabel: string;
+  candidates: BarCandidate[];
+  inscrits: number;
+  votants: number;
+  exprimes: number;
+  participation: number;
+  elu?: BarCandidate | null;
+}) {
+  const top = candidates.slice(0, 5);
+  const winner = top[0];
+  const max = Math.max(...top.map((c) => c.pct), 0.01);
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {FMT_PCT.format(winner?.pct_exp ?? 0)}
-        </p>
-        <p className="mt-1 text-[12px] text-muted-foreground">
-          <span
-            className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
-            style={{ background: winnerColor }}
-          />
-          {winner?.nom} {winner?.prenom} ·{" "}
-          <span className="text-foreground/80">{nuanceLabel(winner?.nuance)}</span>
-        </p>
-      </div>
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        {scrutinLabel}
+      </p>
+
+      {winner && (
+        <div>
+          <p className="text-[40px] font-semibold leading-none tracking-tight tabular-nums">
+            {FMT_PCT.format(winner.pct)}
+          </p>
+          <p className="mt-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ background: nuanceColor(winner.nuance) }} />
+            <span className="font-medium text-foreground/90">{winner.label}</span>
+            · {nuanceLabel(winner.nuance)}
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
-        {top2.map((c) => (
-          <div key={c.nom}>
+        {top.map((c, i) => (
+          <div key={`${c.label}-${i}`}>
             <div className="mb-1 flex items-center justify-between gap-2 text-[12px]">
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: nuanceColor(c.nuance) }}
-                />
-                <span className="font-medium">
-                  {c.nom.charAt(0)}. {c.nom.slice(1).toLowerCase()}{" "}
-                  {c.prenom ? `${c.prenom.charAt(0)}.` : ""}
-                </span>
-                <span className="text-muted-foreground">· {nuanceLabel(c.nuance)}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: nuanceColor(c.nuance) }} />
+                <span className="truncate font-medium">{c.label}</span>
+                {c.elu && (
+                  <span className="inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-emerald-100 px-1 text-[10px] font-medium text-emerald-700">
+                    <BadgeCheck className="h-2.5 w-2.5" /> élu
+                  </span>
+                )}
               </span>
-              <span className="font-semibold tabular-nums">
-                {FMT_PCT.format(c.pct_exp)}
-              </span>
+              <span className="shrink-0 font-semibold tabular-nums">{FMT_PCT.format(c.pct)}</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-pill bg-surface-soft">
-              <div
-                className="h-full rounded-pill"
-                style={{
-                  width: `${(c.pct_exp / max) * 100}%`,
-                  background: nuanceColor(c.nuance),
-                }}
-              />
+              <div className="h-full rounded-pill transition-[width] duration-500"
+                style={{ width: `${(c.pct / max) * 100}%`, background: nuanceColor(c.nuance) }} />
             </div>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <KPICard
-          label="Participation"
-          value={FMT_PCT.format(data.participation)}
-          hint={null}
-        />
-        <KPICard
-          label="Inscrits"
-          value={FMT_INT.format(data.inscrits)}
-          hint={null}
-        />
-        <KPICard
-          label="Votants"
-          value={FMT_INT.format(data.votants)}
-          hint={null}
-        />
-        <KPICard
-          label="Exprimés"
-          value={FMT_INT.format(data.exprimes)}
-          hint={null}
-        />
+        <KPICard label="Participation" value={FMT_PCT.format(participation)} hint={null} />
+        <KPICard label="Inscrits" value={FMT_INT.format(inscrits)} hint={null} />
+        <KPICard label="Votants" value={FMT_INT.format(votants)} hint={null} />
+        <KPICard label="Exprimés" value={FMT_INT.format(exprimes)} hint={null} />
       </div>
 
       {elu && (
         <p className="text-[11px] text-muted-foreground">
-          Élu·e : <span className="font-medium text-foreground">{elu.nom} {elu.prenom}</span>
+          Élu·e : <span className="font-medium text-foreground">{elu.label}</span>
         </p>
       )}
     </div>
   );
 }
 
-function CommuneFiche({
-  revenu,
-  pauvrete,
-}: {
-  name: string;
-  revenu: number | null;
-  pauvrete: number | null;
-}) {
+function CircoResults({ data }: { data: NonNullable<ReturnType<typeof useCircoDetail>["data"]> }) {
+  const candidates: BarCandidate[] = data.candidates.map((c) => ({
+    label: `${c.nom} ${c.prenom}`.trim(),
+    nuance: c.nuance,
+    pct: c.pct_exp,
+    voix: c.voix,
+    elu: c.elu,
+  }));
+  const elu = candidates.find((c) => c.elu) ?? null;
+  return (
+    <ResultsBlock
+      scrutinLabel="Législatives 2024 · 1er tour"
+      candidates={candidates}
+      inscrits={data.inscrits}
+      votants={data.votants}
+      exprimes={data.exprimes}
+      participation={data.participation}
+      elu={elu}
+    />
+  );
+}
+
+function CommuneResults({ data }: { data: NonNullable<ReturnType<typeof useCommuneDetail>["data"]> }) {
+  const candidates: BarCandidate[] = data.candidates.map((c) => ({
+    label: c.nom.charAt(0) + c.nom.slice(1).toLowerCase(),
+    nuance: presid2022Nuance(c.nom),
+    pct: c.pct,
+    voix: c.voix,
+  }));
+  return (
+    <ResultsBlock
+      scrutinLabel="Présidentielle 2022 · 1er tour"
+      candidates={candidates}
+      inscrits={data.inscrits}
+      votants={data.votants}
+      exprimes={data.exprimes}
+      participation={data.participation}
+    />
+  );
+}
+
+function SocioBlock({ revenu, pauvrete }: { revenu: number | null; pauvrete: number | null }) {
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        Sociologie · INSEE Filosofi 2021
+      </p>
       <div>
-        <p className="text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {revenu != null ? `${(revenu / 1000).toFixed(1)}k€` : "—"}
+        <p className="text-[40px] font-semibold leading-none tracking-tight tabular-nums">
+          {revenu != null ? `${(revenu / 1000).toFixed(1)} k€` : "—"}
         </p>
-        <p className="mt-1 text-[12px] text-muted-foreground">
-          Niveau de vie médian
-        </p>
+        <p className="mt-1 text-[12px] text-muted-foreground">Niveau de vie médian annuel</p>
       </div>
-
       <div className="grid grid-cols-2 gap-2">
         <KPICard
           label="Revenu médian"
           value={revenu != null ? `${FMT_INT.format(Math.round(revenu))} €` : "—"}
-          hint="Médiane FR · 22.0 k€"
+          hint={`France · ${FMT_INT.format(FR.revenuMedian)} €`}
         />
         <KPICard
           label="Taux de pauvreté"
           value={pauvrete != null ? `${pauvrete.toFixed(1)} %` : "—"}
-          hint="Médiane FR · 14.6 %"
+          hint={`France · ${FR.tauxPauvrete} %`}
         />
       </div>
+    </div>
+  );
+}
+
+function FranceBlock({
+  isCirco,
+  participation,
+  revenu,
+  pauvrete,
+}: {
+  isCirco: boolean;
+  participation: number | undefined;
+  revenu: number | null;
+  pauvrete: number | null;
+}) {
+  const refPart = isCirco ? FR.legis2024T1Participation : FR.presidT1Participation;
+  const rows: { label: string; local: string; nat: string; delta: number | null }[] = [
+    {
+      label: `Participation (${isCirco ? "légis. 2024" : "prés. 2022"})`,
+      local: participation != null ? FMT_PCT.format(participation) : "—",
+      nat: FMT_PCT.format(refPart),
+      delta: participation != null ? (participation - refPart) * 100 : null,
+    },
+  ];
+  if (!isCirco) {
+    rows.push({
+      label: "Revenu médian",
+      local: revenu != null ? `${FMT_INT.format(Math.round(revenu))} €` : "—",
+      nat: `${FMT_INT.format(FR.revenuMedian)} €`,
+      delta: revenu != null ? ((revenu - FR.revenuMedian) / FR.revenuMedian) * 100 : null,
+    });
+    rows.push({
+      label: "Taux de pauvreté",
+      local: pauvrete != null ? `${pauvrete.toFixed(1)} %` : "—",
+      nat: `${FR.tauxPauvrete} %`,
+      delta: pauvrete != null ? pauvrete - FR.tauxPauvrete : null,
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        Comparaison à la moyenne nationale
+      </p>
+      <div className="flex flex-col gap-2">
+        {rows.map((r) => (
+          <div key={r.label} className="rounded-md border border-border/70 bg-surface-alt p-3">
+            <p className="text-[11px] text-muted-foreground">{r.label}</p>
+            <div className="mt-1 flex items-baseline justify-between gap-2">
+              <span className="text-[16px] font-semibold tabular-nums">{r.local}</span>
+              <span className="text-[11px] text-muted-foreground">France {r.nat}</span>
+            </div>
+            {r.delta != null && (
+              <p
+                className={cn(
+                  "mt-1 text-[11px] font-medium tabular-nums",
+                  r.delta > 0 ? "text-success" : r.delta < 0 ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {r.delta > 0 ? "+" : ""}
+                {r.label.startsWith("Revenu") ? `${r.delta.toFixed(1)} %` : `${r.delta.toFixed(1)} pts`} vs France
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+      {isCirco && (
+        <p className="text-[10.5px] text-muted-foreground/70">
+          Données sociologiques disponibles à la maille commune.
+        </p>
+      )}
     </div>
   );
 }
