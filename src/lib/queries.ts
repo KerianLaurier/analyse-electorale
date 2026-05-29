@@ -2,206 +2,163 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { inseeUrl, parquetUrl, query } from "@/lib/duckdb";
+import type { Maille } from "@/lib/map-config";
+import type { Scrutin } from "@/lib/url-state";
 
-const CIRCO_PARQUET = "legislatives_2024_t1_circo.parquet";
-const PRESID_T1_PARQUET = "presidentielle_2022_t1.parquet";
 const FILOSOFI_PARQUET = "filosofi_2021_commune.parquet";
-const MAX_CANDIDATS = 19; // largeur max constatée dans le dataset MinInt
-const N_PRESID_2022_T1 = 12;
-const CODE_SQL = `lpad("Code département", 2, '0') || right("Code circonscription législative", 2)`;
-// Code INSEE commune reconstruit depuis le fichier prés. (dept 2-digit pour métropole).
-// Limite connue : les DOM (dept ZA/ZB/...) ne matchent pas la maille communes GeoJSON.
-const COMMUNE_INSEE_SQL = `"Code du département" || "Code de la commune"`;
 
-/** Convertit "71,20%" → 0.712. */
-const PCT_SQL = (col: string) =>
-  `TRY_CAST(replace(replace("${col}", '%', ''), ',', '.') AS DOUBLE) / 100`;
+const aggUrl = (scrutin: Scrutin, kind: "territoires" | "candidats") =>
+  parquetUrl(`agg/${scrutin}_${kind}.parquet`);
 
-/** Construit un UNION ALL qui aplatit les 19 blocs candidats. */
-function buildCandidatesUnion(url: string): string {
-  const parts = [];
-  for (let n = 1; n <= MAX_CANDIDATS; n++) {
-    parts.push(`
-      SELECT
-        ${CODE_SQL} AS code,
-        "Nuance candidat ${n}"  AS nuance,
-        "Nom candidat ${n}"     AS nom,
-        "Prénom candidat ${n}"  AS prenom,
-        TRY_CAST(replace("Voix ${n}", ' ', '') AS BIGINT) AS voix,
-        ${PCT_SQL(`% Voix/exprimés ${n}`)} AS pct_exp,
-        "Elu ${n}" AS elu_flag
-      FROM read_parquet('${url}')
-      WHERE "Nuance candidat ${n}" IS NOT NULL
-    `);
-  }
-  return parts.join(" UNION ALL ");
-}
+// ─── Types partagés ───────────────────────────────────────────────────────────
 
-export type ParticipationRow = { code: string; participation: number };
 export type WinningNuanceRow = { code: string; nuance: string };
-export type CandidateRow = {
-  nom: string;
-  prenom: string;
-  nuance: string;
+export type NumericRow = { code: string; value: number };
+export type CommuneNumericRow = NumericRow;
+
+export type ScrutinCandidate = {
+  label: string;
+  nuance: string | null;
   voix: number;
-  pct_exp: number;
+  pct: number;
   elu: boolean;
 };
-export type CircoDetail = {
+
+export type ScrutinDetail = {
   code: string;
-  libelle: string;
-  departement: string;
+  libelle: string | null;
   inscrits: number;
   votants: number;
   exprimes: number;
+  abstentions: number;
+  blancs: number;
+  nuls: number;
   participation: number;
-  candidates: CandidateRow[];
+  candidates: ScrutinCandidate[];
 };
 
-/**
- * Taux de participation au 1er tour des législatives 2024, par circonscription.
- * Normalise le code circo au format GeoJSON ("0104" = dpt 01 + circo 04).
- */
-export function useParticipationCirco(enabled = true) {
-  return useQuery({
-    enabled,
-    queryKey: ["choropleth", "participation", CIRCO_PARQUET],
-    queryFn: async (): Promise<ParticipationRow[]> => {
-      const url = parquetUrl(CIRCO_PARQUET);
-      const rows = await query<{ code: string; participation: number }>(
-        `
-        SELECT
-          ${CODE_SQL} AS code,
-          ${PCT_SQL("% Votants")} AS participation
-        FROM read_parquet('${url}')
-        WHERE "Code circonscription législative" IS NOT NULL
-        `,
-      );
-      return rows
-        .filter((r) => r.code && Number.isFinite(r.participation))
-        .map((r) => ({ code: r.code, participation: Number(r.participation) }));
-    },
-    staleTime: 60 * 60 * 1000,
-  });
-}
+export type CommuneSociologie = {
+  code: string;
+  revenuMedian: number | null;
+  tauxPauvrete: number | null;
+};
+
+// ─── Choroplèthes électorales (génériques, lisent les agrégats) ───────────────
 
 /**
- * Nuance politique gagnante au T1 par circonscription : on aplatit les 19
- * blocs candidats (UNION ALL) puis on garde le top score par circo via
- * QUALIFY ROW_NUMBER().
+ * Nuance gagnante par territoire pour un scrutin × maille donné.
+ * On somme les voix par nuance (gère le cas où plusieurs candidats partagent
+ * une nuance, ex. extrême gauche en présidentielle) puis on garde le top.
  */
-export function useWinningNuanceCirco(enabled = true) {
+export function useScrutinWinner(scrutin: Scrutin, maille: Maille, enabled = true) {
   return useQuery({
     enabled,
-    queryKey: ["choropleth", "winning-nuance", CIRCO_PARQUET],
+    queryKey: ["scrutin-winner", scrutin, maille],
     queryFn: async (): Promise<WinningNuanceRow[]> => {
-      const url = parquetUrl(CIRCO_PARQUET);
-      const sql = `
-        WITH candidates AS (
-          ${buildCandidatesUnion(url)}
+      const url = aggUrl(scrutin, "candidats");
+      const rows = await query<{ code: string; nuance: string }>(`
+        WITH s AS (
+          SELECT code, nuance, SUM(voix) AS v
+          FROM read_parquet('${url}')
+          WHERE maille = '${maille}' AND nuance IS NOT NULL
+          GROUP BY code, nuance
         )
-        SELECT code, nuance
-        FROM candidates
-        WHERE voix IS NOT NULL
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY code ORDER BY voix DESC) = 1
-      `;
-      const rows = await query<{ code: string; nuance: string }>(sql);
+        SELECT code, nuance FROM s
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY code ORDER BY v DESC) = 1
+      `);
       return rows.filter((r) => r.code && r.nuance);
     },
     staleTime: 60 * 60 * 1000,
   });
 }
 
-/**
- * Construit le UNION ALL des 12 blocs candidats pour la présidentielle 2022 T1,
- * en s'appuyant sur les colonnes nommées `Nom_N`, `Voix_N` (générées par le pipeline).
- */
-function buildPresid2022T1CandidatesUnion(url: string): string {
-  const parts: string[] = [];
-  for (let n = 1; n <= N_PRESID_2022_T1; n++) {
-    parts.push(`
-      SELECT
-        ${COMMUNE_INSEE_SQL} AS commune,
-        "Nom_${n}" AS nom,
-        TRY_CAST(replace("Voix_${n}", ' ', '') AS BIGINT) AS voix
-      FROM read_parquet('${url}')
-      WHERE "Nom_${n}" IS NOT NULL
-    `);
-  }
-  return parts.join(" UNION ALL ");
+/** Participation ou abstention (rapport sur inscrits) par territoire. */
+export function useScrutinMetric(
+  scrutin: Scrutin,
+  maille: Maille,
+  metric: "participation" | "abstention",
+  enabled = true,
+) {
+  return useQuery({
+    enabled,
+    queryKey: ["scrutin-metric", scrutin, maille, metric],
+    queryFn: async (): Promise<NumericRow[]> => {
+      const url = aggUrl(scrutin, "territoires");
+      const numer = metric === "participation" ? "votants" : "abstentions";
+      const rows = await query<{ code: string; value: number }>(`
+        SELECT code, CAST(${numer} AS DOUBLE) / inscrits AS value
+        FROM read_parquet('${url}')
+        WHERE maille = '${maille}' AND inscrits > 0
+      `);
+      return rows
+        .filter((r) => r.code && Number.isFinite(r.value))
+        .map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 60 * 60 * 1000,
+  });
 }
 
-export type CommuneParticipationRow = { code: string; participation: number };
-export type CommuneCandidateRow = { code: string; candidate: string };
-export type CommuneNumericRow = { code: string; value: number };
-export type CommuneSociologie = {
-  code: string;
-  revenuMedian: number | null;
-  tauxPauvrete: number | null;
-};
-export type CommuneDetail = {
-  code: string;
-  libelle: string;
-  inscrits: number;
-  votants: number;
-  exprimes: number;
-  participation: number;
-  candidates: { nom: string; voix: number; pct: number }[];
-};
-
-/**
- * Détail présidentielle 2022 (1er tour) pour une commune : chiffres clés +
- * tous les candidats agrégés depuis les bureaux de vote de la commune.
- */
-export function useCommuneDetail(code: string | null) {
+/** Détail complet d'un territoire pour un scrutin (chiffres clés + candidats). */
+export function useScrutinDetail(
+  scrutin: Scrutin | null,
+  maille: Maille,
+  code: string | null,
+) {
   return useQuery({
-    enabled: !!code,
-    queryKey: ["commune-detail-presid", code],
-    queryFn: async (): Promise<CommuneDetail | null> => {
-      if (!code) return null;
-      const url = parquetUrl(PRESID_T1_PARQUET);
+    enabled: !!scrutin && !!code,
+    queryKey: ["scrutin-detail", scrutin, maille, code],
+    queryFn: async (): Promise<ScrutinDetail | null> => {
+      if (!scrutin || !code) return null;
+      const terr = aggUrl(scrutin, "territoires");
+      const cand = aggUrl(scrutin, "candidats");
 
       const headerRows = await query<{
-        libelle: string;
+        libelle: string | null;
         inscrits: number;
         votants: number;
         exprimes: number;
+        abstentions: number;
+        blancs: number;
+        nuls: number;
       }>(`
-        SELECT
-          any_value("Libellé de la commune") AS libelle,
-          SUM(TRY_CAST(replace("Inscrits", ' ', '') AS BIGINT)) AS inscrits,
-          SUM(TRY_CAST(replace("Votants",  ' ', '') AS BIGINT)) AS votants,
-          SUM(TRY_CAST(replace("Exprimés", ' ', '') AS BIGINT)) AS exprimes
-        FROM read_parquet('${url}')
-        WHERE ${COMMUNE_INSEE_SQL} = '${code}'
+        SELECT libelle, inscrits, votants, exprimes, abstentions, blancs, nuls
+        FROM read_parquet('${terr}')
+        WHERE maille = '${maille}' AND code = '${code}'
+        LIMIT 1
       `);
-      if (headerRows.length === 0 || !headerRows[0].inscrits) return null;
+      if (headerRows.length === 0) return null;
       const h = headerRows[0];
       const exprimes = Number(h.exprimes ?? 0);
+      const inscrits = Number(h.inscrits ?? 0);
 
-      const candRows = await query<{ nom: string; voix: number }>(`
-        WITH bureau AS (${buildPresid2022T1CandidatesUnion(url)}),
-        agg AS (
-          SELECT nom, SUM(voix) AS voix
-          FROM bureau
-          WHERE commune = '${code}'
-          GROUP BY nom
-        )
-        SELECT nom, voix FROM agg WHERE voix IS NOT NULL ORDER BY voix DESC
+      const candRows = await query<{
+        label: string | null;
+        nuance: string | null;
+        voix: number;
+        elu: boolean;
+      }>(`
+        SELECT label, nuance, voix, elu
+        FROM read_parquet('${cand}')
+        WHERE maille = '${maille}' AND code = '${code}' AND voix IS NOT NULL
+        ORDER BY voix DESC
       `);
 
       return {
         code,
-        libelle: String(h.libelle ?? ""),
-        inscrits: Number(h.inscrits ?? 0),
+        libelle: h.libelle ?? null,
+        inscrits,
         votants: Number(h.votants ?? 0),
         exprimes,
-        participation:
-          Number(h.inscrits) > 0 ? Number(h.votants) / Number(h.inscrits) : 0,
+        abstentions: Number(h.abstentions ?? 0),
+        blancs: Number(h.blancs ?? 0),
+        nuls: Number(h.nuls ?? 0),
+        participation: inscrits > 0 ? Number(h.votants) / inscrits : 0,
         candidates: candRows.map((c) => ({
-          nom: String(c.nom ?? ""),
+          label: c.label ?? "",
+          nuance: c.nuance ?? null,
           voix: Number(c.voix ?? 0),
           pct: exprimes > 0 ? Number(c.voix) / exprimes : 0,
+          elu: Boolean(c.elu),
         })),
       };
     },
@@ -209,58 +166,21 @@ export function useCommuneDetail(code: string | null) {
   });
 }
 
-/** Participation présidentielle 2022 T1 — agrégée à la commune. */
-export function useParticipationCommunePresid2022T1(enabled = true) {
+/** Participation nationale (métropole) d'un scrutin — pour les comparaisons. */
+export function useScrutinNationalParticipation(scrutin: Scrutin | null, enabled = true) {
   return useQuery({
-    enabled,
-    queryKey: ["choropleth", "participation-presid-2022-t1-commune"],
-    queryFn: async (): Promise<CommuneParticipationRow[]> => {
-      const url = parquetUrl(PRESID_T1_PARQUET);
-      const rows = await query<{
-        code: string;
-        votants: number;
-        inscrits: number;
-      }>(`
-        SELECT
-          ${COMMUNE_INSEE_SQL} AS code,
-          SUM(TRY_CAST(replace("Inscrits", ' ', '') AS BIGINT)) AS inscrits,
-          SUM(TRY_CAST(replace("Votants",  ' ', '') AS BIGINT)) AS votants
+    enabled: enabled && !!scrutin,
+    queryKey: ["scrutin-national-participation", scrutin],
+    queryFn: async (): Promise<number | null> => {
+      if (!scrutin) return null;
+      const url = aggUrl(scrutin, "territoires");
+      const rows = await query<{ value: number }>(`
+        SELECT CAST(SUM(votants) AS DOUBLE) / SUM(inscrits) AS value
         FROM read_parquet('${url}')
-        GROUP BY code
-        HAVING inscrits > 0
+        WHERE maille = 'departements' AND inscrits > 0
       `);
-      return rows.map((r) => ({
-        code: String(r.code),
-        participation: Number(r.votants) / Number(r.inscrits),
-      }));
-    },
-    staleTime: 60 * 60 * 1000,
-  });
-}
-
-/** Vote dominant présidentielle 2022 T1 — agrégé à la commune. */
-export function useWinningCandidateCommunePresid2022T1(enabled = true) {
-  return useQuery({
-    enabled,
-    queryKey: ["choropleth", "winning-presid-2022-t1-commune"],
-    queryFn: async (): Promise<CommuneCandidateRow[]> => {
-      const url = parquetUrl(PRESID_T1_PARQUET);
-      const sql = `
-        WITH bureau AS (${buildPresid2022T1CandidatesUnion(url)}),
-        commune_sum AS (
-          SELECT commune, nom, SUM(voix) AS voix
-          FROM bureau
-          GROUP BY commune, nom
-        )
-        SELECT commune AS code, nom AS candidate
-        FROM commune_sum
-        WHERE voix IS NOT NULL
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY commune ORDER BY voix DESC) = 1
-      `;
-      const rows = await query<{ code: string; candidate: string }>(sql);
-      return rows
-        .filter((r) => r.code && r.candidate)
-        .map((r) => ({ code: String(r.code), candidate: String(r.candidate) }));
+      const v = rows[0]?.value;
+      return v != null && Number.isFinite(v) ? Number(v) : null;
     },
     staleTime: 60 * 60 * 1000,
   });
@@ -268,7 +188,7 @@ export function useWinningCandidateCommunePresid2022T1(enabled = true) {
 
 // ─── Sociologie INSEE (Filosofi 2021, niveau commune) ─────────────────────────
 
-/** Niveau de vie médian (en €) par commune — indicateur Filosofi MED_SL. */
+/** Niveau de vie médian (€) par commune — indicateur Filosofi MED_SL. */
 export function useRevenuMedianCommune(enabled = true) {
   return useQuery({
     enabled,
@@ -286,7 +206,7 @@ export function useRevenuMedianCommune(enabled = true) {
   });
 }
 
-/** Taux de pauvreté (en %, seuil 60% médiane) par commune — indicateur PR_MD60. */
+/** Taux de pauvreté (%, seuil 60% médiane) par commune — indicateur PR_MD60. */
 export function useTauxPauvreteCommune(enabled = true) {
   return useQuery({
     enabled,
@@ -304,7 +224,7 @@ export function useTauxPauvreteCommune(enabled = true) {
   });
 }
 
-/** Récupère les 2 indicateurs sociologie pour une commune donnée (pour la fiche). */
+/** Indicateurs sociologie pour une commune (pour la fiche). */
 export function useSociologieCommune(code: string | null) {
   return useQuery({
     enabled: !!code,
@@ -330,73 +250,5 @@ export function useSociologieCommune(code: string | null) {
       };
     },
     staleTime: 60 * 60 * 1000,
-  });
-}
-
-/** Détail complet d'une circonscription (chiffres clés + tous les candidats). */
-export function useCircoDetail(code: string | null) {
-  return useQuery({
-    enabled: !!code,
-    queryKey: ["circo-detail", code, CIRCO_PARQUET],
-    queryFn: async (): Promise<CircoDetail | null> => {
-      if (!code) return null;
-      const url = parquetUrl(CIRCO_PARQUET);
-      const headerRows = await query<{
-        code: string;
-        libelle: string;
-        departement: string;
-        inscrits: number;
-        votants: number;
-        exprimes: number;
-        participation: number;
-      }>(`
-        SELECT
-          ${CODE_SQL} AS code,
-          "Libellé circonscription législative" AS libelle,
-          "Libellé département" AS departement,
-          TRY_CAST(replace("Inscrits", ' ', '') AS BIGINT) AS inscrits,
-          TRY_CAST(replace("Votants",  ' ', '') AS BIGINT) AS votants,
-          TRY_CAST(replace("Exprimés", ' ', '') AS BIGINT) AS exprimes,
-          ${PCT_SQL("% Votants")} AS participation
-        FROM read_parquet('${url}')
-        WHERE ${CODE_SQL} = '${code}'
-      `);
-      if (headerRows.length === 0) return null;
-      const header = headerRows[0];
-
-      const candRows = await query<{
-        nom: string;
-        prenom: string;
-        nuance: string;
-        voix: number;
-        pct_exp: number;
-        elu_flag: string | null;
-      }>(`
-        WITH candidates AS (${buildCandidatesUnion(url)})
-        SELECT nom, prenom, nuance, voix, pct_exp, elu_flag
-        FROM candidates
-        WHERE code = '${code}' AND voix IS NOT NULL
-        ORDER BY voix DESC
-      `);
-
-      return {
-        code: String(header.code),
-        libelle: String(header.libelle ?? ""),
-        departement: String(header.departement ?? ""),
-        inscrits: Number(header.inscrits ?? 0),
-        votants: Number(header.votants ?? 0),
-        exprimes: Number(header.exprimes ?? 0),
-        participation: Number(header.participation ?? 0),
-        candidates: candRows.map((c) => ({
-          nom: String(c.nom ?? ""),
-          prenom: String(c.prenom ?? ""),
-          nuance: String(c.nuance ?? ""),
-          voix: Number(c.voix ?? 0),
-          pct_exp: Number(c.pct_exp ?? 0),
-          elu: c.elu_flag != null && String(c.elu_flag).trim() !== "",
-        })),
-      };
-    },
-    staleTime: 10 * 60 * 1000,
   });
 }

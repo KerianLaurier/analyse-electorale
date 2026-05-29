@@ -4,6 +4,7 @@
 
 export type NuanceCode =
   | "EXG"
+  | "DXG"
   | "COM"
   | "FI"
   | "SOC"
@@ -11,46 +12,103 @@ export type NuanceCode =
   | "DVG"
   | "ECO"
   | "UG"
+  | "NUP"
+  | "VEC"
   | "REG"
   | "DIV"
   | "DVC"
   | "ENS"
+  | "MDM"
   | "HOR"
   | "UDI"
   | "UDC"
+  | "UC"
   | "LR"
+  | "DLF"
   | "DVD"
   | "DSV"
   | "RN"
   | "UXD"
   | "REC"
-  | "EXD";
+  | "EXD"
+  // Municipales (nuances de liste)
+  | "LEXG"
+  | "LCOM"
+  | "LFI"
+  | "LSOC"
+  | "LRDG"
+  | "LDVG"
+  | "LECO"
+  | "LUG"
+  | "LVEC"
+  | "LREG"
+  | "LDIV"
+  | "LGJ"
+  | "LENS"
+  | "LMDM"
+  | "LUDI"
+  | "LUC"
+  | "LDVC"
+  | "LR_M"
+  | "LDVD"
+  | "LUD"
+  | "LRN"
+  | "LEXD";
 
 type NuanceMeta = { label: string; color: string };
 
 export const NUANCES: Record<NuanceCode, NuanceMeta> = {
   EXG: { label: "Extrême gauche",        color: "#7f1d1d" },
+  DXG: { label: "Divers extrême gauche", color: "#991b1b" },
   COM: { label: "Communiste",            color: "#b91c1c" },
   FI:  { label: "La France insoumise",   color: "#dc2626" },
   UG:  { label: "Union de la gauche / NFP", color: "#be123c" },
+  NUP: { label: "Nouvelle Union Populaire (NUPES)", color: "#be123c" },
   SOC: { label: "Socialiste",            color: "#f43f5e" },
   RDG: { label: "Radical de gauche",     color: "#fb7185" },
   ECO: { label: "Écologiste",            color: "#16a34a" },
+  VEC: { label: "Les Écologistes",       color: "#16a34a" },
   DVG: { label: "Divers gauche",         color: "#fda4af" },
   REG: { label: "Régionaliste",          color: "#0d9488" },
   DIV: { label: "Divers",                color: "#9ca3af" },
   DVC: { label: "Divers centre",         color: "#fcd34d" },
   ENS: { label: "Ensemble (majorité)",   color: "#f59e0b" },
+  MDM: { label: "Modem",                 color: "#f97316" },
   HOR: { label: "Horizons",              color: "#fbbf24" },
   UDI: { label: "UDI",                   color: "#fb923c" },
   UDC: { label: "Union du centre",       color: "#fbbf24" },
+  UC:  { label: "Union du centre",       color: "#fbbf24" },
   LR:  { label: "Les Républicains",      color: "#1e40af" },
+  DLF: { label: "Debout la France",      color: "#334155" },
   DVD: { label: "Divers droite",         color: "#60a5fa" },
   DSV: { label: "Droite souverainiste",  color: "#1e293b" },
   RN:  { label: "Rassemblement National", color: "#1c1917" },
   UXD: { label: "Union de l'extrême droite", color: "#3f3f46" },
   REC: { label: "Reconquête",            color: "#525252" },
   EXD: { label: "Extrême droite",        color: "#27272a" },
+  // Municipales — nuances de liste (mêmes familles, codes préfixés L)
+  LEXG: { label: "Liste extrême gauche",  color: "#7f1d1d" },
+  LCOM: { label: "Liste communiste",      color: "#b91c1c" },
+  LFI:  { label: "Liste France insoumise", color: "#dc2626" },
+  LUG:  { label: "Liste union de la gauche", color: "#be123c" },
+  LSOC: { label: "Liste socialiste",      color: "#f43f5e" },
+  LRDG: { label: "Liste radicale de gauche", color: "#fb7185" },
+  LECO: { label: "Liste écologiste",      color: "#16a34a" },
+  LVEC: { label: "Liste écologiste",      color: "#16a34a" },
+  LDVG: { label: "Liste divers gauche",   color: "#fda4af" },
+  LREG: { label: "Liste régionaliste",    color: "#0d9488" },
+  LGJ:  { label: "Liste gilets jaunes",   color: "#eab308" },
+  LDIV: { label: "Liste divers",          color: "#9ca3af" },
+  LDVC: { label: "Liste divers centre",   color: "#fcd34d" },
+  LENS: { label: "Liste majorité présidentielle", color: "#f59e0b" },
+  LMDM: { label: "Liste Modem",           color: "#f97316" },
+  LUDI: { label: "Liste UDI",             color: "#fb923c" },
+  LUC:  { label: "Liste union du centre", color: "#fbbf24" },
+  LR_M: { label: "Liste Les Républicains", color: "#1e40af" },
+  LDVD: { label: "Liste divers droite",   color: "#60a5fa" },
+  LUD:  { label: "Liste union de la droite", color: "#3b82f6" },
+  LRN:  { label: "Liste Rassemblement National", color: "#1c1917" },
+  LEXD: { label: "Liste extrême droite",  color: "#27272a" },
 };
 
 const FALLBACK_COLOR = "#cbd5e1";
@@ -84,6 +142,26 @@ export const PRESID_2022_NUANCE: Record<string, NuanceCode> = {
 export function presid2022Nuance(nom: string | null | undefined): NuanceCode | null {
   if (!nom) return null;
   return PRESID_2022_NUANCE[nom.toUpperCase().trim()] ?? null;
+}
+
+/** Mapping candidat présidentielle 2017 (nom MinInt) → nuance politique. */
+export const PRESID_2017_NUANCE: Record<string, NuanceCode> = {
+  ARTHAUD: "EXG",
+  POUTOU: "EXG",
+  "DUPONT-AIGNAN": "DSV",
+  "LE PEN": "RN",
+  MACRON: "ENS",
+  HAMON: "SOC",
+  ASSELINEAU: "DSV",
+  LASSALLE: "REG",
+  MÉLENCHON: "FI",
+  CHEMINADE: "DIV",
+  FILLON: "LR",
+};
+
+export function presid2017Nuance(nom: string | null | undefined): NuanceCode | null {
+  if (!nom) return null;
+  return PRESID_2017_NUANCE[nom.toUpperCase().trim()] ?? null;
 }
 
 export function nuanceLabel(code: string | null | undefined): string {

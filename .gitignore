@@ -55,3 +55,7 @@ next-env.d.ts
 
 # Outils macOS
 .DS_Store
+
+# python caches
+__pycache__/
+*.pyc
