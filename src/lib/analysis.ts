@@ -5,8 +5,8 @@ import { inseeUrl, parquetUrl, query } from "@/lib/duckdb";
 import type { Maille } from "@/lib/map-config";
 import type { Scrutin } from "@/lib/url-state";
 
-const aggUrl = (scrutin: Scrutin, kind: "territoires" | "candidats") =>
-  parquetUrl(`agg/${scrutin}_${kind}.parquet`);
+const aggUrl = (scrutin: Scrutin, kind: "territoires" | "candidats", maille?: Maille) =>
+  parquetUrl(`agg/${scrutin}${maille === "bureaux" ? "_bureaux" : ""}_${kind}.parquet`);
 
 const FILOSOFI_PARQUET = "filosofi_2021_commune.parquet";
 
@@ -75,8 +75,8 @@ export function useBlocShare(
     enabled: enabled && !!codes && codes.length > 0,
     queryKey: ["bloc-share", scrutin, maille, codeKey],
     queryFn: async (): Promise<TerritoryValue[]> => {
-      const terr = aggUrl(scrutin, "territoires");
-      const cand = aggUrl(scrutin, "candidats");
+      const terr = aggUrl(scrutin, "territoires", maille);
+      const cand = aggUrl(scrutin, "candidats", maille);
       const blocCodes = codes ?? [];
       const inList = blocCodes.map(() => "?").join(", ");
       const rows = await query<{ code: string; libelle: string | null; value: number }>(
@@ -117,7 +117,7 @@ export function useParticipationByMaille(scrutin: Scrutin, maille: Maille, enabl
     enabled,
     queryKey: ["analysis-participation", scrutin, maille],
     queryFn: async (): Promise<TerritoryValue[]> => {
-      const terr = aggUrl(scrutin, "territoires");
+      const terr = aggUrl(scrutin, "territoires", maille);
       const rows = await query<{ code: string; libelle: string | null; value: number }>(
         `
         SELECT code, any_value(libelle) AS libelle,
@@ -146,8 +146,8 @@ export function useWinnerByMaille(scrutin: Scrutin, maille: Maille, enabled = tr
     enabled,
     queryKey: ["analysis-winner", scrutin, maille],
     queryFn: async (): Promise<TerritoryWinner[]> => {
-      const terr = aggUrl(scrutin, "territoires");
-      const cand = aggUrl(scrutin, "candidats");
+      const terr = aggUrl(scrutin, "territoires", maille);
+      const cand = aggUrl(scrutin, "candidats", maille);
       const rows = await query<{ code: string; libelle: string | null; nuance: string }>(
         `
         WITH s AS (
@@ -174,21 +174,53 @@ export function useWinnerByMaille(scrutin: Scrutin, maille: Maille, enabled = tr
   });
 }
 
-// ─── Sociologie commune (revenu / pauvreté) pour la corrélation ────────────────
+// ─── Sociologie & démographie commune (catalogue) pour la corrélation ─────────
 
-export type SocioIndicator = "revenu" | "pauvrete";
+const RP_PARQUET = "rp_2022_commune.parquet";
+
+export type SocioIndicator =
+  | "revenu" | "pauvrete" | "inegalites" | "prestations" | "pensions"
+  | "age65" | "chomage" | "cadres" | "ouvriers" | "diplome";
+
+export type SocioUnit = "euro" | "pct" | "ratio";
+
+type SocioMeta = {
+  id: SocioIndicator;
+  label: string;
+  source: "filosofi" | "rp";
+  column: string;
+  unit: SocioUnit;
+};
+
+/** Catalogue des indicateurs croisables avec le vote (liste blanche de colonnes). */
+export const SOCIO_INDICATORS: SocioMeta[] = [
+  { id: "revenu", label: "Revenu médian", source: "filosofi", column: "MED_SL", unit: "euro" },
+  { id: "pauvrete", label: "Taux de pauvreté", source: "filosofi", column: "PR_MD60", unit: "pct" },
+  { id: "inegalites", label: "Inégalités (D9/D1)", source: "filosofi", column: "IR_D9_D1_SL", unit: "ratio" },
+  { id: "prestations", label: "Prestations sociales", source: "filosofi", column: "S_SOC_BEN_DI", unit: "pct" },
+  { id: "pensions", label: "Pensions / retraites", source: "filosofi", column: "S_RET_PEN_DI", unit: "pct" },
+  { id: "age65", label: "Part des 65 ans +", source: "rp", column: "part65plus", unit: "pct" },
+  { id: "chomage", label: "Taux de chômage", source: "rp", column: "tauxChomage", unit: "pct" },
+  { id: "cadres", label: "Part de cadres", source: "rp", column: "partCadres", unit: "pct" },
+  { id: "ouvriers", label: "Part d'ouvriers", source: "rp", column: "partOuvriers", unit: "pct" },
+  { id: "diplome", label: "Diplômés du supérieur", source: "rp", column: "partDiplomeSup", unit: "pct" },
+];
+
+export function socioMeta(id: SocioIndicator): SocioMeta {
+  return SOCIO_INDICATORS.find((s) => s.id === id) ?? SOCIO_INDICATORS[0];
+}
 
 export function useSocioByCommune(indicator: SocioIndicator, enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["analysis-socio", indicator],
     queryFn: async (): Promise<Map<string, number>> => {
-      const url = inseeUrl(FILOSOFI_PARQUET);
-      const col = indicator === "revenu" ? "MED_SL" : "PR_MD60";
+      const meta = socioMeta(indicator);
+      const url = inseeUrl(meta.source === "rp" ? RP_PARQUET : FILOSOFI_PARQUET);
       const rows = await query<{ code: string; value: number }>(`
-        SELECT code, ${col} AS value
+        SELECT code, ${meta.column} AS value
         FROM read_parquet('${url}')
-        WHERE ${col} IS NOT NULL
+        WHERE ${meta.column} IS NOT NULL
       `);
       const m = new Map<string, number>();
       for (const r of rows) m.set(String(r.code), Number(r.value));
@@ -215,8 +247,8 @@ export function useMarginalite(scrutin: Scrutin, maille: Maille = "circonscripti
     enabled,
     queryKey: ["marginalite", scrutin, maille],
     queryFn: async (): Promise<MarginRow[]> => {
-      const terr = aggUrl(scrutin, "territoires");
-      const cand = aggUrl(scrutin, "candidats");
+      const terr = aggUrl(scrutin, "territoires", maille);
+      const cand = aggUrl(scrutin, "candidats", maille);
       const rows = await query<{
         code: string;
         libelle: string | null;
