@@ -14,6 +14,9 @@ const PRIMARY_NAV = [
 export function AppHeader() {
   const pathname = usePathname();
 
+  // Écrans d'authentification : pas de chrome applicatif.
+  if (pathname?.startsWith("/auth")) return null;
+
   function openPalette() {
     const event = new KeyboardEvent("keydown", {
       key: "k",

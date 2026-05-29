@@ -1,11 +1,5 @@
-import { PagePlaceholder } from "@/components/page-placeholder";
+import { AuthForm } from "@/app/auth/auth-form";
 
 export default function LoginPage() {
-  return (
-    <PagePlaceholder
-      module="Auth"
-      title="Connexion"
-      description="Authentification Supabase — à câbler dans un sprint dédié."
-    />
-  );
+  return <AuthForm mode="login" />;
 }
