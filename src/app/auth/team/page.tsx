@@ -1,16 +1,5 @@
-import { PagePlaceholder } from "@/components/page-placeholder";
+import { TeamView } from "@/app/auth/team/team-view";
 
 export default function TeamPage() {
-  return (
-    <PagePlaceholder
-      module="Auth"
-      title="Gestion d'équipe"
-      description="Invitations, rôles, permissions — base à concevoir avec Supabase RLS."
-      bullets={[
-        "Rôles : admin, analyste, militant",
-        "Invitations par email",
-        "Audit log des accès",
-      ]}
-    />
-  );
+  return <TeamView />;
 }
