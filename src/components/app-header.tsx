@@ -14,8 +14,9 @@ const PRIMARY_NAV = [
 export function AppHeader() {
   const pathname = usePathname();
 
-  // Écrans d'authentification : pas de chrome applicatif.
-  if (pathname?.startsWith("/auth")) return null;
+  // Écrans de connexion / inscription : pas de chrome applicatif.
+  // (la page équipe /auth/team garde le chrome : c'est un réglage in-app)
+  if (pathname === "/auth/login" || pathname === "/auth/signup") return null;
 
   function openPalette() {
     const event = new KeyboardEvent("keydown", {
@@ -90,20 +91,21 @@ export function AppHeader() {
           >
             <Bell className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            aria-label="Paramètres"
+          <Link
+            href="/auth/team"
+            aria-label="Paramètres de l'équipe"
+            title="Équipe & abonnement"
             className="grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
           >
             <Settings2 className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
+          </Link>
+          <Link
+            href="/auth/team"
             aria-label="Profil"
             className="ml-1 grid h-8 w-8 place-items-center rounded-pill bg-warm/90 text-[12px] font-semibold text-on-dark transition-transform duration-150 hover:scale-105 active:scale-95"
           >
             K
-          </button>
+          </Link>
         </div>
       </div>
     </header>
