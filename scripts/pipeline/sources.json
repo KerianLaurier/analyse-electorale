@@ -78,6 +78,69 @@
       "level": "circonscription",
       "approx_size_mb": 0.4,
       "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "legislatives_2024_t2_circo": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-30-juin-et-7-juillet-2024-resultats-definitifs-du-2nd-tour/20240710-170728/resultats-definitifs-par-circonscription.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "circonscription",
+      "approx_size_mb": 0.4,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "presidentielle_2017_t1": {
+      "url": "https://www.data.gouv.fr/api/1/datasets/r/8fdb0926-ea9d-4fb4-a136-7767cd97e30b",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 35,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "presidentielle_2017_t2": {
+      "url": "https://static.data.gouv.fr/resources/election-presidentielle-des-23-avril-et-7-mai-2017-resultats-definitifs-du-2nd-tour-par-bureaux-de-vote/20170511-093541/PR17_BVot_T2_FE.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 13,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "legislatives_2022_t1_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-12-et-19-juin-2022-resultats-definitifs-du-premier-tour/20220614-192343/resultats-par-niveau-burvot-t1-france-entiere.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 35,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "legislatives_2022_t1_circo": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-12-et-19-juin-2022-resultats-definitifs-du-premier-tour/20220614-192511/resultats-par-niveau-cirlg-t1-france-entiere.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "circonscription",
+      "approx_size_mb": 0.3,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "legislatives_2022_t2_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-12-et-19-juin-2022-resultats-definitifs-du-second-tour/20220621-175201/resultats-par-niveau-burvot-t2-france-entiere.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 14,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "legislatives_2022_t2_circo": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-12-et-19-juin-2022-resultats-definitifs-du-second-tour/20220621-175613/resultats-par-niveau-cirlg-t2-france-entiere.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "circonscription",
+      "approx_size_mb": 0.1,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "municipales_2026_t1_commune": {
+      "url": "https://static.data.gouv.fr/resources/elections-municipales-2026-resultats-du-premier-tour/20260320-164339/municipales-2026-resultats-communes-2026-03-20.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "commune",
+      "approx_size_mb": 14,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "municipales_2026_t2_commune": {
+      "url": "https://static.data.gouv.fr/resources/elections-municipales-2026-resultats-du-scond-tour/20260323-180124/municipales-2026-resultats-communes-2026-03-23-16h14.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "commune",
+      "approx_size_mb": 0.9,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
     }
   }
 }

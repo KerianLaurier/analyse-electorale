@@ -4,77 +4,99 @@ import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MAILLE_ORDER, type Maille } from "@/lib/map-config";
 
-// Anciens LayerId — conservés en interne pour driver les queries existantes.
-export type LayerId =
-  | "none"
-  | "participation-legis-2024"
-  | "nuance-legis-2024"
-  | "participation-presid-2022"
-  | "vote-dominant-presid-2022"
-  | "revenu-median-commune"
-  | "taux-pauvrete-commune";
+// ─── Scrutins disponibles ─────────────────────────────────────────────────────
+// L'identifiant correspond directement au nom des Parquet agrégés
+// (public/electoral/agg/{scrutin}_territoires.parquet & _candidats.parquet).
 
-// Nouvelle granularité UI : scrutin × coloration. Plus proche du design.
 export type Scrutin =
+  | "presid-2017-t1"
+  | "presid-2017-t2"
   | "presid-2022-t1"
   | "presid-2022-t2"
-  | "legis-2024"
+  | "legis-2022-t1"
+  | "legis-2022-t2"
+  | "legis-2024-t1"
+  | "legis-2024-t2"
+  | "municipales-2026-t1"
+  | "municipales-2026-t2"
   | "sociologie";
 
 export type Coloration =
   | "vainqueur"
-  | "score"
+  | "participation"
   | "abstention"
   | "revenu"
   | "pauvrete";
 
-const SCRUTINS: ReadonlySet<Scrutin> = new Set<Scrutin>([
-  "presid-2022-t1",
-  "presid-2022-t2",
-  "legis-2024",
-  "sociologie",
-]);
-const COLORATIONS: ReadonlySet<Coloration> = new Set<Coloration>([
-  "vainqueur",
-  "score",
-  "abstention",
-  "revenu",
-  "pauvrete",
-]);
-const MAILLE_SET: ReadonlySet<Maille> = new Set<Maille>(MAILLE_ORDER);
+export type ScrutinFamily =
+  | "presidentielle"
+  | "legislative"
+  | "municipale"
+  | "sociologie";
 
-export const SCRUTIN_LABELS: Record<Scrutin, { short: string; long: string }> = {
-  "presid-2022-t1": { short: "Prés. 2022 · T1", long: "PRÉS. 2022 · 1ER TOUR" },
-  "presid-2022-t2": { short: "Prés. 2022 · T2", long: "PRÉS. 2022 · 2ND TOUR" },
-  "legis-2024":     { short: "Légis. 2024",      long: "LÉGIS. 2024 · 1ER TOUR" },
-  "sociologie":     { short: "Sociologie",       long: "INSEE FILOSOFI 2021" },
+type ScrutinMeta = {
+  short: string;
+  long: string;
+  family: ScrutinFamily;
+  mailles: Maille[];
 };
+
+const ALL_MAILLES: Maille[] = ["regions", "departements", "circonscriptions", "communes"];
+const NO_CIRCO: Maille[] = ["regions", "departements", "communes"];
+
+export const SCRUTIN_META: Record<Scrutin, ScrutinMeta> = {
+  "presid-2017-t1": { short: "Prés. 2017 · T1", long: "PRÉSIDENTIELLE 2017 · 1ER TOUR", family: "presidentielle", mailles: ALL_MAILLES },
+  "presid-2017-t2": { short: "Prés. 2017 · T2", long: "PRÉSIDENTIELLE 2017 · 2ND TOUR", family: "presidentielle", mailles: ALL_MAILLES },
+  "presid-2022-t1": { short: "Prés. 2022 · T1", long: "PRÉSIDENTIELLE 2022 · 1ER TOUR", family: "presidentielle", mailles: ALL_MAILLES },
+  "presid-2022-t2": { short: "Prés. 2022 · T2", long: "PRÉSIDENTIELLE 2022 · 2ND TOUR", family: "presidentielle", mailles: ALL_MAILLES },
+  "legis-2022-t1": { short: "Légis. 2022 · T1", long: "LÉGISLATIVES 2022 · 1ER TOUR", family: "legislative", mailles: ALL_MAILLES },
+  "legis-2022-t2": { short: "Légis. 2022 · T2", long: "LÉGISLATIVES 2022 · 2ND TOUR", family: "legislative", mailles: ALL_MAILLES },
+  "legis-2024-t1": { short: "Légis. 2024 · T1", long: "LÉGISLATIVES 2024 · 1ER TOUR", family: "legislative", mailles: ALL_MAILLES },
+  "legis-2024-t2": { short: "Légis. 2024 · T2", long: "LÉGISLATIVES 2024 · 2ND TOUR", family: "legislative", mailles: ALL_MAILLES },
+  "municipales-2026-t1": { short: "Municip. 2026 · T1", long: "MUNICIPALES 2026 · 1ER TOUR", family: "municipale", mailles: NO_CIRCO },
+  "municipales-2026-t2": { short: "Municip. 2026 · T2", long: "MUNICIPALES 2026 · 2ND TOUR", family: "municipale", mailles: NO_CIRCO },
+  "sociologie": { short: "Sociologie", long: "INSEE FILOSOFI 2021", family: "sociologie", mailles: ["communes"] },
+};
+
+/** Conservé pour compatibilité : { short, long } par scrutin. */
+export const SCRUTIN_LABELS: Record<Scrutin, { short: string; long: string }> =
+  Object.fromEntries(
+    Object.entries(SCRUTIN_META).map(([k, v]) => [k, { short: v.short, long: v.long }]),
+  ) as Record<Scrutin, { short: string; long: string }>;
 
 export const COLORATION_LABELS: Record<Coloration, string> = {
   vainqueur: "Vainqueur",
-  score: "% Score",
+  participation: "Participation",
   abstention: "Abstention",
   revenu: "Revenu médian",
   pauvrete: "Taux de pauvreté",
 };
 
-/**
- * Combos (scrutin × coloration) couverts par les données actuelles.
- * Tout ce qui n'est pas listé renvoie `null` côté `resolveLayer` → la couche
- * affichera "Non disponible" dans l'UI au lieu de planter.
- */
-const COMBO_TO_LAYER: Partial<Record<`${Scrutin}|${Coloration}`, LayerId>> = {
-  "presid-2022-t1|vainqueur": "vote-dominant-presid-2022",
-  "presid-2022-t1|score": "participation-presid-2022",
-  "legis-2024|vainqueur": "nuance-legis-2024",
-  "legis-2024|score": "participation-legis-2024",
-  "sociologie|revenu": "revenu-median-commune",
-  "sociologie|pauvrete": "taux-pauvrete-commune",
-};
-
-export function resolveLayer(scrutin: Scrutin, coloration: Coloration): LayerId | null {
-  return COMBO_TO_LAYER[`${scrutin}|${coloration}`] ?? null;
+export function isElection(scrutin: Scrutin): boolean {
+  return scrutin !== "sociologie";
 }
+
+/** Colorations proposées pour un scrutin donné. */
+export function colorationsFor(scrutin: Scrutin): Coloration[] {
+  return scrutin === "sociologie"
+    ? ["revenu", "pauvrete"]
+    : ["vainqueur", "participation", "abstention"];
+}
+
+/** Mailles couvertes par les données d'un scrutin. */
+export function maillesFor(scrutin: Scrutin): Maille[] {
+  return SCRUTIN_META[scrutin].mailles;
+}
+
+const SCRUTINS = new Set<Scrutin>(Object.keys(SCRUTIN_META) as Scrutin[]);
+const COLORATIONS = new Set<Coloration>([
+  "vainqueur",
+  "participation",
+  "abstention",
+  "revenu",
+  "pauvrete",
+]);
+const MAILLE_SET: ReadonlySet<Maille> = new Set<Maille>(MAILLE_ORDER);
 
 export type ExplorerState = {
   maille: Maille;
@@ -83,12 +105,7 @@ export type ExplorerState = {
   code: string | null;
 };
 
-export type ExplorerStatePatch = Partial<{
-  maille: Maille;
-  scrutin: Scrutin;
-  coloration: Coloration;
-  code: string | null;
-}>;
+export type ExplorerStatePatch = Partial<ExplorerState>;
 
 export function useExplorerUrlState(): ExplorerState & {
   update: (patch: ExplorerStatePatch) => void;
@@ -105,7 +122,8 @@ export function useExplorerUrlState(): ExplorerState & {
     return {
       maille: mailleParam && MAILLE_SET.has(mailleParam) ? mailleParam : "regions",
       scrutin: scrutinParam && SCRUTINS.has(scrutinParam) ? scrutinParam : "presid-2022-t1",
-      coloration: colorationParam && COLORATIONS.has(colorationParam) ? colorationParam : "vainqueur",
+      coloration:
+        colorationParam && COLORATIONS.has(colorationParam) ? colorationParam : "vainqueur",
       code: codeParam && codeParam.length > 0 ? codeParam : null,
     };
   }, [params]);
