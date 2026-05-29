@@ -26,14 +26,34 @@ export function getDuckDb(): Promise<duckdb.AsyncDuckDB> {
   return dbPromise;
 }
 
+/**
+ * Exécute une requête DuckDB-WASM.
+ *
+ * Sécurité : les valeurs contrôlées par l'utilisateur (codes de territoire issus
+ * de l'URL ou d'un clic carte, mailles) ne doivent JAMAIS être interpolées dans
+ * `sql`. On les passe via `params` (placeholders `?`), liées par un prepared
+ * statement — ce qui neutralise toute injection (apostrophe, sous-requête,
+ * `read_parquet` arbitraire…). Seuls les chemins de Parquet dérivés d'enums
+ * validés peuvent rester dans `sql`.
+ */
 export async function query<T extends Record<string, unknown> = Record<string, unknown>>(
   sql: string,
+  params: unknown[] = [],
 ): Promise<T[]> {
   const db = await getDuckDb();
   const conn = await db.connect();
   try {
-    const result = await conn.query(sql);
-    return result.toArray().map((row) => row.toJSON()) as T[];
+    if (params.length === 0) {
+      const result = await conn.query(sql);
+      return result.toArray().map((row) => row.toJSON()) as T[];
+    }
+    const stmt = await conn.prepare(sql);
+    try {
+      const result = await stmt.query(...params);
+      return result.toArray().map((row) => row.toJSON()) as T[];
+    } finally {
+      await stmt.close();
+    }
   } finally {
     await conn.close();
   }

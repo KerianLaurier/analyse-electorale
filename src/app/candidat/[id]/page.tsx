@@ -1,22 +1,12 @@
-import { PagePlaceholder } from "@/components/page-placeholder";
+import { PersonneFiche } from "@/components/personne-fiche";
 
+// id = "{scrutin}__{circo}__{slug}" — ex. "legis-2024-t1__2602__pollet"
 export default async function CandidatPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return (
-    <PagePlaceholder
-      module="Fiche personne"
-      title={`Candidat ${id}`}
-      description="Profil candidat : parrainages, intentions de vote, comptes de campagne, HATVP."
-      bullets={[
-        "Compteur de parrainages (Conseil constitutionnel)",
-        "Agrégat sondages avec intervalle de confiance",
-        "Comptes de campagne CNCCFP (historique)",
-        "Déclarations d'intérêts et de patrimoine HATVP",
-      ]}
-    />
-  );
+  const [scrutin = "", circo = "", slug = ""] = decodeURIComponent(id).split("__");
+  return <PersonneFiche mode="candidat" scrutin={scrutin} circo={circo} slug={slug} />;
 }

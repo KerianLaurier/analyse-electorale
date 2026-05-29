@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Loader2, X, Search, BadgeCheck } from "lucide-react";
+import Link from "next/link";
+import { Loader2, X, Search, BadgeCheck, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
 import {
@@ -12,6 +13,8 @@ import {
   useScrutinNationalParticipation,
   useRevenuMedianCommune,
   useTauxPauvreteCommune,
+  useSocioColumnCommune,
+  useRpColumnCommune,
   useSociologieCommune,
   type WinningNuanceRow,
   type NumericRow,
@@ -24,11 +27,19 @@ import {
   useExplorerUrlState,
   type Scrutin,
   type Coloration,
+  type ScrutinFamily,
   SCRUTIN_META,
   COLORATION_LABELS,
+  FAMILY_ORDER,
+  FAMILY_LABELS,
   colorationsFor,
   maillesFor,
   isElection,
+  parseScrutin,
+  yearsFor,
+  toursFor,
+  scrutinFor,
+  defaultScrutinFor,
 } from "@/lib/url-state";
 import { CommandPalette } from "@/components/command-palette";
 
@@ -48,14 +59,8 @@ const MAILLE_COUNTS: Record<Maille, number> = {
   departements: 96,
   circonscriptions: 559,
   communes: 35798,
+  bureaux: 69000,
 };
-
-const SCRUTIN_GROUPS: { label: string; items: Scrutin[] }[] = [
-  { label: "Présidentielle", items: ["presid-2022-t1", "presid-2022-t2", "presid-2017-t1", "presid-2017-t2"] },
-  { label: "Législatives", items: ["legis-2024-t1", "legis-2024-t2", "legis-2022-t1", "legis-2022-t2"] },
-  { label: "Municipales", items: ["municipales-2026-t1", "municipales-2026-t2"] },
-  { label: "Données INSEE", items: ["sociologie"] },
-];
 
 const FR = { revenuMedian: 22040, tauxPauvrete: 14.4 };
 
@@ -87,6 +92,50 @@ const PAUVRETE_STOPS: Array<[number, string]> = [
   [30, "#dc2626"],
   [50, "#7f1d1d"],
 ];
+const INEGALITES_STOPS: Array<[number, string]> = [
+  [2.5, "#f0fdf4"],
+  [3.5, "#fde68a"],
+  [5, "#fb923c"],
+  [7, "#dc2626"],
+  [10, "#7f1d1d"],
+];
+const PRESTATIONS_STOPS: Array<[number, string]> = [
+  [1, "#f1f5f9"],
+  [4, "#bfdbfe"],
+  [8, "#60a5fa"],
+  [12, "#2563eb"],
+  [18, "#1e3a8a"],
+];
+const PENSIONS_STOPS: Array<[number, string]> = [
+  [10, "#fef3c7"],
+  [22, "#fcd34d"],
+  [32, "#f59e0b"],
+  [45, "#b45309"],
+];
+const AGE65_STOPS: Array<[number, string]> = [
+  [10, "#eff6ff"],
+  [20, "#93c5fd"],
+  [30, "#3b82f6"],
+  [40, "#1e3a8a"],
+];
+const CHOMAGE_STOPS: Array<[number, string]> = [
+  [4, "#f0fdf4"],
+  [9, "#fde68a"],
+  [15, "#fb923c"],
+  [22, "#7f1d1d"],
+];
+const CADRES_STOPS: Array<[number, string]> = [
+  [5, "#faf5ff"],
+  [15, "#d8b4fe"],
+  [30, "#a855f7"],
+  [50, "#6b21a8"],
+];
+const DIPLOME_STOPS: Array<[number, string]> = [
+  [10, "#f0fdfa"],
+  [25, "#5eead4"],
+  [40, "#14b8a6"],
+  [60, "#0f766e"],
+];
 
 function continuousChoropleth(
   stateKey: string,
@@ -114,6 +163,12 @@ function nuanceChoropleth(rows: WinningNuanceRow[]): Choropleth {
 }
 
 function pickName(props: Record<string, unknown>): string {
+  // Bureau de vote : « Bureau 0001 · Commune » (contours officiels REU).
+  const numBV = props["numeroBureauVote"];
+  const nomCommune = props["nomCommune"];
+  if (typeof numBV === "string" && typeof nomCommune === "string") {
+    return `Bureau ${numBV} · ${nomCommune}`;
+  }
   for (const key of ["nom", "NOM", "libelle", "LIBELLE", "nomCirconscription", "name"]) {
     const value = props[key];
     if (typeof value === "string" && value.length > 0) return value;
@@ -121,7 +176,7 @@ function pickName(props: Record<string, unknown>): string {
   return "Sans nom";
 }
 function pickCode(props: Record<string, unknown>): string | null {
-  for (const key of ["code", "codeCirconscription", "CODE", "INSEE_COM", "insee", "id"]) {
+  for (const key of ["codeBureauVote", "code", "codeCirconscription", "CODE", "INSEE_COM", "insee", "id"]) {
     const value = props[key];
     if (typeof value === "string" || typeof value === "number") return String(value);
   }
@@ -173,6 +228,22 @@ function ExplorerView() {
   );
   const revenu = useRevenuMedianCommune(scrutin === "sociologie" && coloration === "revenu");
   const pauvrete = useTauxPauvreteCommune(scrutin === "sociologie" && coloration === "pauvrete");
+  const inegalites = useSocioColumnCommune(
+    "IR_D9_D1_SL",
+    scrutin === "sociologie" && coloration === "inegalites",
+  );
+  const prestations = useSocioColumnCommune(
+    "S_SOC_BEN_DI",
+    scrutin === "sociologie" && coloration === "prestations",
+  );
+  const pensions = useSocioColumnCommune(
+    "S_RET_PEN_DI",
+    scrutin === "sociologie" && coloration === "pensions",
+  );
+  const age65 = useRpColumnCommune("part65plus", scrutin === "sociologie" && coloration === "age65");
+  const chomage = useRpColumnCommune("tauxChomage", scrutin === "sociologie" && coloration === "chomage");
+  const cadres = useRpColumnCommune("partCadres", scrutin === "sociologie" && coloration === "cadres");
+  const diplome = useRpColumnCommune("partDiplomeSup", scrutin === "sociologie" && coloration === "diplome");
 
   const choropleth = useMemo<Choropleth | undefined>(() => {
     switch (coloration) {
@@ -192,17 +263,58 @@ function ExplorerView() {
         return pauvrete.data
           ? continuousChoropleth("pauvrete", PAUVRETE_STOPS, pauvrete.data)
           : undefined;
+      case "inegalites":
+        return inegalites.data
+          ? continuousChoropleth("inegalites", INEGALITES_STOPS, inegalites.data)
+          : undefined;
+      case "prestations":
+        return prestations.data
+          ? continuousChoropleth("prestations", PRESTATIONS_STOPS, prestations.data)
+          : undefined;
+      case "pensions":
+        return pensions.data
+          ? continuousChoropleth("pensions", PENSIONS_STOPS, pensions.data)
+          : undefined;
+      case "age65":
+        return age65.data ? continuousChoropleth("age65", AGE65_STOPS, age65.data) : undefined;
+      case "chomage":
+        return chomage.data ? continuousChoropleth("chomage", CHOMAGE_STOPS, chomage.data) : undefined;
+      case "cadres":
+        return cadres.data ? continuousChoropleth("cadres", CADRES_STOPS, cadres.data) : undefined;
+      case "diplome":
+        return diplome.data ? continuousChoropleth("diplome", DIPLOME_STOPS, diplome.data) : undefined;
       default:
         return undefined;
     }
-  }, [coloration, winner.data, participation.data, abstention.data, revenu.data, pauvrete.data]);
+  }, [
+    coloration,
+    winner.data,
+    participation.data,
+    abstention.data,
+    revenu.data,
+    pauvrete.data,
+    inegalites.data,
+    prestations.data,
+    pensions.data,
+    age65.data,
+    chomage.data,
+    cadres.data,
+    diplome.data,
+  ]);
 
   const isLoading =
     winner.isFetching ||
     participation.isFetching ||
     abstention.isFetching ||
     revenu.isFetching ||
-    pauvrete.isFetching;
+    pauvrete.isFetching ||
+    inegalites.isFetching ||
+    prestations.isFetching ||
+    pensions.isFetching ||
+    age65.isFetching ||
+    chomage.isFetching ||
+    cadres.isFetching ||
+    diplome.isFetching;
 
   return (
     <div className="relative flex h-[calc(100dvh-3.5rem)] w-full overflow-hidden bg-canvas">
@@ -275,35 +387,9 @@ function ControlsPanel({
         {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
       </div>
 
-      <Section title="Scrutin">
-        <div className="flex flex-col gap-3">
-          {SCRUTIN_GROUPS.map((group) => (
-            <div key={group.label} className="flex flex-col gap-1">
-              <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
-                {group.label}
-              </p>
-              {group.items.map((id) => (
-                <RadioRow
-                  key={id}
-                  active={scrutin === id}
-                  label={SCRUTIN_META[id].short}
-                  onClick={() => update({ scrutin: id, code: null })}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      </Section>
+      <ScrutinPicker scrutin={scrutin} update={update} />
 
-      <Section title="Coloration">
-        <div className="flex flex-wrap gap-1.5">
-          {colorations.map((c) => (
-            <Pill key={c} active={coloration === c} onClick={() => update({ coloration: c })}>
-              {COLORATION_LABELS[c]}
-            </Pill>
-          ))}
-        </div>
-      </Section>
+      <div className="h-px bg-black/5" />
 
       <Section title="Maille">
         <div className="flex flex-col gap-1">
@@ -324,6 +410,99 @@ function ControlsPanel({
           ))}
         </div>
       </Section>
+
+      <Section title="Coloration">
+        <div className="flex flex-wrap gap-1.5">
+          {colorations.map((c) => (
+            <Pill key={c} active={coloration === c} onClick={() => update({ coloration: c })}>
+              {COLORATION_LABELS[c]}
+            </Pill>
+          ))}
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+// ─── Sélecteur de scrutin à deux niveaux (type → année → tour) ────────────────
+
+function ScrutinPicker({
+  scrutin,
+  update,
+}: {
+  scrutin: Scrutin;
+  update: (p: { scrutin?: Scrutin; code?: string | null }) => void;
+}) {
+  const { family, year, tour } = parseScrutin(scrutin);
+  const years = family === "sociologie" ? [] : yearsFor(family);
+  const tours = year != null ? toursFor(family, year) : [];
+
+  function pickFamily(f: ScrutinFamily) {
+    if (f === family) return;
+    update({ scrutin: defaultScrutinFor(f), code: null });
+  }
+  function pickYear(y: number) {
+    const next = scrutinFor(family, y, tour ?? 1) ?? scrutinFor(family, y, 1);
+    if (next) update({ scrutin: next, code: null });
+  }
+  function pickTour(t: 1 | 2) {
+    if (year == null) return;
+    const next = scrutinFor(family, year, t);
+    if (next) update({ scrutin: next, code: null });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Section title="Type de scrutin">
+        <div className="grid grid-cols-2 gap-1.5">
+          {FAMILY_ORDER.map((f) => (
+            <button
+              key={f}
+              onClick={() => pickFamily(f)}
+              className={cn(
+                "rounded-lg px-2.5 py-1.5 text-center text-[12px] font-medium transition-colors",
+                family === f
+                  ? "bg-warm/15 text-foreground ring-1 ring-warm/40"
+                  : "bg-black/[0.04] text-muted-foreground hover:bg-black/[0.08]",
+              )}
+            >
+              {FAMILY_LABELS[f]}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      {family !== "sociologie" && (
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Section title="Année">
+            <div className="flex flex-wrap gap-1.5">
+              {years.map((y) => (
+                <Pill key={y} active={year === y} onClick={() => pickYear(y)}>
+                  {y}
+                </Pill>
+              ))}
+            </div>
+          </Section>
+          <Section title="Tour">
+            <div className="inline-flex rounded-lg bg-black/[0.04] p-0.5">
+              {tours.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => pickTour(t)}
+                  className={cn(
+                    "rounded-md px-3 py-1 text-[11px] font-medium transition-colors",
+                    tour === t
+                      ? "bg-black text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  T{t}
+                </button>
+              ))}
+            </div>
+          </Section>
+        </div>
+      )}
     </div>
   );
 }
@@ -334,28 +513,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</p>
       {children}
     </div>
-  );
-}
-
-function RadioRow({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition-colors",
-        active ? "bg-warm/15 font-medium text-foreground" : "hover:bg-black/[0.04]",
-      )}
-    >
-      <span
-        className={cn(
-          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border",
-          active ? "border-warm" : "border-black/20",
-        )}
-      >
-        {active && <span className="h-1.5 w-1.5 rounded-full bg-warm" />}
-      </span>
-      {label}
-    </button>
   );
 }
 
@@ -417,8 +574,22 @@ function MapBottomLegend({
         <ContinuousMiniLegend stops={ABSTENTION_STOPS} fmt={(v) => fmtPct(v, 0)} />
       ) : coloration === "revenu" ? (
         <ContinuousMiniLegend stops={REVENU_STOPS} fmt={(v) => `${Math.round(v / 1000)}k`} />
-      ) : (
+      ) : coloration === "pauvrete" ? (
         <ContinuousMiniLegend stops={PAUVRETE_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "inegalites" ? (
+        <ContinuousMiniLegend stops={INEGALITES_STOPS} fmt={(v) => `${v}`} />
+      ) : coloration === "prestations" ? (
+        <ContinuousMiniLegend stops={PRESTATIONS_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "pensions" ? (
+        <ContinuousMiniLegend stops={PENSIONS_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "age65" ? (
+        <ContinuousMiniLegend stops={AGE65_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "chomage" ? (
+        <ContinuousMiniLegend stops={CHOMAGE_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "cadres" ? (
+        <ContinuousMiniLegend stops={CADRES_STOPS} fmt={(v) => `${v}%`} />
+      ) : (
+        <ContinuousMiniLegend stops={DIPLOME_STOPS} fmt={(v) => `${v}%`} />
       )}
     </div>
   );
@@ -519,6 +690,19 @@ function FicheTerritoire({
             {MAILLE_LABELS[maille]}
           </p>
           <h3 className="truncate text-[15px] font-semibold tracking-tight">{displayName}</h3>
+          {(maille === "circonscriptions" || maille === "communes") && (
+            <Link
+              href={
+                maille === "circonscriptions"
+                  ? `/circo/${encodeURIComponent(code)}`
+                  : `/commune/${encodeURIComponent(code)}`
+              }
+              className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-warm transition-opacity hover:opacity-80"
+            >
+              Fiche complète
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          )}
         </div>
         <button
           onClick={onClear}

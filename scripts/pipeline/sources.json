@@ -31,6 +31,27 @@
       "tile_layer": "communes",
       "minzoom": 6,
       "maxzoom": 13
+    },
+    "bureaux": {
+      "description": "Contours officiels des bureaux de vote (Etalab), reconstruits à partir du Répertoire Électoral Unique (REU/INSEE) et de la Base Adresse Nationale. Découpage le plus récent et le plus précis disponible à l'échelle nationale.",
+      "dataset_page": "https://www.data.gouv.fr/datasets/proposition-de-contours-des-bureaux-de-vote",
+      "methode": "https://github.com/etalab/bureau-vote",
+      "license": "Licence Ouverte 2.0 — Etalab / REU INSEE",
+      "tile_layer": "repertoire-unique-electoral-polygons",
+      "join_key": "codeBureauVote",
+      "join_key_format": "{communeINSEE 5}_{numeroBureauVote 4} (ex. 01001_0001)",
+      "minzoom": 9,
+      "maxzoom": 14,
+      "pmtiles": {
+        "url": "https://object.files.data.gouv.fr/data-pipeline-open/reu/reu-france-entiere-2022-06-01-v2.pmtiles",
+        "approx_size_mb": 282,
+        "note": "Servi directement par data.gouv.fr (HTTP range) — pas de copie locale. Référencé dans src/lib/map-config.ts (TILES.bureaux)."
+      },
+      "geojson": {
+        "url": "https://object.files.data.gouv.fr/data-pipeline-open/reu/contours-france-entiere-latest-v2.geojson",
+        "approx_size_mb": 644,
+        "note": "Pour régénérer les tuiles localement si besoin (tippecanoe)."
+      }
     }
   },
   "insee": {
@@ -40,7 +61,23 @@
       "level": "commune",
       "approx_size_mb": 4.8,
       "license": "Licence Ouverte 2.0 — INSEE",
-      "description": "Dispositif Filosofi : niveau de vie médian, taux de pauvreté, structure des revenus, par commune (millésime 2021, géo 2025)."
+      "description": "Dispositif Filosofi : niveau de vie médian, taux de pauvreté, déciles D1/D9, rapport interdécile, parts pensions/prestations sociales/indemnités chômage, ménages imposés, par commune (millésime 2021, géo 2025). 9 indicateurs retenus dans build-insee.py.",
+      "measures": ["MED_SL", "PR_MD60", "D1_SL", "D9_SL", "IR_D9_D1_SL", "S_RET_PEN_DI", "S_SOC_BEN_DI", "S_EI_DI_UNE", "S_HH_TAX"]
+    },
+    "recensement_rp": {
+      "level": "commune",
+      "license": "Licence Ouverte 2.0 — INSEE (Recensement de la population 2022)",
+      "api": "https://api.insee.fr/melodi/file/{dataset}/{dataset}_2022_CSV_FR",
+      "datasets": ["DS_RP_POPULATION_PRINC", "DS_RP_EMPLOI_LR_COMP", "DS_RP_DIPLOMES_PRINC"],
+      "description": "Recensement (RP 2022, melodi SDMX) : structure par âge, catégories socio-professionnelles (cadres/ouvriers), diplômes du supérieur, taux de chômage. Agrégé par build-rp.py → public/insee/rp_2022_commune.parquet.",
+      "indicateurs": ["population", "part65plus", "partMoins15", "tauxChomage", "partCadres", "partOuvriers", "partDiplomeSup"]
+    },
+    "bureaux_vote_adresses": {
+      "dataset_page": "https://www.data.gouv.fr/datasets/bureaux-de-vote-et-adresses-de-leurs-electeurs",
+      "level": "adresse",
+      "license": "Licence Ouverte 2.0 — INSEE (REU)",
+      "description": "Répertoire Électoral Unique : rattachement de chaque adresse à son bureau de vote. Source du géocodage des contours Etalab. Réservé au câblage futur de la recherche d'adresse → bureau (BAN).",
+      "status": "planifié"
     }
   },
   "electoral": {
