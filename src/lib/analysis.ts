@@ -188,6 +188,136 @@ export function useSocioByCommune(indicator: SocioIndicator, enabled = true) {
   });
 }
 
+// ─── Marginalité : circonscriptions les plus disputées (écart 1er / 2e) ────────
+
+export type MarginRow = {
+  code: string;
+  libelle: string | null;
+  leader: string;
+  leaderNuance: string;
+  runnerNuance: string | null;
+  leaderPct: number;
+  marginPts: number; // (voix1 - voix2) / exprimés
+};
+
+export function useMarginalite(scrutin: Scrutin, maille: Maille = "circonscriptions", enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["marginalite", scrutin, maille],
+    queryFn: async (): Promise<MarginRow[]> => {
+      const terr = aggUrl(scrutin, "territoires");
+      const cand = aggUrl(scrutin, "candidats");
+      const rows = await query<{
+        code: string;
+        libelle: string | null;
+        leader: string | null;
+        leaderNuance: string | null;
+        runnerNuance: string | null;
+        leaderPct: number;
+        marginPts: number;
+      }>(`
+        WITH top AS (
+          SELECT code, label, nuance, voix,
+                 ROW_NUMBER() OVER (PARTITION BY code ORDER BY voix DESC) AS rn
+          FROM read_parquet('${cand}')
+          WHERE maille = '${maille}' AND voix IS NOT NULL
+          QUALIFY rn <= 2
+        ),
+        piv AS (
+          SELECT code,
+            MAX(CASE WHEN rn = 1 THEN voix END) AS v1,
+            MAX(CASE WHEN rn = 1 THEN label END) AS l1,
+            MAX(CASE WHEN rn = 1 THEN nuance END) AS n1,
+            MAX(CASE WHEN rn = 2 THEN voix END) AS v2,
+            MAX(CASE WHEN rn = 2 THEN nuance END) AS n2
+          FROM top GROUP BY code
+        ),
+        terr AS (
+          SELECT code, any_value(libelle) AS libelle, SUM(exprimes) AS exp
+          FROM read_parquet('${terr}') WHERE maille = '${maille}' GROUP BY code
+        )
+        SELECT p.code, t.libelle, p.l1 AS leader, p.n1 AS leaderNuance, p.n2 AS runnerNuance,
+               CAST(p.v1 AS DOUBLE) / t.exp AS leaderPct,
+               CAST(p.v1 - COALESCE(p.v2, 0) AS DOUBLE) / t.exp AS marginPts
+        FROM piv p JOIN terr t USING (code)
+        WHERE t.exp > 0 AND p.v1 IS NOT NULL
+        ORDER BY marginPts ASC
+      `);
+      return rows.map((r) => ({
+        code: String(r.code),
+        libelle: r.libelle ?? null,
+        leader: r.leader ?? "",
+        leaderNuance: r.leaderNuance ?? "",
+        runnerNuance: r.runnerNuance ?? null,
+        leaderPct: Number(r.leaderPct),
+        marginPts: Number(r.marginPts),
+      }));
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+// ─── Matrice circo × bloc (pour le simulateur de report) ───────────────────────
+
+export type CircoBlocRow = {
+  code: string;
+  libelle: string | null;
+  exp: number;
+  shares: Record<BlocId, number>;
+};
+export type CircoBlocMatrix = {
+  circos: CircoBlocRow[];
+  national: Record<BlocId, number>;
+};
+
+export function useCircoBlocMatrix(scrutin: Scrutin, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["circo-bloc-matrix", scrutin],
+    queryFn: async (): Promise<CircoBlocMatrix> => {
+      const terr = aggUrl(scrutin, "territoires");
+      const cand = aggUrl(scrutin, "candidats");
+      const sums = BLOCS.map((b) => {
+        const inList = b.codes.map((c) => `'${c}'`).join(", ");
+        return `SUM(CASE WHEN nuance IN (${inList}) THEN voix ELSE 0 END) AS "${b.id}"`;
+      }).join(",\n");
+      const rows = await query<Record<string, number | string | null>>(`
+        WITH bloc AS (
+          SELECT code, ${sums}
+          FROM read_parquet('${cand}')
+          WHERE maille = 'circonscriptions' AND voix IS NOT NULL
+          GROUP BY code
+        ),
+        terr AS (
+          SELECT code, any_value(libelle) AS libelle, SUM(exprimes) AS exp
+          FROM read_parquet('${terr}') WHERE maille = 'circonscriptions' GROUP BY code
+        )
+        SELECT t.code, t.libelle, t.exp, ${BLOCS.map((b) => `b."${b.id}"`).join(", ")}
+        FROM terr t JOIN bloc b USING (code)
+        WHERE t.exp > 0
+      `);
+      const circos: CircoBlocRow[] = [];
+      const totals: Record<string, number> = {};
+      let totalExp = 0;
+      for (const r of rows) {
+        const exp = Number(r.exp);
+        const shares = {} as Record<BlocId, number>;
+        for (const b of BLOCS) {
+          const v = Number(r[b.id] ?? 0);
+          shares[b.id] = exp > 0 ? v / exp : 0;
+          totals[b.id] = (totals[b.id] ?? 0) + v;
+        }
+        totalExp += exp;
+        circos.push({ code: String(r.code), libelle: (r.libelle as string) ?? null, exp, shares });
+      }
+      const national = {} as Record<BlocId, number>;
+      for (const b of BLOCS) national[b.id] = totalExp > 0 ? (totals[b.id] ?? 0) / totalExp : 0;
+      return { circos, national };
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 // ─── Pearson ───────────────────────────────────────────────────────────────────
 
 export function pearson(pairs: Array<[number, number]>): number {

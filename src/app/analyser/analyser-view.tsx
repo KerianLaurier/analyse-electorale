@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { GitCompare, Activity, ArrowRight, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { GitCompare, Activity, ArrowRight, Loader2, Layers, Crosshair, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
 import type { Choropleth } from "@/components/map";
@@ -97,8 +98,42 @@ export function AnalyserView() {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2 px-2">
+        <ToolLink href="/analyser/comparateur" icon={Layers} title="Comparateur" desc="Un territoire, tous les scrutins" />
+        <ToolLink href="/analyser/marginalite" icon={Crosshair} title="Sièges marginaux" desc="Circonscriptions les plus disputées" />
+        <ToolLink href="/analyser/simulateur" icon={SlidersHorizontal} title="Simulateur" desc="Projection de sièges par bloc" />
+      </div>
+
       {mode === "comparaison" ? <ComparaisonMode /> : <CorrelationMode />}
     </div>
+  );
+}
+
+function ToolLink({
+  href,
+  icon: Icon,
+  title,
+  desc,
+}: {
+  href: string;
+  icon: typeof Layers;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group inline-flex items-center gap-2.5 rounded-lg bg-surface px-3 py-2 shadow-card transition-colors hover:bg-surface-soft"
+    >
+      <span className="grid h-7 w-7 place-items-center rounded-md bg-warm/15 text-warm">
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <span className="flex flex-col">
+        <span className="text-[12px] font-semibold leading-tight">{title}</span>
+        <span className="text-[10.5px] leading-tight text-muted-foreground">{desc}</span>
+      </span>
+      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+    </Link>
   );
 }
 
