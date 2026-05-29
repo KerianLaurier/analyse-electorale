@@ -17,8 +17,11 @@ import {
   useWinnerByMaille,
   useSocioByCommune,
   pearson,
+  SOCIO_INDICATORS,
+  socioMeta,
   type BlocId,
   type SocioIndicator,
+  type SocioUnit,
   type TerritoryValue,
   type TerritoryWinner,
 } from "@/lib/analysis";
@@ -70,7 +73,7 @@ export function AnalyserView() {
             Analyser
           </p>
           <h1 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight">
-            {mode === "comparaison" ? "Comparer des scrutins" : "Sociologie & vote"}
+            {mode === "comparaison" ? "Comparer des scrutins" : "Sociologie, démographie & vote"}
           </h1>
         </div>
         <div className="inline-flex items-center gap-0.5 rounded-pill bg-surface p-0.5 shadow-card">
@@ -442,28 +445,47 @@ function NuanceChip({ code }: { code: string }) {
 //  Mode Corrélation
 // ═══════════════════════════════════════════════════════════════════════════
 
+function fmtSocioX(unit: SocioUnit, x: number): string {
+  if (unit === "euro") return `${Math.round(x / 1000)}k€`;
+  if (unit === "ratio") return x.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+  return `${Math.round(x)}%`;
+}
+
+type Regression = { slope: number; intercept: number };
+
 function CorrelationMode() {
   const [scrutin, setScrutin] = useState<Scrutin>("presid-2022-t1");
   const [blocId, setBlocId] = useState<BlocId>("rn");
   const [indicator, setIndicator] = useState<SocioIndicator>("revenu");
 
   const bloc = blocById(blocId);
+  const meta = socioMeta(indicator);
   const share = useBlocShare(scrutin, "communes", bloc.codes, true);
   const socio = useSocioByCommune(indicator, true);
 
-  const { points, r, n } = useMemo(() => {
-    if (!share.data || !socio.data) return { points: [] as Array<[number, number]>, r: 0, n: 0 };
+  const { points, r, n, reg } = useMemo(() => {
+    if (!share.data || !socio.data)
+      return { points: [] as Array<[number, number]>, r: 0, n: 0, reg: null as Regression | null };
     const pairs: Array<[number, number]> = [];
     for (const row of share.data) {
       const s = socio.data.get(row.code);
       if (s == null) continue;
       pairs.push([s, row.value]);
     }
-    return { points: pairs, r: pearson(pairs), n: pairs.length };
+    // Régression linéaire (moindres carrés) y = slope·x + intercept.
+    let reg: Regression | null = null;
+    const m = pairs.length;
+    if (m >= 2) {
+      let sx = 0, sy = 0, sxx = 0, sxy = 0;
+      for (const [x, y] of pairs) { sx += x; sy += y; sxx += x * x; sxy += x * y; }
+      const denom = m * sxx - sx * sx;
+      if (denom !== 0) reg = { slope: (m * sxy - sx * sy) / denom, intercept: (sy - ((m * sxy - sx * sy) / denom) * sx) / m };
+    }
+    return { points: pairs, r: pearson(pairs), n: pairs.length, reg };
   }, [share.data, socio.data]);
 
+  const r2 = r * r;
   const isLoading = share.isFetching || socio.isFetching;
-  const indicatorLabel = indicator === "revenu" ? "Revenu médian (€)" : "Taux de pauvreté (%)";
 
   return (
     <>
@@ -472,14 +494,7 @@ function CorrelationMode() {
         <span className="mx-1 h-5 w-px bg-border" />
         <BlocSelect value={blocId} onChange={setBlocId} />
         <span className="mx-1 h-5 w-px bg-border" />
-        <PillGroup
-          options={[
-            { id: "revenu", label: "Revenu médian" },
-            { id: "pauvrete", label: "Taux de pauvreté" },
-          ]}
-          value={indicator}
-          onChange={(v) => setIndicator(v as SocioIndicator)}
-        />
+        <IndicatorSelect value={indicator} onChange={setIndicator} />
         {isLoading && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
@@ -488,18 +503,22 @@ function CorrelationMode() {
         <KPICard
           label="Corrélation (Pearson r)"
           value={n ? r.toFixed(2) : "—"}
-          accent={r >= 0 ? "positive" : "negative"}
+          accent={n ? (r >= 0 ? "positive" : "negative") : undefined}
         />
-        <KPICard label="Intensité" value={strength(r)} hint={r >= 0 ? "relation positive" : "relation négative"} />
-        <KPICard label="Bloc analysé" value={bloc.label} />
+        <KPICard
+          label="Variance expliquée (R²)"
+          value={n ? `${Math.round(r2 * 100)} %` : "—"}
+          hint={strength(r).toLowerCase()}
+        />
+        <KPICard label="Intensité" value={n ? strength(r) : "—"} hint={r >= 0 ? "relation positive" : "relation négative"} />
       </div>
 
       <div className="grid min-h-[420px] grid-cols-[1fr_320px] gap-2">
         <div className="flex flex-col gap-2 rounded-lg bg-surface p-4 shadow-card">
           <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Nuage de points · {indicatorLabel} × part {bloc.label}
+            Nuage de points · {meta.label} × part {bloc.label}
           </p>
-          <Scatter points={points} indicator={indicator} color={bloc.color} />
+          <Scatter points={points} unit={meta.unit} color={bloc.color} reg={reg} />
         </div>
         <div className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-card">
           <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Lecture</p>
@@ -512,10 +531,10 @@ function CorrelationMode() {
                     : r > 0
                       ? "augmente"
                       : "diminue"
-                } avec ${indicator === "revenu" ? "le revenu médian" : "le taux de pauvreté"} (r = ${r.toFixed(2)}, ${strength(r).toLowerCase()}).`}
+                } avec « ${meta.label} » (r = ${r.toFixed(2)}, ${strength(r).toLowerCase()} ; R² = ${Math.round(r2 * 100)} %).`}
           </p>
           <p className="mt-auto text-[10.5px] text-muted-foreground/70">
-            Vote · MI · data.gouv.fr — Revenus · INSEE Filosofi 2021. Corrélation ≠ causalité.
+            Vote · MI · data.gouv.fr — {meta.source === "rp" ? "INSEE Recensement 2022" : "INSEE Filosofi 2021"}. La droite est une régression linéaire ; corrélation ≠ causalité.
           </p>
         </div>
       </div>
@@ -523,14 +542,32 @@ function CorrelationMode() {
   );
 }
 
+function IndicatorSelect({ value, onChange }: { value: SocioIndicator; onChange: (v: SocioIndicator) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as SocioIndicator)}
+      className="rounded-pill border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-foreground/80 outline-none"
+    >
+      {SOCIO_INDICATORS.map((s) => (
+        <option key={s.id} value={s.id} className="bg-surface text-foreground">
+          {s.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function Scatter({
   points,
-  indicator,
+  unit,
   color,
+  reg,
 }: {
   points: Array<[number, number]>;
-  indicator: SocioIndicator;
+  unit: SocioUnit;
   color: string;
+  reg: Regression | null;
 }) {
   const W = 760;
   const H = 360;
@@ -561,10 +598,14 @@ function Scatter({
   const sx = (x: number) =>
     PAD + ((x - bounds.minX) / (bounds.maxX - bounds.minX || 1)) * (W - 2 * PAD);
   const sy = (y: number) => H - PAD - (y / bounds.maxY) * (H - 2 * PAD);
-  const fmtX = (x: number) => (indicator === "revenu" ? `${Math.round(x / 1000)}k€` : `${Math.round(x)}%`);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
+      <defs>
+        <clipPath id="scatter-plot">
+          <rect x={PAD} y={PAD} width={W - 2 * PAD} height={H - 2 * PAD} />
+        </clipPath>
+      </defs>
       {/* axes */}
       <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#d4d4d8" strokeWidth={1} />
       <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#d4d4d8" strokeWidth={1} />
@@ -581,12 +622,26 @@ function Scatter({
       })}
       {[bounds.minX, (bounds.minX + bounds.maxX) / 2, bounds.maxX].map((xv, i) => (
         <text key={i} x={sx(xv)} y={H - PAD + 14} textAnchor="middle" fontSize={9} fill="#9ca3af">
-          {fmtX(xv)}
+          {fmtSocioX(unit, xv)}
         </text>
       ))}
-      {sample.map(([x, y], i) => (
-        <circle key={i} cx={sx(x)} cy={sy(y)} r={1.6} fill={color} fillOpacity={0.35} />
-      ))}
+      <g clipPath="url(#scatter-plot)">
+        {sample.map(([x, y], i) => (
+          <circle key={i} cx={sx(x)} cy={sy(y)} r={1.6} fill={color} fillOpacity={0.35} />
+        ))}
+        {reg && (
+          <line
+            x1={sx(bounds.minX)}
+            y1={sy(reg.slope * bounds.minX + reg.intercept)}
+            x2={sx(bounds.maxX)}
+            y2={sy(reg.slope * bounds.maxX + reg.intercept)}
+            stroke="#0a0a0c"
+            strokeWidth={1.8}
+            strokeOpacity={0.7}
+            strokeDasharray="5 4"
+          />
+        )}
+      </g>
     </svg>
   );
 }
