@@ -31,28 +31,31 @@ export type NuanceCode =
   | "UXD"
   | "REC"
   | "EXD"
-  // Municipales (nuances de liste)
+  // Municipales (nuances de liste — codes MinInt préfixés L)
   | "LEXG"
   | "LCOM"
   | "LFI"
+  | "LUG"
   | "LSOC"
-  | "LRDG"
   | "LDVG"
   | "LECO"
-  | "LUG"
   | "LVEC"
   | "LREG"
   | "LDIV"
-  | "LGJ"
-  | "LENS"
+  | "LREN"
   | "LMDM"
   | "LUDI"
   | "LUC"
   | "LDVC"
-  | "LR_M"
-  | "LDVD"
+  | "LHOR"
+  | "LLR"
   | "LUD"
+  | "LUDR"
+  | "LDVD"
+  | "LDSV"
+  | "LREC"
   | "LRN"
+  | "LUXD"
   | "LEXD";
 
 type NuanceMeta = { label: string; color: string };
@@ -82,33 +85,38 @@ export const NUANCES: Record<NuanceCode, NuanceMeta> = {
   DLF: { label: "Debout la France",      color: "#334155" },
   DVD: { label: "Divers droite",         color: "#60a5fa" },
   DSV: { label: "Droite souverainiste",  color: "#1e293b" },
-  RN:  { label: "Rassemblement National", color: "#1c1917" },
-  UXD: { label: "Union de l'extrême droite", color: "#3f3f46" },
-  REC: { label: "Reconquête",            color: "#525252" },
-  EXD: { label: "Extrême droite",        color: "#27272a" },
-  // Municipales — nuances de liste (mêmes familles, codes préfixés L)
+  // Extrême droite : famille bleu marine (RN = bleu marine de référence)
+  RN:  { label: "Rassemblement National", color: "#13294b" },
+  UXD: { label: "Union de l'extrême droite", color: "#243b66" },
+  REC: { label: "Reconquête",            color: "#33405c" },
+  EXD: { label: "Extrême droite",        color: "#0b1a33" },
+  // Municipales — nuances de liste (mêmes familles, codes MinInt préfixés L)
   LEXG: { label: "Liste extrême gauche",  color: "#7f1d1d" },
   LCOM: { label: "Liste communiste",      color: "#b91c1c" },
   LFI:  { label: "Liste France insoumise", color: "#dc2626" },
   LUG:  { label: "Liste union de la gauche", color: "#be123c" },
   LSOC: { label: "Liste socialiste",      color: "#f43f5e" },
-  LRDG: { label: "Liste radicale de gauche", color: "#fb7185" },
+  LDVG: { label: "Liste divers gauche",   color: "#fda4af" },
   LECO: { label: "Liste écologiste",      color: "#16a34a" },
   LVEC: { label: "Liste écologiste",      color: "#16a34a" },
-  LDVG: { label: "Liste divers gauche",   color: "#fda4af" },
   LREG: { label: "Liste régionaliste",    color: "#0d9488" },
-  LGJ:  { label: "Liste gilets jaunes",   color: "#eab308" },
   LDIV: { label: "Liste divers",          color: "#9ca3af" },
-  LDVC: { label: "Liste divers centre",   color: "#fcd34d" },
-  LENS: { label: "Liste majorité présidentielle", color: "#f59e0b" },
+  LREN: { label: "Liste Renaissance (majorité)", color: "#f59e0b" },
   LMDM: { label: "Liste Modem",           color: "#f97316" },
   LUDI: { label: "Liste UDI",             color: "#fb923c" },
   LUC:  { label: "Liste union du centre", color: "#fbbf24" },
-  LR_M: { label: "Liste Les Républicains", color: "#1e40af" },
-  LDVD: { label: "Liste divers droite",   color: "#60a5fa" },
+  LDVC: { label: "Liste divers centre",   color: "#fcd34d" },
+  LHOR: { label: "Liste Horizons",        color: "#fbbf24" },
+  LLR:  { label: "Liste Les Républicains", color: "#1e40af" },
   LUD:  { label: "Liste union de la droite", color: "#3b82f6" },
-  LRN:  { label: "Liste Rassemblement National", color: "#1c1917" },
-  LEXD: { label: "Liste extrême droite",  color: "#27272a" },
+  LUDR: { label: "Liste Union des droites (UDR)", color: "#1e3a8a" },
+  LDVD: { label: "Liste divers droite",   color: "#60a5fa" },
+  LDSV: { label: "Liste droite souverainiste", color: "#1e293b" },
+  // Extrême droite (listes) : famille bleu marine
+  LREC: { label: "Liste Reconquête",      color: "#33405c" },
+  LRN:  { label: "Liste Rassemblement National", color: "#13294b" },
+  LUXD: { label: "Liste union de l'extrême droite", color: "#243b66" },
+  LEXD: { label: "Liste extrême droite",  color: "#0b1a33" },
 };
 
 const FALLBACK_COLOR = "#cbd5e1";
