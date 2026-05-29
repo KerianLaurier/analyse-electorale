@@ -77,25 +77,29 @@ export function useBlocShare(
     queryFn: async (): Promise<TerritoryValue[]> => {
       const terr = aggUrl(scrutin, "territoires");
       const cand = aggUrl(scrutin, "candidats");
-      const inList = (codes ?? []).map((c) => `'${c}'`).join(", ");
-      const rows = await query<{ code: string; libelle: string | null; value: number }>(`
+      const blocCodes = codes ?? [];
+      const inList = blocCodes.map(() => "?").join(", ");
+      const rows = await query<{ code: string; libelle: string | null; value: number }>(
+        `
         WITH terr AS (
           SELECT code, any_value(libelle) AS libelle, SUM(exprimes) AS exprimes
           FROM read_parquet('${terr}')
-          WHERE maille = '${maille}'
+          WHERE maille = ?
           GROUP BY code
           HAVING SUM(exprimes) > 0
         ),
         bloc AS (
           SELECT code, SUM(voix) AS v
           FROM read_parquet('${cand}')
-          WHERE maille = '${maille}' AND nuance IN (${inList})
+          WHERE maille = ? AND nuance IN (${inList})
           GROUP BY code
         )
         SELECT t.code, t.libelle,
                CAST(COALESCE(b.v, 0) AS DOUBLE) / t.exprimes AS value
         FROM terr t LEFT JOIN bloc b USING (code)
-      `);
+      `,
+        [maille, maille, ...blocCodes],
+      );
       return rows.map((r) => ({
         code: String(r.code),
         libelle: r.libelle ?? null,
@@ -114,14 +118,17 @@ export function useParticipationByMaille(scrutin: Scrutin, maille: Maille, enabl
     queryKey: ["analysis-participation", scrutin, maille],
     queryFn: async (): Promise<TerritoryValue[]> => {
       const terr = aggUrl(scrutin, "territoires");
-      const rows = await query<{ code: string; libelle: string | null; value: number }>(`
+      const rows = await query<{ code: string; libelle: string | null; value: number }>(
+        `
         SELECT code, any_value(libelle) AS libelle,
                CAST(SUM(votants) AS DOUBLE) / SUM(inscrits) AS value
         FROM read_parquet('${terr}')
-        WHERE maille = '${maille}'
+        WHERE maille = ?
         GROUP BY code
         HAVING SUM(inscrits) > 0
-      `);
+      `,
+        [maille],
+      );
       return rows.map((r) => ({
         code: String(r.code),
         libelle: r.libelle ?? null,
@@ -141,21 +148,24 @@ export function useWinnerByMaille(scrutin: Scrutin, maille: Maille, enabled = tr
     queryFn: async (): Promise<TerritoryWinner[]> => {
       const terr = aggUrl(scrutin, "territoires");
       const cand = aggUrl(scrutin, "candidats");
-      const rows = await query<{ code: string; libelle: string | null; nuance: string }>(`
+      const rows = await query<{ code: string; libelle: string | null; nuance: string }>(
+        `
         WITH s AS (
           SELECT code, nuance, SUM(voix) AS v
           FROM read_parquet('${cand}')
-          WHERE maille = '${maille}' AND nuance IS NOT NULL
+          WHERE maille = ? AND nuance IS NOT NULL
           GROUP BY code, nuance
           QUALIFY ROW_NUMBER() OVER (PARTITION BY code ORDER BY v DESC) = 1
         ),
         terr AS (
           SELECT code, any_value(libelle) AS libelle
-          FROM read_parquet('${terr}') WHERE maille = '${maille}' GROUP BY code
+          FROM read_parquet('${terr}') WHERE maille = ? GROUP BY code
         )
         SELECT s.code, t.libelle, s.nuance
         FROM s LEFT JOIN terr t USING (code)
-      `);
+      `,
+        [maille, maille],
+      );
       return rows
         .filter((r) => r.code && r.nuance)
         .map((r) => ({ code: String(r.code), libelle: r.libelle ?? null, nuance: String(r.nuance) }));
@@ -215,12 +225,13 @@ export function useMarginalite(scrutin: Scrutin, maille: Maille = "circonscripti
         runnerNuance: string | null;
         leaderPct: number;
         marginPts: number;
-      }>(`
+      }>(
+        `
         WITH top AS (
           SELECT code, label, nuance, voix,
                  ROW_NUMBER() OVER (PARTITION BY code ORDER BY voix DESC) AS rn
           FROM read_parquet('${cand}')
-          WHERE maille = '${maille}' AND voix IS NOT NULL
+          WHERE maille = ? AND voix IS NOT NULL
           QUALIFY rn <= 2
         ),
         piv AS (
@@ -234,7 +245,7 @@ export function useMarginalite(scrutin: Scrutin, maille: Maille = "circonscripti
         ),
         terr AS (
           SELECT code, any_value(libelle) AS libelle, SUM(exprimes) AS exp
-          FROM read_parquet('${terr}') WHERE maille = '${maille}' GROUP BY code
+          FROM read_parquet('${terr}') WHERE maille = ? GROUP BY code
         )
         SELECT p.code, t.libelle, p.l1 AS leader, p.n1 AS leaderNuance, p.n2 AS runnerNuance,
                CAST(p.v1 AS DOUBLE) / t.exp AS leaderPct,
@@ -242,7 +253,9 @@ export function useMarginalite(scrutin: Scrutin, maille: Maille = "circonscripti
         FROM piv p JOIN terr t USING (code)
         WHERE t.exp > 0 AND p.v1 IS NOT NULL
         ORDER BY marginPts ASC
-      `);
+      `,
+        [maille, maille],
+      );
       return rows.map((r) => ({
         code: String(r.code),
         libelle: r.libelle ?? null,

@@ -3,6 +3,7 @@ export const MAILLE_ORDER = [
   "departements",
   "circonscriptions",
   "communes",
+  "bureaux",
 ] as const;
 
 export type Maille = (typeof MAILLE_ORDER)[number];
@@ -49,6 +50,18 @@ export const TILES: Record<Maille, TileConfig> = {
     maxzoom: 13,
     color: "#14b8a6",
   },
+  // Contours officiels des bureaux de vote (Etalab / REU INSEE), PMTiles servi
+  // directement par data.gouv.fr — pas de copie locale (282 Mo). Le code de
+  // jointture `codeBureauVote` (« 01001_0001 ») correspond aux agrégats
+  // public/electoral/agg/{scrutin}_bureaux_*.parquet. Cf. scripts/pipeline/sources.json.
+  bureaux: {
+    path: "https://object.files.data.gouv.fr/data-pipeline-open/reu/reu-france-entiere-2022-06-01-v2.pmtiles",
+    sourceLayer: "repertoire-unique-electoral-polygons",
+    promoteId: "codeBureauVote",
+    minzoom: 9,
+    maxzoom: 14,
+    color: "#db2777",
+  },
 };
 
 export const MAILLE_LABELS: Record<Maille, string> = {
@@ -56,4 +69,5 @@ export const MAILLE_LABELS: Record<Maille, string> = {
   departements: "Département",
   circonscriptions: "Circonscription",
   communes: "Commune",
+  bureaux: "Bureau de vote",
 };

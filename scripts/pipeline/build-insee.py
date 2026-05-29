@@ -6,9 +6,16 @@ Filosofi 2021 (commune) :
 - input  : data/raw/insee/DS_FILOSOFI_CC_data.csv (format SDMX long, ~833k lignes)
 - output : public/insee/filosofi_2021_commune.parquet (wide, 1 ligne par commune)
 
-Indicateurs retenus pour v1 :
-- MED_SL  : niveau de vie médian (€)
-- PR_MD60 : taux de pauvreté (%, seuil 60 % de la médiane)
+Indicateurs retenus :
+- MED_SL       : niveau de vie médian (€)
+- PR_MD60      : taux de pauvreté (%, seuil 60 % de la médiane)
+- D1_SL        : 1er décile du niveau de vie (€)
+- D9_SL        : 9e décile du niveau de vie (€)
+- IR_D9_D1_SL  : rapport interdécile D9/D1 (inégalités)
+- S_RET_PEN_DI : part des pensions/retraites dans le revenu disponible (%) — proxy âge
+- S_SOC_BEN_DI : part des prestations sociales dans le revenu disponible (%)
+- S_EI_DI_UNE  : part des indemnités de chômage dans le revenu disponible (%)
+- S_HH_TAX     : part des ménages imposés (%) — aisance fiscale
 """
 from __future__ import annotations
 
@@ -22,7 +29,10 @@ OUT = ROOT / "public" / "insee"
 FILOSOFI_SRC = RAW / "DS_FILOSOFI_CC_data.csv"
 FILOSOFI_OUT = OUT / "filosofi_2021_commune.parquet"
 
-MEASURES = ("MED_SL", "PR_MD60")
+MEASURES = (
+    "MED_SL", "PR_MD60", "D1_SL", "D9_SL", "IR_D9_D1_SL",
+    "S_RET_PEN_DI", "S_SOC_BEN_DI", "S_EI_DI_UNE", "S_HH_TAX",
+)
 
 
 def main() -> int:

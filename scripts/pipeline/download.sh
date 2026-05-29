@@ -52,6 +52,15 @@ for key in filosofi_2021; do
   fi
 done
 
+# INSEE — Recensement de la population (RP 2022, datasets melodi SDMX)
+for ds in DS_RP_POPULATION_PRINC DS_RP_EMPLOI_LR_COMP DS_RP_DIPLOMES_PRINC; do
+  fetch "https://api.insee.fr/melodi/file/${ds}/${ds}_2022_CSV_FR" "data/raw/insee/${ds}.zip"
+  if [[ -f "data/raw/insee/${ds}.zip" ]] && ! ls "data/raw/insee/${ds}.d"/*.csv >/dev/null 2>&1; then
+    mkdir -p "data/raw/insee/${ds}.d"
+    unzip -o "data/raw/insee/${ds}.zip" -d "data/raw/insee/${ds}.d/" >/dev/null || echo "✗ unzip failed for ${ds}.zip"
+  fi
+done
+
 echo
 echo "✓ Sources téléchargées dans data/raw/"
 ls -lh data/raw/geo data/raw/electoral data/raw/insee

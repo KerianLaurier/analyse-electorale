@@ -41,9 +41,11 @@ function buildStyle(origin: string): StyleSpecification {
 
   for (const maille of MAILLE_ORDER) {
     const cfg = TILES[maille];
+    // `path` peut être relatif (servi par Next) ou absolu (PMTiles distant officiel).
+    const tilesUrl = cfg.path.startsWith("http") ? cfg.path : `${origin}${cfg.path}`;
     sources[maille] = {
       type: "vector",
-      url: `pmtiles://${origin}${cfg.path}`,
+      url: `pmtiles://${tilesUrl}`,
       promoteId: { [cfg.sourceLayer]: cfg.promoteId },
     };
   }
@@ -153,6 +155,9 @@ export function Map({
   const choroplethMailleRef = useRef<Maille | null>(null);
   const onFeatureClickRef = useRef(onFeatureClick);
   const selectedRef = useRef<{ maille: Maille; code: string | number } | null>(null);
+  // Application incrémentale des feature-states (perf : maille bureaux ~70k).
+  const fsRafRef = useRef<number | null>(null);
+  const fsTokenRef = useRef(0);
 
   // Keep the latest click callback accessible from the long-lived init effect.
   useEffect(() => {
@@ -294,11 +299,34 @@ export function Map({
             0.65,
           ]);
 
-          for (const entry of choropleth.data) {
-            map.setFeatureState(
-              { source: m, sourceLayer: cfg.sourceLayer, id: entry.code },
-              { [choropleth.stateKey]: entry.value },
-            );
+          // Application des feature-states. Pour les grosses mailles (bureaux,
+          // ~70k entrées), on découpe par frames pour ne pas bloquer le thread
+          // principal ; un token permet d'annuler si la maille/choroplèthe change.
+          if (fsRafRef.current != null) {
+            cancelAnimationFrame(fsRafRef.current);
+            fsRafRef.current = null;
+          }
+          const token = ++fsTokenRef.current;
+          const data = choropleth.data;
+          const stateKey = choropleth.stateKey;
+          const sourceLayer = cfg.sourceLayer;
+          const CHUNK = 5000;
+          if (data.length <= CHUNK) {
+            for (const entry of data) {
+              map.setFeatureState({ source: m, sourceLayer, id: entry.code }, { [stateKey]: entry.value });
+            }
+          } else {
+            let i = 0;
+            const step = () => {
+              if (fsTokenRef.current !== token || !mapRef.current) return;
+              const end = Math.min(i + CHUNK, data.length);
+              for (; i < end; i++) {
+                const entry = data[i];
+                map.setFeatureState({ source: m, sourceLayer, id: entry.code }, { [stateKey]: entry.value });
+              }
+              fsRafRef.current = i < data.length ? requestAnimationFrame(step) : null;
+            };
+            fsRafRef.current = requestAnimationFrame(step);
           }
         } else {
           map.setPaintProperty(fillLayer, "fill-color", cfg.color);

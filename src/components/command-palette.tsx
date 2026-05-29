@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Building2, Map, Vote, Loader2, ArrowRight } from "lucide-react";
+import { MapPin, Building2, Map, Vote, Loader2, ArrowRight, UserRound } from "lucide-react";
 import {
   Command,
   CommandDialog,
@@ -27,6 +27,7 @@ const TYPE_ICON: Record<SearchEntryType, typeof MapPin> = {
   departement: Map,
   circo: Vote,
   commune: Building2,
+  depute: UserRound,
 };
 
 // Navigation rapide (toujours dispo, en bas de la palette).
@@ -89,7 +90,11 @@ export function CommandPalette() {
     router.push(href);
   }
 
-  function openTerritory(entry: SearchEntry) {
+  function openEntry(entry: SearchEntry) {
+    if (entry.type === "depute") {
+      go(`/elu/${encodeURIComponent(entry.code)}`);
+      return;
+    }
     const params = new URLSearchParams({
       maille: mailleForType(entry.type),
       code: entry.code,
@@ -106,7 +111,7 @@ export function CommandPalette() {
     >
       <Command shouldFilter={false}>
       <CommandInput
-        placeholder="Rechercher commune, circonscription, département…"
+        placeholder="Rechercher commune, circonscription, département, député…"
         value={query}
         onValueChange={setQuery}
       />
@@ -127,7 +132,7 @@ export function CommandPalette() {
             </CommandGroup>
             <div className="px-3 py-2 text-[11px] text-muted-foreground/80">
               Tape pour rechercher parmi {indexQuery.data?.length ?? "…"}{" "}
-              territoires.
+              territoires et députés en exercice.
             </div>
           </>
         )}
@@ -139,7 +144,7 @@ export function CommandPalette() {
         )}
 
         {query.length > 0 && !indexQuery.isLoading && results.length === 0 && (
-          <CommandEmpty>Aucun territoire ne correspond.</CommandEmpty>
+          <CommandEmpty>Aucun résultat.</CommandEmpty>
         )}
 
         {Array.from(groups.entries()).map(([type, items], i) => {
@@ -152,14 +157,24 @@ export function CommandPalette() {
                   <CommandItem
                     key={`${e.type}-${e.code}`}
                     value={`${e.type}-${e.code}-${e.nom}`}
-                    onSelect={() => openTerritory(e)}
+                    onSelect={() => openEntry(e)}
                   >
-                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    {e.type === "depute" && e.groupeColor ? (
+                      <span
+                        className="h-3 w-3 shrink-0 rounded-full"
+                        style={{ background: e.groupeColor }}
+                        aria-hidden
+                      />
+                    ) : (
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                    )}
                     <span className="flex-1 truncate">{e.nom}</span>
                     <span className="ml-2 shrink-0 text-xs text-muted-foreground tabular-nums">
-                      {e.departement
-                        ? `${e.departement} · ${e.code}`
-                        : e.code}
+                      {e.type === "depute"
+                        ? `${e.groupe ?? ""} · circ. ${e.code}`
+                        : e.departement
+                          ? `${e.departement} · ${e.code}`
+                          : e.code}
                     </span>
                   </CommandItem>
                 ))}

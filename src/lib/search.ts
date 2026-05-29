@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-export type SearchEntryType = "region" | "departement" | "circo" | "commune";
+export type SearchEntryType = "region" | "departement" | "circo" | "commune" | "depute";
 
 export type SearchEntry = {
   type: SearchEntryType;
@@ -10,17 +10,52 @@ export type SearchEntry = {
   nom: string;
   departement?: string;
   codeDepartement?: string;
+  /** Députés : sigle + couleur du groupe parlementaire courant (open data AN). */
+  groupe?: string;
+  groupeColor?: string;
 };
 
-/** Index complet — chargé à la demande (lazy) lors de la 1re ouverture de Cmd+K. */
+type DeputesPayload = {
+  deputes: Array<{
+    circo: string;
+    prenom: string | null;
+    nom: string | null;
+    groupe: string | null;
+    groupeColor: string | null;
+  }>;
+};
+
+/**
+ * Index complet — chargé à la demande (lazy) lors de la 1re ouverture de Cmd+K.
+ * Fusionne les territoires (GeoJSON) et les députés en exercice (open data AN).
+ */
 export function useSearchIndex(enabled: boolean) {
   return useQuery({
     enabled,
     queryKey: ["search-index"],
     queryFn: async (): Promise<SearchEntry[]> => {
-      const res = await fetch("/search-index.json");
-      if (!res.ok) throw new Error("Search index introuvable");
-      return (await res.json()) as SearchEntry[];
+      const [territoiresRes, deputesRes] = await Promise.all([
+        fetch("/search-index.json"),
+        fetch("/an/deputes.json"),
+      ]);
+      if (!territoiresRes.ok) throw new Error("Search index introuvable");
+      const territoires = (await territoiresRes.json()) as SearchEntry[];
+
+      let deputes: SearchEntry[] = [];
+      if (deputesRes.ok) {
+        const payload = (await deputesRes.json()) as DeputesPayload;
+        deputes = payload.deputes
+          .filter((d) => d.nom && d.circo)
+          .map((d) => ({
+            type: "depute" as const,
+            code: d.circo,
+            nom: [d.prenom, d.nom].filter(Boolean).join(" "),
+            departement: d.groupe ?? undefined,
+            groupe: d.groupe ?? undefined,
+            groupeColor: d.groupeColor ?? undefined,
+          }));
+      }
+      return [...territoires, ...deputes];
     },
     staleTime: 24 * 60 * 60 * 1000, // 1 jour
     gcTime: 24 * 60 * 60 * 1000,
@@ -99,9 +134,10 @@ export const TYPE_LABELS: Record<SearchEntryType, string> = {
   departement: "Département",
   circo: "Circonscription",
   commune: "Commune",
+  depute: "Député",
 };
 
-/** Maille Explorer correspondant à un type d'entrée. */
+/** Maille Explorer correspondant à un type d'entrée territoriale. */
 export function mailleForType(type: SearchEntryType): string {
   switch (type) {
     case "region":
@@ -109,6 +145,7 @@ export function mailleForType(type: SearchEntryType): string {
     case "departement":
       return "departements";
     case "circo":
+    case "depute":
       return "circonscriptions";
     case "commune":
       return "communes";
