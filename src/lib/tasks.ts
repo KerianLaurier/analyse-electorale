@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export type TaskStatus = "todo" | "doing" | "done";
 export type TaskPriority = "low" | "med" | "high";
-export type TaskKind = "porte" | "boitage" | "collage" | "evenement" | "reunion" | "appel" | "autre";
+export type TaskKind = "communication" | "logistique" | "demarche" | "mobilisation" | "autre";
 
 export type TaskContext = { type: string; id: string; label: string; href: string };
 
@@ -43,12 +43,10 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: "Haute",
 };
 export const TASK_KIND_LABELS: Record<TaskKind, string> = {
-  porte: "Porte-à-porte",
-  boitage: "Boîtage",
-  collage: "Collage / affichage",
-  evenement: "Événement",
-  reunion: "Réunion",
-  appel: "Phoning",
+  communication: "Communication",
+  logistique: "Logistique",
+  demarche: "Démarche / admin",
+  mobilisation: "Mobilisation",
   autre: "Autre",
 };
 

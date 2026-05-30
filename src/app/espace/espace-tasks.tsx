@@ -92,12 +92,17 @@ export function EspaceTasks({ ctx }: { ctx: WsContext }) {
         </button>
       </div>
 
+      <p className="-mt-2 text-[11.5px] text-muted-foreground">
+        Tâches d’organisation (communication, logistique, démarches…). Le terrain collectif se planifie dans Permanences.
+      </p>
+
       {showForm && <TaskForm ctx={ctx} onDone={() => setShowForm(false)} />}
 
       {visible.length === 0 ? (
         <p className="rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-10 text-center text-[13px] text-muted-foreground">
-          Aucune action {filter !== "all" ? `« ${TASK_STATUS_LABELS[filter as TaskStatus]} »` : ""}. Créez la première
-          pour organiser le terrain.
+          Aucune action {filter !== "all" ? `« ${TASK_STATUS_LABELS[filter as TaskStatus]} »` : ""}. Les actions sont les
+          tâches d’organisation (communication, logistique, démarches…). Les sessions de terrain
+          collectives (porte-à-porte, tractage…) se planifient dans l’onglet Permanences.
         </p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -127,7 +132,7 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
 
 function TaskForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
   const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<TaskKind>("porte");
+  const [kind, setKind] = useState<TaskKind>("communication");
   const [priority, setPriority] = useState<TaskPriority>("med");
   const [dueDate, setDueDate] = useState("");
   const [assignee, setAssignee] = useState<string>(ctx.meId);
@@ -160,7 +165,7 @@ function TaskForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
         autoFocus
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Que faut-il faire ? (ex. Porte-à-porte quartier Gare)"
+        placeholder="Que faut-il faire ? (ex. Imprimer 5 000 tracts, déposer le dossier de candidature)"
         className={cn(field, "text-[14px]")}
       />
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
