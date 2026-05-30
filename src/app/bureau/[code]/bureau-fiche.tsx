@@ -6,6 +6,9 @@ import { ArrowLeft, BadgeCheck, Building2, Loader2, Map as MapIcon } from "lucid
 import { useBureauHistory, type CircoTimelinePoint } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
+import { ExportButton } from "@/components/export-button";
+import { PinButton } from "@/components/pin-button";
+import { downloadCsv, type CsvRow } from "@/lib/export";
 
 const FAMILY_GROUPS: { family: ScrutinFamily; label: string }[] = [
   { family: "presidentielle", label: "Présidentielles" },
@@ -49,6 +52,23 @@ export function BureauFiche({ code }: { code: string }) {
   const communeName = libelle?.includes(" · ") ? libelle.split(" · ").slice(1).join(" · ") : null;
   const latest = byScrutin.get("legis-2024-t2") ?? ordered[ordered.length - 1];
 
+  function exportCsv() {
+    const rows: CsvRow[] = ordered.map((p) => {
+      const w = p.candidates[0];
+      return {
+        Scrutin: SCRUTIN_META[p.scrutin].short,
+        Type: SCRUTIN_META[p.scrutin].family,
+        "Arrive en tête": w ? w.label || nuanceLabel(w.nuance) : "",
+        Nuance: w?.nuance ?? "",
+        "Part %": w ? Number((w.pct * 100).toFixed(1)) : "",
+        "Participation %": Number((p.participation * 100).toFixed(1)),
+        Inscrits: Math.round(p.inscrits),
+        Exprimés: Math.round(p.exprimes),
+      };
+    });
+    downloadCsv(`bureau-${code}`, rows);
+  }
+
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
       <Link
@@ -72,6 +92,10 @@ export function BureauFiche({ code }: { code: string }) {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          <PinButton
+            pin={{ type: "bureau", id: code, label: `Bureau ${num}`, sublabel: communeName ? `Bureau · ${communeName}` : `Bureau · ${insee}`, href: `/bureau/${code}` }}
+          />
+          {ordered.length > 0 && <ExportButton onClick={exportCsv} />}
           {insee && (
             <Link
               href={`/commune/${encodeURIComponent(insee)}`}

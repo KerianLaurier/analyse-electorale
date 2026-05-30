@@ -1,23 +1,10 @@
-// Espace de travail : équipe & abonnement.
-//
-// ⚠️ Données de préversion (mock). Le branchement Supabase se fera ici :
-//   - `members` ← supabase.from('team_members').select('*, profile(*)')
-//   - `subscription` ← supabase.from('subscriptions').select().single()
-//   - mutations (invite / role / remove / billing) → Edge Functions + Stripe.
-// Les types ci-dessous sont calqués sur le schéma cible pour limiter le
-// refactor au moment du câblage.
+// Espace de travail : rôles & grille tarifaire (référence).
+// Le compte, l'abonnement et l'essai réels sont chargés depuis Supabase
+// (table `profiles`) côté page serveur ; voir src/app/auth/team/page.tsx.
+// Le partage d'équipe (membres, invitations) et la facturation Stripe restent
+// à brancher dans un sprint dédié.
 
 export type Role = "owner" | "admin" | "member";
-export type MemberStatus = "active" | "invited";
-
-export type TeamMember = {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  status: MemberStatus;
-  lastActive: string | null; // ISO ou null si invité
-};
 
 export type PlanId = "solo" | "equipe" | "cabinet";
 
@@ -29,14 +16,6 @@ export type Plan = {
   seats: string;
   tagline: string;
   features: string[];
-};
-
-export type Subscription = {
-  planId: PlanId;
-  status: "active" | "trialing" | "past_due";
-  renewsAt: string; // ISO
-  seatsUsed: number;
-  seatsTotal: number;
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -74,27 +53,6 @@ export const PLANS: Plan[] = [
     features: ["Tout Équipe", "SSO & rôles avancés", "Accès API", "Données sur-mesure", "Accompagnement dédié"],
   },
 ];
-
-// ── Mock de préversion ────────────────────────────────────────────────────────
-
-export const MOCK_SUBSCRIPTION: Subscription = {
-  planId: "equipe",
-  status: "active",
-  renewsAt: "2026-06-28",
-  seatsUsed: 3,
-  seatsTotal: 5,
-};
-
-export const MOCK_MEMBERS: TeamMember[] = [
-  { id: "u1", name: "Kérian Laurier", email: "kerian@mouvancia.app", role: "owner", status: "active", lastActive: "2026-05-29T08:10:00Z" },
-  { id: "u2", name: "Camille Dubois", email: "camille@mouvancia.app", role: "admin", status: "active", lastActive: "2026-05-28T17:42:00Z" },
-  { id: "u3", name: "Hugo Marchand", email: "hugo@mouvancia.app", role: "member", status: "active", lastActive: "2026-05-27T11:05:00Z" },
-  { id: "u4", name: "—", email: "nina@parti.fr", role: "member", status: "invited", lastActive: null },
-];
-
-export function planById(id: PlanId): Plan {
-  return PLANS.find((p) => p.id === id) ?? PLANS[0];
-}
 
 export function initials(name: string, email: string): string {
   const base = name && name !== "—" ? name : email;

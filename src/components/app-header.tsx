@@ -1,9 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Search, Bell, Settings2 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Search, Bell, Settings2, LogOut, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 const PRIMARY_NAV = [
   { href: "/explorer", label: "Explorer" },
@@ -11,12 +21,33 @@ const PRIMARY_NAV = [
   { href: "/suivre", label: "Suivre" },
 ] as const;
 
+const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement"]);
+
 export function AppHeader() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
 
-  // Écrans de connexion / inscription : pas de chrome applicatif.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
+      setEmail(session?.user?.email ?? null),
+    );
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function signOut() {
+    await createClient().auth.signOut();
+    router.push("/auth/login");
+    router.refresh();
+  }
+
+  // Écrans d'authentification : pas de chrome applicatif.
   // (la page équipe /auth/team garde le chrome : c'est un réglage in-app)
-  if (pathname === "/auth/login" || pathname === "/auth/signup") return null;
+  if (NO_CHROME.has(pathname)) return null;
+
+  const initial = (email?.[0] ?? "K").toUpperCase();
 
   function openPalette() {
     const event = new KeyboardEvent("keydown", {
@@ -99,13 +130,27 @@ export function AppHeader() {
           >
             <Settings2 className="h-4 w-4" />
           </Link>
-          <Link
-            href="/auth/team"
-            aria-label="Profil"
-            className="ml-1 grid h-8 w-8 place-items-center rounded-pill bg-warm/90 text-[12px] font-semibold text-on-dark transition-transform duration-150 hover:scale-105 active:scale-95"
-          >
-            K
-          </Link>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Compte"
+              className="ml-1 grid h-8 w-8 place-items-center rounded-pill bg-warm/90 text-[12px] font-semibold text-on-dark transition-transform duration-150 hover:scale-105 active:scale-95"
+            >
+              {initial}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="truncate">{email ?? "Compte"}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => router.push("/auth/team")}>
+                <Users className="h-4 w-4" />
+                Équipe & abonnement
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={signOut}>
+                <LogOut className="h-4 w-4" />
+                Se déconnecter
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

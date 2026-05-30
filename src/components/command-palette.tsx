@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Building2, Map, Vote, Loader2, ArrowRight, UserRound } from "lucide-react";
+import { MapPin, Building2, Map, Vote, Loader2, ArrowRight, UserRound, Star, Users } from "lucide-react";
+import { usePins } from "@/lib/pins";
 import {
   Command,
   CommandDialog,
@@ -47,6 +48,7 @@ export function CommandPalette() {
   const router = useRouter();
 
   const indexQuery = useSearchIndex(open);
+  const pins = usePins();
   const results = useMemo<SearchEntry[]>(() => {
     if (!query || !indexQuery.data) return [];
     return searchEntries(indexQuery.data, query, 30);
@@ -118,6 +120,32 @@ export function CommandPalette() {
       <CommandList>
         {query.length === 0 && (
           <>
+            {pins.length > 0 && (
+              <CommandGroup heading="Épinglés">
+                {pins.slice(0, 8).map((p) => (
+                  <CommandItem
+                    key={`${p.type}-${p.id}`}
+                    value={`pin-${p.type}-${p.id}-${p.label}`}
+                    onSelect={() => go(p.href)}
+                  >
+                    {p.shared ? (
+                      <Users className="h-4 w-4 text-warm" />
+                    ) : (
+                      <Star className="h-4 w-4 fill-warm text-warm" />
+                    )}
+                    <span className="flex-1 truncate">{p.label}</span>
+                    {p.shared && (
+                      <span className="ml-2 shrink-0 rounded-full bg-warm/15 px-1.5 py-0.5 text-[10px] font-medium text-warm">
+                        Équipe
+                      </span>
+                    )}
+                    {p.sublabel && (
+                      <span className="ml-2 shrink-0 text-xs text-muted-foreground">{p.sublabel}</span>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
             <CommandGroup heading="Navigation">
               {NAV_SHORTCUTS.map((s) => (
                 <CommandItem
