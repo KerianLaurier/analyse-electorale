@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -27,15 +28,22 @@ export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
-      setEmail(session?.user?.email ?? null),
-    );
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null);
+      setUserId(data.user?.id ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  const notifs = useNotifications(userId);
 
   async function signOut() {
     await createClient().auth.signOut();
@@ -123,13 +131,10 @@ export function AppHeader() {
           >
             <Star className="h-4 w-4" />
           </Link>
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
-          >
-            <Bell className="h-4 w-4" />
-          </button>
+          <NotificationsBell
+            notifs={notifs}
+            onOpen={(href) => router.push(href)}
+          />
           <Link
             href="/auth/team"
             aria-label="Paramètres de l'équipe"
@@ -166,5 +171,112 @@ export function AppHeader() {
         </div>
       </div>
     </header>
+  );
+}
+
+const NOTIF_ICON = {
+  task: ListTodo,
+  shift: CalendarClock,
+  campaign: Target,
+} as const;
+const NOTIF_TONE = {
+  warn: "text-red-600",
+  info: "text-warm",
+  success: "text-emerald-600",
+} as const;
+
+function NotificationsBell({
+  notifs,
+  onOpen,
+}: {
+  notifs: AppNotification[];
+  onOpen: (href: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const count = notifs.length;
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={`Notifications${count > 0 ? ` (${count})` : ""}`}
+        className="relative grid h-8 w-8 place-items-center rounded-md text-foreground/70 outline-none transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
+      >
+        <Bell className="h-4 w-4" />
+        {count > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">
+            {count > 9 ? "9+" : count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-black/10 bg-surface shadow-[0_8px_30px_rgba(10,10,12,0.18)]">
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-[12px] font-semibold">Notifications</span>
+            {count > 0 && (
+              <button
+                type="button"
+                onClick={() => dismissAll(notifs.map((n) => n.id))}
+                className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                <CheckCheck className="h-3.5 w-3.5" /> Tout lire
+              </button>
+            )}
+          </div>
+          <div className="h-px bg-border" />
+          {count === 0 ? (
+            <p className="px-3 py-8 text-center text-[12.5px] text-muted-foreground">Aucune notification</p>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto p-1">
+              {notifs.map((n) => {
+                const Icon = NOTIF_ICON[n.kind];
+                return (
+                  <div key={n.id} className="group flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-surface-soft">
+                    <button
+                      type="button"
+                      onClick={() => { onOpen(n.href); setOpen(false); }}
+                      className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                    >
+                      <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", NOTIF_TONE[n.tone])} />
+                      <span className="min-w-0">
+                        <span className="block text-[12.5px] font-medium leading-snug">{n.title}</span>
+                        {n.detail && <span className="block truncate text-[11px] text-muted-foreground">{n.detail}</span>}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => dismissNotification(n.id)}
+                      aria-label="Marquer comme lu"
+                      className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

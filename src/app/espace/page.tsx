@@ -3,7 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { EspaceView } from "@/app/espace/espace-view";
 import type { WsContext, WsMember } from "@/app/espace/types";
 
-export default async function EspacePage() {
+export default async function EspacePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -39,5 +44,5 @@ export default async function EspacePage() {
 
   const ctx: WsContext = { meId: user.id, meName, teamId, teamName, members };
 
-  return <EspaceView ctx={ctx} />;
+  return <EspaceView ctx={ctx} initialTab={tab} />;
 }
