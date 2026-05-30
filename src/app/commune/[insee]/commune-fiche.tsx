@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2, Map as MapIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { ScrutinFamily } from "@/lib/url-state";
 import {
   useCommuneHistory,
   useSociologieCommune,
   useDemographieCommune,
+  useCommuneCircoMap,
   type CircoTimelinePoint,
   type CommuneSociologie,
   type DemographieCommune,
@@ -29,10 +32,20 @@ const DISPLAY_ORDER: Scrutin[] = [
   "legis-2024-t1", "legis-2024-t2",
 ];
 
+const FAMILY_GROUPS: { family: ScrutinFamily; label: string }[] = [
+  { family: "presidentielle", label: "Présidentielles" },
+  { family: "legislative", label: "Législatives" },
+  { family: "municipale", label: "Municipales" },
+];
+
+type CommuneTab = "elections" | "population";
+
 export function CommuneFiche({ insee }: { insee: string }) {
   const history = useCommuneHistory(insee);
   const socio = useSociologieCommune(insee);
   const demo = useDemographieCommune(insee);
+  const circoMap = useCommuneCircoMap();
+  const circos = circoMap.data?.[insee] ?? [];
 
   const byScrutin = useMemo(() => {
     const map = new Map<Scrutin, CircoTimelinePoint>();
@@ -51,6 +64,8 @@ export function CommuneFiche({ insee }: { insee: string }) {
   const libelle =
     byScrutin.get("legis-2024-t2")?.libelle ?? (history.data ?? [])[0]?.libelle ?? null;
   const latest = byScrutin.get("presid-2022-t2") ?? ordered[ordered.length - 1];
+  const [tab, setTab] = useState<CommuneTab>("elections");
+  const hasPopulation = !!demo.data || !!socio.data;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
@@ -85,58 +100,86 @@ export function CommuneFiche({ insee }: { insee: string }) {
       ) : ordered.length === 0 && !socio.data ? (
         <Empty insee={insee} />
       ) : (
-        <div className="mt-6 flex flex-col gap-8">
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <KPI
-              label="Revenu médian disponible"
-              value={socio.data?.revenuMedian != null ? fmtEuro(socio.data.revenuMedian) : "—"}
-              hint={`France : ${fmtEuro(FR.revenuMedian)}`}
-              delta={
-                socio.data?.revenuMedian != null
-                  ? socio.data.revenuMedian - FR.revenuMedian
-                  : null
-              }
-              deltaFmt={(d) => `${d >= 0 ? "+" : ""}${fmtInt(d)} €`}
-              goodWhenPositive
-            />
-            <KPI
-              label="Taux de pauvreté"
-              value={
-                socio.data?.tauxPauvrete != null
-                  ? `${socio.data.tauxPauvrete.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`
-                  : "—"
-              }
-              hint={`France : ${FR.tauxPauvrete} %`}
-              delta={
-                socio.data?.tauxPauvrete != null ? socio.data.tauxPauvrete - FR.tauxPauvrete : null
-              }
-              deltaFmt={(d) => `${d >= 0 ? "+" : ""}${d.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pts`}
-              goodWhenPositive={false}
-            />
-            <KPI
-              label="Inscrits (dernier scrutin)"
-              value={latest ? fmtInt(latest.inscrits) : "—"}
-              hint={latest ? `Participation ${fmtPct(latest.participation, 0)}` : undefined}
-            />
-          </section>
+        <div className="mt-5">
+          <div className="flex gap-1 border-b border-black/5">
+            <TabButton active={tab === "elections"} onClick={() => setTab("elections")}>
+              Élections
+            </TabButton>
+            <TabButton
+              active={tab === "population"}
+              onClick={() => setTab("population")}
+              disabled={!hasPopulation}
+            >
+              Population
+            </TabButton>
+          </div>
 
-          {demo.data && <DemographieSection demo={demo.data} />}
-
-          {socio.data && <SociologieSection socio={socio.data} />}
-
-          {ordered.length > 0 && (
-            <section>
-              <SectionTitle>Historique des scrutins</SectionTitle>
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {ordered.map((point) => (
-                  <ScrutinRow key={point.scrutin} point={point} />
-                ))}
-              </div>
-              <p className="mt-2 text-[10px] text-muted-foreground">
-                Résultats communaux agrégés depuis les bureaux de vote (MinInt). Le
-                gagnant local peut différer du résultat de la circonscription.
-              </p>
-            </section>
+          {tab === "elections" ? (
+            <div className="mt-5 flex flex-col gap-7">
+              {latest && (
+                <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <KPI label="Inscrits" value={fmtInt(latest.inscrits)} hint={SCRUTIN_META[latest.scrutin].short} />
+                  <KPI label="Participation" value={fmtPct(latest.participation)} />
+                  <KPI label="Votants" value={fmtInt(latest.votants)} />
+                  <KPI label="Exprimés" value={fmtInt(latest.exprimes)} />
+                </section>
+              )}
+              {circos.length > 0 && <CirconscriptionsBanner circos={circos} />}
+              {ordered.length > 0 ? (
+                <>
+                  {FAMILY_GROUPS.map((g) => {
+                    const pts = ordered.filter((p) => SCRUTIN_META[p.scrutin].family === g.family);
+                    if (pts.length === 0) return null;
+                    return (
+                      <section key={g.family}>
+                        <SectionTitle>{g.label}</SectionTitle>
+                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {pts.map((point) => (
+                            <ScrutinRow key={point.scrutin} point={point} />
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
+                  <p className="text-[10px] leading-relaxed text-muted-foreground">
+                    Résultats communaux agrégés depuis les bureaux de vote (MinInt). Aux
+                    législatives, une commune peut relever de <strong>plusieurs circonscriptions</strong> :
+                    le résultat est alors présenté <strong>par nuance politique</strong> (les candidats
+                    de circonscriptions différentes ne sont pas comparables).
+                  </p>
+                </>
+              ) : (
+                <p className="text-[12px] text-muted-foreground">Aucun résultat électoral disponible.</p>
+              )}
+            </div>
+          ) : (
+            <div className="mt-5 flex flex-col gap-7">
+              <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <KPI
+                  label="Revenu médian disponible"
+                  value={socio.data?.revenuMedian != null ? fmtEuro(socio.data.revenuMedian) : "—"}
+                  hint={`France : ${fmtEuro(FR.revenuMedian)}`}
+                  delta={socio.data?.revenuMedian != null ? socio.data.revenuMedian - FR.revenuMedian : null}
+                  deltaFmt={(d) => `${d >= 0 ? "+" : ""}${fmtInt(d)} €`}
+                  goodWhenPositive
+                />
+                <KPI
+                  label="Taux de pauvreté"
+                  value={socio.data?.tauxPauvrete != null ? `${socio.data.tauxPauvrete.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %` : "—"}
+                  hint={`France : ${FR.tauxPauvrete} %`}
+                  delta={socio.data?.tauxPauvrete != null ? socio.data.tauxPauvrete - FR.tauxPauvrete : null}
+                  deltaFmt={(d) => `${d >= 0 ? "+" : ""}${d.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pts`}
+                  goodWhenPositive={false}
+                />
+                <KPI
+                  label="Population"
+                  value={demo.data?.population != null ? fmtInt(demo.data.population) : "—"}
+                  hint="municipale (RP 2022)"
+                />
+              </section>
+              {demo.data && <DemographieSection demo={demo.data} />}
+              {socio.data && <SociologieSection socio={socio.data} />}
+            </div>
           )}
         </div>
       )}
@@ -206,13 +249,51 @@ function SociologieSection({ socio }: { socio: CommuneSociologie }) {
   );
 }
 
+const ordinal = (n: number) => (n === 1 ? "1ʳᵉ" : `${n}ᵉ`);
+
+function CirconscriptionsBanner({ circos }: { circos: string[] }) {
+  const multi = circos.length > 1;
+  return (
+    <section className="rounded-2xl border border-black/5 bg-white/60 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        {multi ? `Circonscriptions législatives · ${circos.length}` : "Circonscription législative"}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {circos.map((code) => {
+          const num = Number(code.slice(-2));
+          const dept = code.slice(0, -2);
+          return (
+            <Link
+              key={code}
+              href={`/circo/${encodeURIComponent(code)}`}
+              className="inline-flex items-center gap-1 rounded-full bg-warm/10 px-2.5 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-warm/20"
+            >
+              {Number.isFinite(num) ? `${ordinal(num)} circ. ` : ""}
+              <span className="text-muted-foreground">· dépt {dept}</span>
+            </Link>
+          );
+        })}
+      </div>
+      {multi && (
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Cette commune est répartie sur plusieurs circonscriptions — ouvre une fiche
+          circonscription pour le détail de chaque course législative.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function ScrutinRow({ point }: { point: CircoTimelinePoint }) {
   const winner = point.candidates[0];
   return (
     <div className="flex items-center gap-3 rounded-xl border border-black/5 bg-white/60 px-3.5 py-3">
       <div className="w-[128px] shrink-0">
         <p className="text-[12px] font-medium leading-tight">{SCRUTIN_META[point.scrutin].short}</p>
-        <p className="text-[10px] text-muted-foreground">Part. {fmtPct(point.participation, 0)}</p>
+        <p className="text-[10px] text-muted-foreground">
+          Part. {fmtPct(point.participation, 0)}
+          {point.multiCirco && <span className="text-warm"> · plusieurs circ.</span>}
+        </p>
       </div>
       {winner ? (
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -229,6 +310,37 @@ function ScrutinRow({ point }: { point: CircoTimelinePoint }) {
         <span className="flex-1 text-[12px] text-muted-foreground">Données indisponibles</span>
       )}
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  disabled,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "relative -mb-px px-3 pb-2.5 pt-1 text-[13px] font-medium transition-colors",
+        disabled
+          ? "cursor-not-allowed text-muted-foreground/40"
+          : active
+            ? "text-foreground"
+            : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+      {active && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-warm" />}
+    </button>
   );
 }
 

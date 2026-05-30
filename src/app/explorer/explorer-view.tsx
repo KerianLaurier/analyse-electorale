@@ -690,12 +690,14 @@ function FicheTerritoire({
             {MAILLE_LABELS[maille]}
           </p>
           <h3 className="truncate text-[15px] font-semibold tracking-tight">{displayName}</h3>
-          {(maille === "circonscriptions" || maille === "communes") && (
+          {(maille === "circonscriptions" || maille === "communes" || maille === "bureaux") && (
             <Link
               href={
                 maille === "circonscriptions"
                   ? `/circo/${encodeURIComponent(code)}`
-                  : `/commune/${encodeURIComponent(code)}`
+                  : maille === "communes"
+                    ? `/commune/${encodeURIComponent(code)}`
+                    : `/bureau/${encodeURIComponent(code)}`
               }
               className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-warm transition-opacity hover:opacity-80"
             >

@@ -243,10 +243,19 @@ const NATURE_BLURB: Record<string, string> = {
     "Enquête d'opinion thématique (sujet de société ou d'actualité). Les résultats détaillés figurent dans la notice PDF.",
 };
 
+const NATURE_LABELS: Record<string, string> = {
+  intentions: "Intentions de vote",
+  popularite: "Cote de popularité",
+  barometre: "Baromètre politique",
+  thematique: "Enquête thématique",
+};
+const NATURE_ORDER = ["intentions", "popularite", "barometre", "thematique"];
+
 function SondagesView() {
   const { data, isLoading, error } = useNotices();
   const [scrutin, setScrutin] = useState<"all" | ScrutinCode>("all");
   const [institut, setInstitut] = useState<string | null>(null);
+  const [nature, setNature] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -258,6 +267,12 @@ function SondagesView() {
     return SCRUTIN_ORDER.filter((s) => counts.has(s)).map((s) => ({ code: s, count: counts.get(s) ?? 0 }));
   }, [notices]);
 
+  const naturesPresent = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const n of notices) counts.set(n.nature, (counts.get(n.nature) ?? 0) + 1);
+    return NATURE_ORDER.filter((x) => counts.has(x)).map((x) => ({ code: x, count: counts.get(x) ?? 0 }));
+  }, [notices]);
+
   const instituts = useMemo(() => {
     const m = new Map<string, number>();
     for (const n of notices) if (n.institut) m.set(n.institut, (m.get(n.institut) ?? 0) + 1);
@@ -266,36 +281,50 @@ function SondagesView() {
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return notices.filter((n) => {
-      if (scrutin !== "all" && n.scrutin !== scrutin) return false;
-      if (institut && n.institut !== institut) return false;
-      if (q && !`${n.label} ${n.institut ?? ""}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [notices, scrutin, institut, query]);
+    return notices
+      .filter((n) => {
+        if (scrutin !== "all" && n.scrutin !== scrutin) return false;
+        if (institut && n.institut !== institut) return false;
+        if (nature && n.nature !== nature) return false;
+        if (q && !`${n.label} ${n.institut ?? ""}`.toLowerCase().includes(q)) return false;
+        return true;
+      })
+      // Correctif : tri par date décroissante — les sondages récents en tête.
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  }, [notices, scrutin, institut, nature, query]);
 
   const selected = useMemo(
-    () => (selectedId ? notices.find((n) => n.pdf === selectedId) : items[0]) ?? null,
-    [selectedId, notices, items],
+    () => (selectedId ? notices.find((n) => n.pdf === selectedId) ?? null : null),
+    [selectedId, notices],
   );
   const { pageItems, page, setPage, pageCount, total } = usePaged(items);
+
+  const latestDate = items[0]?.date ?? null;
 
   return (
     <>
       <FilterSidebar>
         <SearchBox value={query} onChange={setQuery} placeholder="Filtrer (sujet, institut)…" />
         <FilterSection label="Scrutins">
-          <FilterRow active={scrutin === "all"} label="Tous les sondages" count={notices.length} icon={FileText} onClick={() => setScrutin("all")} />
+          <FilterRow active={scrutin === "all"} label="Tous les sondages" count={notices.length} icon={FileText} onClick={() => { setScrutin("all"); setSelectedId(null); }} />
           {scrutinsPresent.map(({ code, count }) => {
             const meta = SCRUTIN_META[code];
-            return <FilterRow key={code} active={scrutin === code} label={meta.label} count={count} icon={meta.icon} color={meta.color} onClick={() => setScrutin(code)} />;
+            return <FilterRow key={code} active={scrutin === code} label={meta.label} count={count} icon={meta.icon} color={meta.color} onClick={() => { setScrutin(code); setSelectedId(null); }} />;
           })}
         </FilterSection>
+        {naturesPresent.length > 1 && (
+          <FilterSection label="Nature">
+            <FilterRow active={nature === null} label="Toutes natures" icon={BarChart3} onClick={() => { setNature(null); setSelectedId(null); }} />
+            {naturesPresent.map(({ code, count }) => (
+              <FilterRow key={code} active={nature === code} label={NATURE_LABELS[code] ?? code} count={count} dot onClick={() => { setNature(nature === code ? null : code); setSelectedId(null); }} />
+            ))}
+          </FilterSection>
+        )}
         {instituts.length > 0 && (
           <FilterSection label="Instituts">
-            <FilterRow active={institut === null} label="Tous les instituts" icon={Building2} onClick={() => setInstitut(null)} />
+            <FilterRow active={institut === null} label="Tous les instituts" icon={Building2} onClick={() => { setInstitut(null); setSelectedId(null); }} />
             {instituts.map(([name, n]) => (
-              <FilterRow key={name} active={institut === name} label={name} count={n} dot onClick={() => setInstitut(institut === name ? null : name)} />
+              <FilterRow key={name} active={institut === name} label={name} count={n} dot onClick={() => { setInstitut(institut === name ? null : name); setSelectedId(null); }} />
             ))}
           </FilterSection>
         )}
@@ -304,7 +333,7 @@ function SondagesView() {
       <ListColumn
         eyebrow={`${data?.source ?? "Commission des sondages"}`}
         title={`${scrutin === "all" ? "Toutes les notices" : SCRUTIN_META[scrutin].label} · ${items.length}`}
-        meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined}
+        meta={latestDate ? `dernière : ${relativeFr(latestDate)}` : data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined}
         loading={isLoading}
         error={!!error}
         pager={{ page, pageCount, total, onPage: setPage }}
@@ -315,10 +344,94 @@ function SondagesView() {
         {!isLoading && items.length === 0 && <EmptyRow />}
       </ListColumn>
 
-      <DetailColumn k={selected?.pdf}>
-        {selected ? <NoticeDetail notice={selected} /> : <DetailEmpty label="une notice" />}
+      <DetailColumn k={selected?.pdf ?? "overview"}>
+        {selected ? (
+          <NoticeDetail notice={selected} />
+        ) : (
+          <SondagesOverview items={items} generatedAt={data?.generated_at ?? null} />
+        )}
       </DetailColumn>
     </>
+  );
+}
+
+/** Aperçu : cadence mensuelle, répartition par nature, dernière notice. */
+function SondagesOverview({ items, generatedAt }: { items: Notice[]; generatedAt: string | null }) {
+  const monthly = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const n of items) {
+      if (!n.date) continue;
+      const m = n.date.slice(0, 7); // YYYY-MM
+      counts.set(m, (counts.get(m) ?? 0) + 1);
+    }
+    // 10 derniers mois présents, ordre chronologique
+    const months = [...counts.keys()].sort().slice(-10);
+    const max = Math.max(1, ...months.map((m) => counts.get(m) ?? 0));
+    return { months: months.map((m) => ({ m, n: counts.get(m) ?? 0 })), max };
+  }, [items]);
+
+  const byNature = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const n of items) counts.set(n.nature, (counts.get(n.nature) ?? 0) + 1);
+    return NATURE_ORDER.filter((x) => counts.has(x)).map((x) => ({ code: x, n: counts.get(x) ?? 0 }));
+  }, [items]);
+
+  const latest = items[0] ?? null;
+
+  return (
+    <div className="flex flex-col gap-6 p-6 text-[13px]">
+      <div>
+        <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Aperçu</p>
+        <p className="mt-1 text-[18px] font-semibold leading-tight">{items.length} notices</p>
+        {latest?.date && (
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Dernière : {formatDateFr(latest.date)} · {relativeFr(latest.date)}
+          </p>
+        )}
+      </div>
+
+      {monthly.months.length > 0 && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Cadence mensuelle</p>
+          <div className="mt-3 flex h-24 items-end gap-1.5">
+            {monthly.months.map(({ m, n }) => (
+              <div key={m} className="group flex flex-1 flex-col items-center gap-1">
+                <span className="text-[9px] tabular-nums text-muted-foreground opacity-0 group-hover:opacity-100">{n}</span>
+                <div
+                  className="w-full rounded-t bg-warm/70 transition-colors group-hover:bg-warm"
+                  style={{ height: `${Math.max(4, (n / monthly.max) * 76)}px` }}
+                />
+                <span className="text-[8.5px] tabular-nums text-muted-foreground">{m.slice(5)}/{m.slice(2, 4)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {byNature.length > 0 && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Par nature</p>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {byNature.map(({ code, n }) => {
+              const w = items.length > 0 ? (n / items.length) * 100 : 0;
+              return (
+                <div key={code} className="flex items-center gap-2 text-[12px]">
+                  <span className="w-36 shrink-0 truncate">{NATURE_LABELS[code] ?? code}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-soft/60">
+                    <span className="block h-full rounded-pill bg-primary/70" style={{ width: `${w}%` }} />
+                  </div>
+                  <span className="w-7 shrink-0 text-right tabular-nums text-muted-foreground">{n}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-auto text-[10.5px] text-muted-foreground/70">
+        Source · Commission des sondages{generatedAt ? ` — généré ${relativeFr(generatedAt)}` : ""}. Sélectionne une notice pour le détail.
+      </p>
+    </div>
   );
 }
 

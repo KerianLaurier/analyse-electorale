@@ -7,10 +7,15 @@ import { cn } from "@/lib/utils";
 import { useCircoHistory, type CircoTimelinePoint } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { candidatSlug } from "@/lib/personnes";
-import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
+import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 
 const candidatHref = (scrutin: Scrutin, code: string, label: string) =>
   `/candidat/${encodeURIComponent(`${scrutin}__${code}__${candidatSlug(label)}`)}`;
+
+const FAMILY_GROUPS: { family: ScrutinFamily; label: string }[] = [
+  { family: "presidentielle", label: "Présidentielles" },
+  { family: "legislative", label: "Législatives" },
+];
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const fmtPct = (n: number, d = 1) =>
@@ -125,14 +130,20 @@ export function CircoFiche({ code }: { code: string }) {
             </section>
           )}
 
-          <section>
-            <SectionTitle>Historique des scrutins</SectionTitle>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {ordered.map((point) => (
-                <ScrutinRow key={point.scrutin} point={point} />
-              ))}
-            </div>
-          </section>
+          {FAMILY_GROUPS.map((g) => {
+            const pts = ordered.filter((p) => SCRUTIN_META[p.scrutin].family === g.family);
+            if (pts.length === 0) return null;
+            return (
+              <section key={g.family}>
+                <SectionTitle>{g.label}</SectionTitle>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {pts.map((point) => (
+                    <ScrutinRow key={point.scrutin} point={point} />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
 
           {latestLegis && (
             <section>
