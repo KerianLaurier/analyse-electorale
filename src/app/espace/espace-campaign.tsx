@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Target, MapPin, Users, Plus, Trash2, Sparkles, Flag, Megaphone } from "lucide-react";
+import { Target, MapPin, Users, Plus, Trash2, Sparkles, Flag, Megaphone, Wand2, Loader2, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePins } from "@/lib/pins";
-import { useScrutinDetail } from "@/lib/queries";
+import { useScrutinDetail, fetchTerritoryBureaux } from "@/lib/queries";
 import {
   useCampaign,
   useSectors,
   useHasTeam,
   saveCampaign,
   addSector,
+  addSectorsBulk,
   updateSector,
   deleteSector,
   voteGoal,
@@ -84,7 +85,7 @@ function CampaignContent() {
         identified={identified}
         dataRegistered={dataRegistered}
       />
-      <SectorsCard sectors={sectors} goal={goal} identified={identified} contacted={contacted} />
+      <SectorsCard sectors={sectors} goal={goal} identified={identified} contacted={contacted} target={target} />
     </div>
   );
 }
@@ -276,21 +277,52 @@ function SectorsCard({
   goal,
   identified,
   contacted,
+  target,
 }: {
   sectors: Sector[];
   goal: number | null;
   identified: number;
   contacted: number;
+  target: CampaignTarget | null;
 }) {
   const [name, setName] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const done = sectors.filter((s) => s.status === "done").length;
   const coverage = sectors.length > 0 ? done / sectors.length : 0;
+  const canGenerate = target?.type === "commune" || target?.type === "circo";
 
   function add(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     addSector({ name: name.trim() });
     setName("");
+  }
+
+  async function generate() {
+    if (!target || generating) return;
+    setGenerating(true);
+    setNotice(null);
+    try {
+      const { bureaux, splitCommunes } = await fetchTerritoryBureaux(target);
+      if (bureaux.length === 0) {
+        setNotice("Aucun bureau de vote trouvé pour ce territoire dans les données.");
+      } else {
+        const added = await addSectorsBulk(bureaux.map((b) => ({ name: b.name, registered: b.registered })));
+        const skipped = bureaux.length - added;
+        setNotice(
+          `${added} secteur${added > 1 ? "s" : ""} ajouté${added > 1 ? "s" : ""} depuis les bureaux de vote` +
+            (skipped > 0 ? ` (${skipped} déjà présent${skipped > 1 ? "s" : ""})` : "") +
+            (splitCommunes > 0
+              ? ` · ${splitCommunes} commune${splitCommunes > 1 ? "s" : ""} partagée${splitCommunes > 1 ? "s" : ""} entre circos à ajouter à la main`
+              : ""),
+        );
+      }
+    } catch {
+      setNotice("Impossible de générer les secteurs (données indisponibles).");
+    } finally {
+      setGenerating(false);
+    }
   }
 
   return (
@@ -317,7 +349,26 @@ function SectorsCard({
         <button type="submit" className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90">
           <Plus className="h-3.5 w-3.5" /> Ajouter
         </button>
+        {canGenerate && (
+          <button
+            type="button"
+            onClick={generate}
+            disabled={generating}
+            title="Créer un secteur par bureau de vote du territoire"
+            className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3.5 py-1.5 text-[12px] font-medium text-foreground/80 hover:bg-surface-soft disabled:opacity-60"
+          >
+            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+            Générer depuis les bureaux
+          </button>
+        )}
       </form>
+
+      {notice && (
+        <div className="mt-2 flex items-start gap-2 rounded-md bg-warm/12 px-3 py-2 text-[12px] text-foreground/80">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
+          <span>{notice}</span>
+        </div>
+      )}
 
       {sectors.length === 0 ? (
         <p className="mt-4 rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">

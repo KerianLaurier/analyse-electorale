@@ -181,6 +181,25 @@ export async function addSector(input: NewSector): Promise<void> {
   }
 }
 
+/** Ajoute plusieurs secteurs d'un coup (génération depuis les bureaux), en
+ *  ignorant ceux dont le nom existe déjà. Renvoie le nombre réellement ajouté. */
+export async function addSectorsBulk(items: NewSector[]): Promise<number> {
+  if (!myTeamId || items.length === 0) return 0;
+  const existing = new Set(sectors.map((s) => s.name));
+  const fresh = items.filter((i) => i.name && !existing.has(i.name));
+  if (fresh.length === 0) return 0;
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("campaign_sectors")
+    .insert(fresh.map((i) => ({ team_id: myTeamId, name: i.name, registered: i.registered ?? null })))
+    .select("*");
+  if (data) {
+    sectors = [...sectors, ...(data as SectorRow[])];
+    emit();
+  }
+  return data?.length ?? 0;
+}
+
 export type SectorPatch = {
   name?: string;
   registered?: number | null;
