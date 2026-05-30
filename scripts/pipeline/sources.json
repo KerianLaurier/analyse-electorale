@@ -172,6 +172,13 @@
       "approx_size_mb": 14,
       "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
     },
+    "table_correspondance_circo": {
+      "url": "https://static.data.gouv.fr/resources/circonscriptions-legislatives-table-de-correspondance-des-communes-et-des-cantons-pour-les-elections-legislatives-de-2012-et-sa-mise-a-jour-pour-les-elections-legislatives-2017/20170411-141128/Table_de_correspondance_circo_legislatives2017-1.xlsx",
+      "format": "xlsx",
+      "level": "commune",
+      "license": "Licence Ouverte — Ministère de l'Intérieur",
+      "description": "Table de correspondance commune → circonscription législative (découpage 2010, stable 2012-2024). Agrégée par build-commune-circo.py → public/electoral/commune_circo.json. Nécessite pandas + openpyxl."
+    },
     "municipales_2026_t2_commune": {
       "url": "https://static.data.gouv.fr/resources/elections-municipales-2026-resultats-du-scond-tour/20260323-180124/municipales-2026-resultats-communes-2026-03-23-16h14.csv",
       "format": "csv-semicolon-utf8",

@@ -40,6 +40,9 @@ export type ScrutinDetail = {
   nuls: number;
   participation: number;
   candidates: ScrutinCandidate[];
+  /** Législatives au niveau commune : la commune relève de plusieurs circonscriptions
+   *  (candidats issus de courses différentes → résultats agrégés par nuance). */
+  multiCirco?: boolean;
 };
 
 export type CommuneSociologie = {
@@ -166,6 +169,22 @@ export async function fetchScrutinDetail(
     [maille, code],
   );
 
+  const rawCandidates: ScrutinCandidate[] = candRows.map((c) => ({
+    label: c.label ?? "",
+    nuance: c.nuance ?? null,
+    voix: Number(c.voix ?? 0),
+    pct: exprimes > 0 ? Number(c.voix) / exprimes : 0,
+    elu: Boolean(c.elu),
+  }));
+
+  // Législatives au niveau commune : une commune peut relever de plusieurs
+  // circonscriptions → l'agrégat mélange des candidats de courses différentes.
+  // On regroupe alors par nuance (seule unité comparable à cette maille).
+  const legislativeCommune = SCRUTIN_META[scrutin].family === "legislative" && maille === "communes";
+  const { candidates, multiCirco } = legislativeCommune
+    ? collapseByNuance(rawCandidates, exprimes)
+    : { candidates: rawCandidates, multiCirco: false };
+
   return {
     code,
     libelle: h.libelle ?? null,
@@ -176,14 +195,45 @@ export async function fetchScrutinDetail(
     blancs: Number(h.blancs ?? 0),
     nuls: Number(h.nuls ?? 0),
     participation: inscrits > 0 ? Number(h.votants) / inscrits : 0,
-    candidates: candRows.map((c) => ({
-      label: c.label ?? "",
-      nuance: c.nuance ?? null,
-      voix: Number(c.voix ?? 0),
-      pct: exprimes > 0 ? Number(c.voix) / exprimes : 0,
-      elu: Boolean(c.elu),
-    })),
+    candidates,
+    multiCirco,
   };
+}
+
+/**
+ * Regroupe des candidats par nuance (somme des voix). `multiCirco` est vrai si
+ * au moins une nuance comptait plusieurs candidats (= plusieurs circonscriptions).
+ * Le libellé reste le nom du candidat quand la nuance n'en a qu'un.
+ */
+function collapseByNuance(
+  rawCandidates: ScrutinCandidate[],
+  exprimes: number,
+): { candidates: ScrutinCandidate[]; multiCirco: boolean } {
+  const groups = new Map<string, { nuance: string | null; voix: number; label: string; count: number; elu: boolean }>();
+  for (const c of rawCandidates) {
+    const key = c.nuance ?? `__${c.label}`;
+    const g = groups.get(key);
+    if (g) {
+      g.voix += c.voix;
+      g.count += 1;
+      g.elu = g.elu || c.elu;
+    } else {
+      groups.set(key, { nuance: c.nuance, voix: c.voix, label: c.label, count: 1, elu: c.elu });
+    }
+  }
+  const ordered = [...groups.values()].sort((a, b) => b.voix - a.voix);
+  // Signal fiable : le groupe gagnant agrège plusieurs candidatures (≈ la commune
+  // relève de plusieurs circonscriptions). Une nuance mineure dédoublée dans une
+  // seule circo (candidats dissidents) ne déclenche donc pas le drapeau.
+  const multiCirco = (ordered[0]?.count ?? 0) > 1;
+  const candidates = ordered.map((g) => ({
+    label: g.count === 1 ? g.label : "",
+    nuance: g.nuance,
+    voix: g.voix,
+    pct: exprimes > 0 ? g.voix / exprimes : 0,
+    elu: g.elu,
+  }));
+  return { candidates, multiCirco };
 }
 
 export function useScrutinDetail(
@@ -247,6 +297,49 @@ export function useCommuneHistory(insee: string | null) {
       const results = await Promise.all(
         scrutins.map(async (s) => {
           const detail = await fetchScrutinDetail(s, "communes", insee);
+          return detail ? { ...detail, scrutin: s } : null;
+        }),
+      );
+      return results.filter((r): r is CircoTimelinePoint => r !== null);
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+/**
+ * Table commune → circonscription(s) législative(s) (MinInt, découpage 2010).
+ * Permet d'afficher/lier les circonscriptions d'une commune (multi-circo inclus).
+ */
+export function useCommuneCircoMap(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["commune-circo-map"],
+    queryFn: async (): Promise<Record<string, string[]>> => {
+      const res = await fetch("/electoral/commune_circo.json");
+      if (!res.ok) throw new Error("Table commune↔circo introuvable");
+      return (await res.json()) as Record<string, string[]>;
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+/**
+ * Historique d'un bureau de vote : chaque scrutin disponible à la maille
+ * bureaux (présidentielles 2017/2022, législatives 2022/2024). Sert /bureau/[code].
+ */
+export function useBureauHistory(code: string | null) {
+  return useQuery({
+    enabled: !!code,
+    queryKey: ["bureau-history", code],
+    queryFn: async (): Promise<CircoTimelinePoint[]> => {
+      if (!code) return [];
+      const scrutins = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(
+        (s) => isElection(s) && SCRUTIN_META[s].mailles.includes("bureaux"),
+      );
+      const results = await Promise.all(
+        scrutins.map(async (s) => {
+          const detail = await fetchScrutinDetail(s, "bureaux", code);
           return detail ? { ...detail, scrutin: s } : null;
         }),
       );

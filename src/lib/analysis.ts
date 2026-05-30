@@ -177,6 +177,7 @@ export function useWinnerByMaille(scrutin: Scrutin, maille: Maille, enabled = tr
 // ─── Sociologie & démographie commune (catalogue) pour la corrélation ─────────
 
 const RP_PARQUET = "rp_2022_commune.parquet";
+const CIRCO_SOCIO_PARQUET = "circo_socio.parquet";
 
 export type SocioIndicator =
   | "revenu" | "pauvrete" | "inegalites" | "prestations" | "pensions"
@@ -210,13 +211,29 @@ export function socioMeta(id: SocioIndicator): SocioMeta {
   return SOCIO_INDICATORS.find((s) => s.id === id) ?? SOCIO_INDICATORS[0];
 }
 
-export function useSocioByCommune(indicator: SocioIndicator, enabled = true) {
+/**
+ * Indicateur socio par territoire, à la maille demandée.
+ * - communes        : Filosofi / RP (données natives).
+ * - circonscriptions : circo_socio.parquet (agrégat pondéré par population,
+ *   cf. build-circo-socio.py) — toutes les colonnes dans un seul fichier.
+ */
+export function useSocioByMaille(
+  indicator: SocioIndicator,
+  maille: Maille,
+  enabled = true,
+) {
   return useQuery({
     enabled,
-    queryKey: ["analysis-socio", indicator],
+    queryKey: ["analysis-socio", indicator, maille],
     queryFn: async (): Promise<Map<string, number>> => {
       const meta = socioMeta(indicator);
-      const url = inseeUrl(meta.source === "rp" ? RP_PARQUET : FILOSOFI_PARQUET);
+      const url = inseeUrl(
+        maille === "circonscriptions"
+          ? CIRCO_SOCIO_PARQUET
+          : meta.source === "rp"
+            ? RP_PARQUET
+            : FILOSOFI_PARQUET,
+      );
       const rows = await query<{ code: string; value: number }>(`
         SELECT code, ${meta.column} AS value
         FROM read_parquet('${url}')
@@ -361,6 +378,127 @@ export function useCircoBlocMatrix(scrutin: Scrutin, enabled = true) {
     },
     staleTime: 60 * 60 * 1000,
   });
+}
+
+// ─── Potentiel : sur/sous-performance vs profil sociologique ──────────────────
+
+/** Colonnes socio-démo utilisées comme prédicteurs (circo_socio.parquet). */
+export const SOCIO_FEATURE_COLUMNS = [
+  "MED_SL", "PR_MD60", "IR_D9_D1_SL", "S_SOC_BEN_DI", "S_RET_PEN_DI",
+  "part65plus", "tauxChomage", "partCadres", "partOuvriers", "partDiplomeSup",
+] as const;
+
+/** Vecteur d'indicateurs socio-démo par circonscription (matrice de features). */
+export function useSocioFeaturesCirco(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["socio-features-circo"],
+    queryFn: async (): Promise<Map<string, number[]>> => {
+      const url = inseeUrl(CIRCO_SOCIO_PARQUET);
+      const cols = SOCIO_FEATURE_COLUMNS.join(", ");
+      const rows = await query<Record<string, number | string>>(`
+        SELECT code, ${cols} FROM read_parquet('${url}')
+      `);
+      const m = new Map<string, number[]>();
+      for (const r of rows) {
+        m.set(String(r.code), SOCIO_FEATURE_COLUMNS.map((c) => Number(r[c])));
+      }
+      return m;
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+/** Résout A·x = b (élimination de Gauss avec pivot partiel). */
+function solveLinearSystem(A: number[][], b: number[]): number[] | null {
+  const n = b.length;
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    if (Math.abs(M[piv][col]) < 1e-12) return null;
+    [M[col], M[piv]] = [M[piv], M[col]];
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = M[r][col] / M[col][col];
+      for (let c = col; c <= n; c++) M[r][c] -= f * M[col][c];
+    }
+  }
+  // Après élimination complète, M est diagonale : x[i] = M[i][n] / M[i][i].
+  return M.map((row, i) => row[n] / M[i][i]);
+}
+
+export type OverPerfRow = { code: string; actual: number; predicted: number; residual: number };
+
+/**
+ * Régression ridge : modélise `target` (part du bloc) par les features socio.
+ * Renvoie, par territoire, le score prédit par la sociologie et le résidu
+ * (sur/sous-performance), plus le R² du modèle.
+ */
+export function ridgeResiduals(
+  features: Map<string, number[]>,
+  target: Map<string, number>,
+  lambda = 1,
+): { rows: OverPerfRow[]; r2: number; n: number } {
+  const codes: string[] = [];
+  const X: number[][] = [];
+  const y: number[] = [];
+  for (const [code, f] of features) {
+    const t = target.get(code);
+    if (t == null || f.some((v) => !Number.isFinite(v))) continue;
+    codes.push(code);
+    X.push(f);
+    y.push(t);
+  }
+  const n = codes.length;
+  const p = X[0]?.length ?? 0;
+  if (n < p + 2) return { rows: [], r2: 0, n };
+
+  // Standardisation des features (z-score) pour le conditionnement.
+  const mean = new Array(p).fill(0);
+  const sd = new Array(p).fill(0);
+  for (let j = 0; j < p; j++) {
+    let s = 0;
+    for (let i = 0; i < n; i++) s += X[i][j];
+    mean[j] = s / n;
+  }
+  for (let j = 0; j < p; j++) {
+    let s = 0;
+    for (let i = 0; i < n; i++) s += (X[i][j] - mean[j]) ** 2;
+    sd[j] = Math.sqrt(s / n) || 1;
+  }
+  const Z = X.map((row) => row.map((v, j) => (v - mean[j]) / sd[j]));
+  const ybar = y.reduce((a, b) => a + b, 0) / n;
+  const yc = y.map((v) => v - ybar);
+
+  // (ZᵀZ + λI) β = Zᵀ yc
+  const A: number[][] = Array.from({ length: p }, () => new Array(p).fill(0));
+  const rhs = new Array(p).fill(0);
+  for (let j = 0; j < p; j++) {
+    for (let k = 0; k < p; k++) {
+      let s = 0;
+      for (let i = 0; i < n; i++) s += Z[i][j] * Z[i][k];
+      A[j][k] = s + (j === k ? lambda : 0);
+    }
+    let sb = 0;
+    for (let i = 0; i < n; i++) sb += Z[i][j] * yc[i];
+    rhs[j] = sb;
+  }
+  const beta = solveLinearSystem(A, rhs);
+  if (!beta) return { rows: [], r2: 0, n };
+
+  const rows: OverPerfRow[] = codes.map((code, i) => {
+    let pred = ybar;
+    for (let j = 0; j < p; j++) pred += Z[i][j] * beta[j];
+    return { code, actual: y[i], predicted: pred, residual: y[i] - pred };
+  });
+  let ssRes = 0;
+  let ssTot = 0;
+  for (let i = 0; i < n; i++) {
+    ssRes += rows[i].residual ** 2;
+    ssTot += (y[i] - ybar) ** 2;
+  }
+  return { rows, r2: ssTot > 0 ? 1 - ssRes / ssTot : 0, n };
 }
 
 // ─── Pearson ───────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { GitCompare, Activity, ArrowRight, Loader2, Layers, Crosshair, SlidersHorizontal } from "lucide-react";
+import { GitCompare, Activity, ArrowRight, Loader2, Layers, Crosshair, SlidersHorizontal, Gauge } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
 import type { Choropleth } from "@/components/map";
@@ -15,7 +15,7 @@ import {
   useBlocShare,
   useParticipationByMaille,
   useWinnerByMaille,
-  useSocioByCommune,
+  useSocioByMaille,
   pearson,
   SOCIO_INDICATORS,
   socioMeta,
@@ -105,6 +105,7 @@ export function AnalyserView() {
         <ToolLink href="/analyser/comparateur" icon={Layers} title="Comparateur" desc="Un territoire, tous les scrutins" />
         <ToolLink href="/analyser/marginalite" icon={Crosshair} title="Sièges marginaux" desc="Circonscriptions les plus disputées" />
         <ToolLink href="/analyser/simulateur" icon={SlidersHorizontal} title="Simulateur" desc="Projection de sièges par bloc" />
+        <ToolLink href="/analyser/potentiel" icon={Gauge} title="Potentiel" desc="Sur / sous-performance vs sociologie" />
       </div>
 
       {mode === "comparaison" ? <ComparaisonMode /> : <CorrelationMode />}
@@ -457,11 +458,13 @@ function CorrelationMode() {
   const [scrutin, setScrutin] = useState<Scrutin>("presid-2022-t1");
   const [blocId, setBlocId] = useState<BlocId>("rn");
   const [indicator, setIndicator] = useState<SocioIndicator>("revenu");
+  const [maille, setMaille] = useState<Maille>("communes");
 
   const bloc = blocById(blocId);
   const meta = socioMeta(indicator);
-  const share = useBlocShare(scrutin, "communes", bloc.codes, true);
-  const socio = useSocioByCommune(indicator, true);
+  const share = useBlocShare(scrutin, maille, bloc.codes, true);
+  const socio = useSocioByMaille(indicator, maille, true);
+  const mailleLabel = maille === "circonscriptions" ? "Circonscriptions" : "Communes";
 
   const { points, r, n, reg } = useMemo(() => {
     if (!share.data || !socio.data)
@@ -495,11 +498,20 @@ function CorrelationMode() {
         <BlocSelect value={blocId} onChange={setBlocId} />
         <span className="mx-1 h-5 w-px bg-border" />
         <IndicatorSelect value={indicator} onChange={setIndicator} />
+        <span className="mx-1 h-5 w-px bg-border" />
+        <PillGroup
+          options={[
+            { id: "communes", label: "Communes" },
+            { id: "circonscriptions", label: "Circonscriptions" },
+          ]}
+          value={maille}
+          onChange={(v) => setMaille(v as Maille)}
+        />
         {isLoading && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
       <div className="anim-stagger grid grid-cols-4 gap-2">
-        <KPICard label="Communes croisées" value={fmtInt(n)} />
+        <KPICard label={`${mailleLabel} croisées`} value={fmtInt(n)} />
         <KPICard
           label="Corrélation (Pearson r)"
           value={n ? r.toFixed(2) : "—"}
@@ -525,7 +537,7 @@ function CorrelationMode() {
           <p className="text-[13px] leading-relaxed text-foreground/80">
             {n === 0
               ? "Chargement des données…"
-              : `Sur ${fmtInt(n)} communes, la part du bloc « ${bloc.label} » à ${SCRUTIN_META[scrutin].short} ${
+              : `Sur ${fmtInt(n)} ${mailleLabel.toLowerCase()}, la part du bloc « ${bloc.label} » à ${SCRUTIN_META[scrutin].short} ${
                   Math.abs(r) < 0.15
                     ? "n'est quasiment pas corrélée"
                     : r > 0
