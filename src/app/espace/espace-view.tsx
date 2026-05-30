@@ -2,21 +2,23 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, ListTodo, StickyNote, Star, Users, Megaphone } from "lucide-react";
+import { LayoutDashboard, ListTodo, StickyNote, Star, Users, Megaphone, Contact } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WsContext } from "@/app/espace/types";
 import { EspaceOverview } from "@/app/espace/espace-overview";
 import { EspaceCampaign } from "@/app/espace/espace-campaign";
 import { EspaceTasks } from "@/app/espace/espace-tasks";
+import { EspaceContacts } from "@/app/espace/espace-contacts";
 import { EspaceNotes } from "@/app/espace/espace-notes";
 import { EspacePins } from "@/app/espace/espace-pins";
 
-export type Tab = "overview" | "campaign" | "tasks" | "notes" | "pins";
+export type Tab = "overview" | "campaign" | "tasks" | "contacts" | "notes" | "pins";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
   { id: "campaign", label: "Campagne", icon: Megaphone },
   { id: "tasks", label: "Actions", icon: ListTodo },
+  { id: "contacts", label: "Contacts", icon: Contact },
   { id: "notes", label: "Notes", icon: StickyNote },
   { id: "pins", label: "Épingles", icon: Star },
 ];
@@ -76,6 +78,7 @@ export function EspaceView({ ctx }: { ctx: WsContext }) {
           {tab === "overview" && <EspaceOverview ctx={ctx} setTab={setTab} />}
           {tab === "campaign" && <EspaceCampaign />}
           {tab === "tasks" && <EspaceTasks ctx={ctx} />}
+          {tab === "contacts" && <EspaceContacts ctx={ctx} />}
           {tab === "notes" && <EspaceNotes ctx={ctx} />}
           {tab === "pins" && <EspacePins />}
         </div>
