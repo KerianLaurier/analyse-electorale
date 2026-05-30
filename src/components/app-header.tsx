@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -115,6 +115,14 @@ export function AppHeader() {
           >
             <Search className="h-4 w-4" />
           </button>
+          <Link
+            href="/espace"
+            aria-label="Mes épingles"
+            title="Mes épingles"
+            className="grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
+          >
+            <Star className="h-4 w-4" />
+          </Link>
           <button
             type="button"
             aria-label="Notifications"
@@ -140,6 +148,10 @@ export function AppHeader() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="truncate">{email ?? "Compte"}</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => router.push("/espace")}>
+                <Star className="h-4 w-4" />
+                Mes épingles
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push("/auth/team")}>
                 <Users className="h-4 w-4" />
                 Équipe & abonnement
