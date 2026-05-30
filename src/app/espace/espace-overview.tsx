@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { ListTodo, CheckCircle2, Star, StickyNote, CalendarClock, MapPin, Flag, ArrowRight } from "lucide-react";
+import { ListTodo, CheckCircle2, Star, StickyNote, CalendarClock, MapPin, Flag, ArrowRight, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTasks, TASK_KIND_LABELS, type Task } from "@/lib/tasks";
 import { useNotes } from "@/lib/notes";
 import { usePins } from "@/lib/pins";
+import { useCampaign, useSectors, voteGoal } from "@/lib/campaign";
 import { memberName, type WsContext } from "@/app/espace/types";
 import type { Tab } from "@/app/espace/espace-view";
+
+const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmtDue = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
@@ -16,6 +19,12 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
   const tasks = useTasks();
   const notes = useNotes();
   const pins = usePins();
+  const campaign = useCampaign();
+  const sectors = useSectors();
+
+  const goal = voteGoal(campaign);
+  const identified = sectors.reduce((s, x) => s + x.favorable, 0);
+  const goalProgress = goal && goal > 0 ? Math.min(1, identified / goal) : 0;
 
   const active = tasks.filter((t) => t.status !== "done");
   const done = tasks.filter((t) => t.status === "done");
@@ -27,6 +36,26 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Objectif de campagne */}
+      {goal != null && (
+        <button
+          type="button"
+          onClick={() => setTab("campaign")}
+          className="flex flex-col gap-2 rounded-lg border border-warm/30 bg-warm/[0.06] p-4 text-left shadow-card transition-colors hover:bg-warm/[0.1]"
+        >
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-warm">
+              <Target className="h-3.5 w-3.5" /> Objectif de campagne
+              {campaign?.target && <span className="font-medium normal-case text-foreground/70">· {campaign.target.label}</span>}
+            </span>
+            <span className="text-[12px] font-semibold tabular-nums">{fmtInt(identified)} / {fmtInt(goal)} voix</span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-pill bg-surface-soft/70">
+            <span className="block h-full rounded-pill bg-warm transition-all" style={{ width: `${goalProgress * 100}%` }} />
+          </div>
+        </button>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat icon={ListTodo} label="Actions en cours" value={active.length} onClick={() => setTab("tasks")} accent />
