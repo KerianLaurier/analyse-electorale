@@ -16,6 +16,8 @@ import {
   type BlocId,
   type OverPerfRow,
 } from "@/lib/analysis";
+import { ExportButton } from "@/components/export-button";
+import { downloadCsv, type CsvRow } from "@/lib/export";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -83,6 +85,17 @@ export function PotentielView() {
 
   const isLoading = share.isFetching || features.isFetching;
 
+  function exportCsv() {
+    const rows: CsvRow[] = sorted.map((r) => ({
+      Code: r.code,
+      Circonscription: libelles.get(r.code) ?? r.code,
+      "Part réelle %": Number((r.actual * 100).toFixed(1)),
+      "Part prédite (socio) %": Number((r.predicted * 100).toFixed(1)),
+      "Écart pts": Number((r.residual * 100).toFixed(1)),
+    }));
+    downloadCsv(`potentiel-${bloc.id}-${scrutin}`, rows);
+  }
+
   return (
     <div className="flex h-full w-full min-h-0 flex-col gap-3 overflow-auto bg-canvas p-3">
       <div className="flex items-end justify-between gap-4 px-2 pt-2">
@@ -95,7 +108,10 @@ export function PotentielView() {
             Score d&apos;un bloc modélisé par la sociologie (régression sur 10 indicateurs INSEE) → sur / sous-performance par circonscription.
           </p>
         </div>
-        {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        <div className="flex items-center gap-2">
+          {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          {model.rows.length > 0 && <ExportButton onClick={exportCsv} label="Exporter le ciblage" />}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface p-4 shadow-card">

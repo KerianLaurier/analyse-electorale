@@ -8,6 +8,9 @@ import { useCircoHistory, type CircoTimelinePoint } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { candidatSlug } from "@/lib/personnes";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
+import { ExportButton } from "@/components/export-button";
+import { PinButton } from "@/components/pin-button";
+import { downloadCsv, type CsvRow } from "@/lib/export";
 
 const candidatHref = (scrutin: Scrutin, code: string, label: string) =>
   `/candidat/${encodeURIComponent(`${scrutin}__${code}__${candidatSlug(label)}`)}`;
@@ -57,6 +60,23 @@ export function CircoFiche({ code }: { code: string }) {
     return order.map((s) => byScrutin.get(s)).filter((p): p is CircoTimelinePoint => !!p);
   }, [byScrutin]);
 
+  function exportCsv() {
+    const rows: CsvRow[] = ordered.map((p) => {
+      const w = p.candidates[0];
+      return {
+        Scrutin: SCRUTIN_META[p.scrutin].short,
+        Type: SCRUTIN_META[p.scrutin].family,
+        "Arrive en tête": w ? w.label || nuanceLabel(w.nuance) : "",
+        Nuance: w?.nuance ?? "",
+        "Part %": w ? Number((w.pct * 100).toFixed(1)) : "",
+        "Participation %": Number((p.participation * 100).toFixed(1)),
+        Inscrits: Math.round(p.inscrits),
+        Exprimés: Math.round(p.exprimes),
+      };
+    });
+    downloadCsv(`circo-${code}`, rows);
+  }
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
       <Link
@@ -82,13 +102,19 @@ export function CircoFiche({ code }: { code: string }) {
             <p className="text-[13px] text-muted-foreground">{libelle}</p>
           )}
         </div>
-        <Link
-          href={`/explorer?maille=circonscriptions&scrutin=legis-2024-t2&code=${encodeURIComponent(code)}`}
-          className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
-        >
-          <MapIcon className="h-3.5 w-3.5" />
-          Voir sur la carte
-        </Link>
+        <div className="flex items-center gap-2">
+          <PinButton
+            pin={{ type: "circo", id: code, label: num != null ? `${ORDINAL(num)} circonscription` : `Circonscription ${code}`, sublabel: `Circonscription · dépt ${dept}`, href: `/circo/${code}` }}
+          />
+          {ordered.length > 0 && <ExportButton onClick={exportCsv} />}
+          <Link
+            href={`/explorer?maille=circonscriptions&scrutin=legis-2024-t2&code=${encodeURIComponent(code)}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <MapIcon className="h-3.5 w-3.5" />
+            Voir sur la carte
+          </Link>
+        </div>
       </header>
 
       {history.isLoading ? (

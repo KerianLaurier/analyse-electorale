@@ -13,6 +13,7 @@ import {
   type DeputeActivite,
 } from "@/lib/activite";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
+import { PinButton } from "@/components/pin-button";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
 import {
   usePersonnesIndex,
@@ -128,6 +129,27 @@ export function PersonneFiche({
                 Siège remporté
               </span>
             )}
+            {(() => {
+              const pinId =
+                mode === "elu"
+                  ? `${scrutin}__${circo}`
+                  : `${scrutin}__${circo}__${slug ?? ""}`;
+              const pinHref =
+                mode === "elu"
+                  ? `/elu/${encodeURIComponent(pinId)}`
+                  : `/candidat/${encodeURIComponent(pinId)}`;
+              return (
+                <PinButton
+                  pin={{
+                    type: mode,
+                    id: pinId,
+                    label: fullName || nuanceLabel(target.nuance),
+                    sublabel: `${target.elu ? "Élu·e" : "Candidat·e"} · ${SCRUTIN_META[scrutin].short} · circ. ${circo}`,
+                    href: pinHref,
+                  }}
+                />
+              );
+            })()}
           </header>
 
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">

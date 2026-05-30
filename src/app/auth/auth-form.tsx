@@ -2,29 +2,64 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Info } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, Loader2, Info, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 type Mode = "login" | "signup";
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const isLogin = mode === "login";
-  const [status, setStatus] = useState<"idle" | "pending" | "soon">("idle");
+  const params = useSearchParams();
+  const next = params.get("next") || "/explorer";
+  const [status, setStatus] = useState<"idle" | "pending" | "check-email" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setStatus("pending");
-    // ── À brancher (Supabase) ───────────────────────────────────────────────
-    // const form = new FormData(e.currentTarget);
-    // const email = String(form.get("email"));
-    // const password = String(form.get("password"));
-    // const { error } = isLogin
-    //   ? await supabase.auth.signInWithPassword({ email, password })
-    //   : await supabase.auth.signUp({ email, password });
-    // if (error) { setError(error.message); return; }
-    // router.push("/explorer");
-    await new Promise((r) => setTimeout(r, 500));
-    setStatus("soon");
+    setError(null);
+    const form = new FormData(e.currentTarget);
+    const email = String(form.get("email"));
+    const password = String(form.get("password"));
+    const supabase = createClient();
+
+    if (isLogin) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(error.message);
+        setStatus("error");
+        return;
+      }
+      // Laisse le client écrire les cookies de session avant la navigation complète.
+      await new Promise((r) => setTimeout(r, 200));
+      window.location.assign(next);
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: String(form.get("name") || ""),
+          organisation: String(form.get("org") || ""),
+        },
+      },
+    });
+    if (error) {
+      setError(error.message);
+      setStatus("error");
+      return;
+    }
+    // Session immédiate (confirmation e-mail désactivée) → on entre directement.
+    if (data.session) {
+      await new Promise((r) => setTimeout(r, 200));
+      window.location.assign(next);
+      return;
+    }
+    setStatus("check-email");
   }
 
   return (
@@ -72,10 +107,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
               action={isLogin ? <button type="button" className="text-[11px] font-medium text-muted-foreground hover:text-foreground">Oublié ?</button> : undefined}
             />
 
-            {status === "soon" && (
+            {status === "check-email" && (
               <div className="flex items-start gap-2 rounded-md bg-warm/12 px-3 py-2.5 text-[12px] text-foreground/80">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
-                <span>L&apos;authentification sera bientôt active. L&apos;explorateur et l&apos;analyse restent accessibles librement pendant la préversion.</span>
+                <span>Compte créé. Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.</span>
+              </div>
+            )}
+            {status === "error" && error && (
+              <div className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2.5 text-[12px] text-destructive">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 

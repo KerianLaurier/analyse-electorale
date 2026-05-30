@@ -16,6 +16,9 @@ import {
 } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
+import { ExportButton } from "@/components/export-button";
+import { PinButton } from "@/components/pin-button";
+import { downloadCsv, type CsvRow } from "@/lib/export";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const fmtPct = (n: number, d = 1) =>
@@ -67,6 +70,24 @@ export function CommuneFiche({ insee }: { insee: string }) {
   const [tab, setTab] = useState<CommuneTab>("elections");
   const hasPopulation = !!demo.data || !!socio.data;
 
+  function exportCsv() {
+    const rows: CsvRow[] = ordered.map((p) => {
+      const w = p.candidates[0];
+      return {
+        Scrutin: SCRUTIN_META[p.scrutin].short,
+        Type: SCRUTIN_META[p.scrutin].family,
+        "Arrive en tête": w ? w.label || nuanceLabel(w.nuance) : "",
+        Nuance: w?.nuance ?? "",
+        "Part %": w ? Number((w.pct * 100).toFixed(1)) : "",
+        "Participation %": Number((p.participation * 100).toFixed(1)),
+        Inscrits: Math.round(p.inscrits),
+        Votants: Math.round(p.votants),
+        Exprimés: Math.round(p.exprimes),
+      };
+    });
+    downloadCsv(`commune-${insee}-${libelle ?? ""}`, rows);
+  }
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
       <Link
@@ -86,13 +107,19 @@ export function CommuneFiche({ insee }: { insee: string }) {
             {libelle ?? `Commune ${insee}`}
           </h1>
         </div>
-        <Link
-          href={`/explorer?maille=communes&scrutin=presid-2022-t2&code=${encodeURIComponent(insee)}`}
-          className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
-        >
-          <MapIcon className="h-3.5 w-3.5" />
-          Voir sur la carte
-        </Link>
+        <div className="flex items-center gap-2">
+          <PinButton
+            pin={{ type: "commune", id: insee, label: libelle ?? `Commune ${insee}`, sublabel: `Commune · ${insee}`, href: `/commune/${insee}` }}
+          />
+          {ordered.length > 0 && <ExportButton onClick={exportCsv} />}
+          <Link
+            href={`/explorer?maille=communes&scrutin=presid-2022-t2&code=${encodeURIComponent(insee)}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <MapIcon className="h-3.5 w-3.5" />
+            Voir sur la carte
+          </Link>
+        </div>
       </header>
 
       {history.isLoading ? (
