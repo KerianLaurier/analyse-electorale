@@ -200,6 +200,62 @@ export async function fetchScrutinDetail(
   };
 }
 
+// ─── Bureaux de vote d'un territoire (pour générer le plan de terrain) ─────────
+
+export type TerritoryBureau = { code: string; name: string; registered: number };
+
+/** Garde-fou : un code INSEE / circo ne contient que des alphanum. */
+const sanitizeCode = (s: string) => s.replace(/[^0-9A-Za-z]/g, "");
+
+/**
+ * Liste les bureaux de vote rattachés à un territoire (commune ou circo), avec
+ * leurs inscrits (Légis. 2024 T1). Pour une circo, on ne retient que les
+ * communes appartenant à cette seule circo ; `splitCommunes` compte celles
+ * partagées entre plusieurs circos (bureaux non attribuables → à ajouter à la main).
+ */
+export async function fetchTerritoryBureaux(target: {
+  type: string;
+  id: string;
+}): Promise<{ bureaux: TerritoryBureau[]; splitCommunes: number }> {
+  const url = aggUrl("legis-2024-t1", "territoires", "bureaux");
+  let filter: string;
+  let splitCommunes = 0;
+
+  if (target.type === "commune") {
+    filter = `split_part(code, '_', 1) = '${sanitizeCode(target.id)}'`;
+  } else if (target.type === "circo") {
+    const res = await fetch("/electoral/commune_circo.json");
+    if (!res.ok) return { bureaux: [], splitCommunes: 0 };
+    const map = (await res.json()) as Record<string, string[]>;
+    const communes: string[] = [];
+    for (const [insee, circos] of Object.entries(map)) {
+      if (!circos.includes(target.id)) continue;
+      if (circos.length === 1) communes.push(insee);
+      else splitCommunes++;
+    }
+    if (communes.length === 0) return { bureaux: [], splitCommunes };
+    const inList = communes.map((c) => `'${sanitizeCode(c)}'`).join(",");
+    filter = `split_part(code, '_', 1) IN (${inList})`;
+  } else {
+    return { bureaux: [], splitCommunes: 0 };
+  }
+
+  const rows = await query<{ code: string; libelle: string | null; inscrits: number }>(
+    `
+      SELECT code, libelle, inscrits
+      FROM read_parquet('${url}')
+      WHERE maille = 'bureaux' AND ${filter}
+      ORDER BY code
+    `,
+  );
+  const bureaux = rows.map((r) => ({
+    code: r.code,
+    name: r.libelle?.trim() || `Bureau ${r.code.split("_")[1] ?? r.code}`,
+    registered: Number(r.inscrits ?? 0),
+  }));
+  return { bureaux, splitCommunes };
+}
+
 /**
  * Regroupe des candidats par nuance (somme des voix). `multiCirco` est vrai si
  * au moins une nuance comptait plusieurs candidats (= plusieurs circonscriptions).
