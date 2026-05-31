@@ -1,15 +1,27 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, Crosshair, Loader2, MapPin, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCircoList, useCircoTargeting, type TargetBureau } from "@/lib/queries";
+import { useCircoList, useCircoBureaux, scoreBureaux, type TargetBureau, type TargetReason } from "@/lib/queries";
+import { BLOCS, blocById, type BlocId } from "@/lib/analysis";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const fmtPct = (n: number, d = 1) =>
   `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
+
+const REASON: Record<TargetReason, { label: string; className: string } | null> = {
+  bascule: { label: "Bascule à portée", className: "bg-amber-100 text-amber-700" },
+  bastion: { label: "Bastion à mobiliser", className: "bg-emerald-100 text-emerald-700" },
+  conquete: { label: "À conquérir", className: "bg-sky-100 text-sky-700" },
+  reservoir: { label: "Réservoir d’abstention", className: "bg-warm/15 text-warm" },
+  dispute: { label: "Très disputé", className: "bg-amber-100 text-amber-700" },
+  defavorable: { label: "Peu favorable", className: "bg-surface-soft text-muted-foreground" },
+  neutre: null,
+};
 
 function priorityClass(p: number): string {
   if (p >= 66) return "bg-red-500";
@@ -17,17 +29,37 @@ function priorityClass(p: number): string {
   return "bg-slate-400";
 }
 
+const BLOC_KEY = "mvc:ciblage:bloc";
+
 export function CiblageView() {
   const params = useSearchParams();
   const router = useRouter();
   const circo = params.get("circo");
   const list = useCircoList();
-  const targeting = useCircoTargeting(circo);
+  const raw = useCircoBureaux(circo);
 
-  const rows = targeting.data ?? [];
+  const [bloc, setBloc] = useState<BlocId | "">(() => {
+    if (typeof window === "undefined") return "";
+    return (localStorage.getItem(BLOC_KEY) as BlocId | "") || "";
+  });
+  function changeBloc(v: BlocId | "") {
+    setBloc(v);
+    try {
+      localStorage.setItem(BLOC_KEY, v);
+    } catch {
+      /* quota / indispo */
+    }
+  }
+
+  const rows = useMemo<TargetBureau[]>(
+    () => (raw.data ? scoreBureaux(raw.data, bloc || null) : []),
+    [raw.data, bloc],
+  );
+
   const totalInscrits = rows.reduce((s, b) => s + b.inscrits, 0);
   const avgAbst = rows.length ? rows.reduce((s, b) => s + b.abstentionRate, 0) / rows.length : 0;
-  const circoLabel = list.data?.find((c) => c.code === circo)?.libelle;
+  const favorables = rows.filter((b) => b.reason === "bastion" || b.reason === "bascule" || b.reason === "conquete").length;
+  const blocMeta = bloc ? blocById(bloc) : null;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
@@ -35,34 +67,48 @@ export function CiblageView() {
         <ArrowLeft className="h-3.5 w-3.5" /> Analyser
       </Link>
 
-      <header className="mt-3 flex flex-wrap items-end justify-between gap-3 border-b border-black/5 pb-5">
-        <div className="min-w-0">
-          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            <Crosshair className="h-3.5 w-3.5" /> Ciblage terrain
-          </p>
-          <h1 className="mt-0.5 text-[22px] font-semibold tracking-tight">Bureaux prioritaires</h1>
-          <p className="text-[12.5px] text-muted-foreground">
-            Où concentrer le porte-à-porte : réservoir d’abstention, marginalité et taille des bureaux.
-          </p>
+      <header className="mt-3 border-b border-black/5 pb-5">
+        <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <Crosshair className="h-3.5 w-3.5" /> Ciblage terrain
+        </p>
+        <h1 className="mt-0.5 text-[22px] font-semibold tracking-tight">Bureaux prioritaires</h1>
+        <p className="text-[12.5px] text-muted-foreground">
+          Où concentrer le porte-à-porte, en fonction de votre positionnement.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Circonscription</span>
+            <select
+              value={circo ?? ""}
+              onChange={(e) => router.push(e.target.value ? `/analyser/ciblage?circo=${e.target.value}` : "/analyser/ciblage")}
+              className="min-w-[240px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
+            >
+              <option value="">Choisir une circonscription…</option>
+              {(list.data ?? []).map((c) => (
+                <option key={c.code} value={c.code}>{c.code} · {c.libelle}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Mon positionnement</span>
+            <select
+              value={bloc}
+              onChange={(e) => changeBloc(e.target.value as BlocId | "")}
+              className="min-w-[200px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
+            >
+              <option value="">Indifférent (générique)</option>
+              {BLOCS.map((b) => (
+                <option key={b.id} value={b.id}>{b.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
-        <label className="flex flex-col gap-1">
-          <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Circonscription</span>
-          <select
-            value={circo ?? ""}
-            onChange={(e) => router.push(e.target.value ? `/analyser/ciblage?circo=${e.target.value}` : "/analyser/ciblage")}
-            className="min-w-[240px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-          >
-            <option value="">Choisir une circonscription…</option>
-            {(list.data ?? []).map((c) => (
-              <option key={c.code} value={c.code}>{c.code} · {c.libelle}</option>
-            ))}
-          </select>
-        </label>
       </header>
 
       {!circo ? (
-        <Empty>Choisissez une circonscription pour classer ses bureaux par priorité.</Empty>
-      ) : targeting.isLoading ? (
+        <Empty>Choisissez une circonscription et votre positionnement pour classer ses bureaux par priorité.</Empty>
+      ) : raw.isLoading ? (
         <Loading />
       ) : rows.length === 0 ? (
         <Empty>
@@ -74,15 +120,27 @@ export function CiblageView() {
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <KPI label="Bureaux" value={fmtInt(rows.length)} />
             <KPI label="Inscrits" value={fmtInt(totalInscrits)} />
-            <KPI label="Abstention moy." value={fmtPct(avgAbst, 0)} />
+            {blocMeta ? (
+              <KPI label="Bureaux favorables" value={fmtInt(favorables)} />
+            ) : (
+              <KPI label="Abstention moy." value={fmtPct(avgAbst, 0)} />
+            )}
             <KPI label="Top priorité" value={rows[0]?.name ?? "—"} small />
           </div>
 
           <div className="mt-3 flex items-start gap-2 rounded-md bg-warm/[0.08] px-3 py-2 text-[11.5px] text-foreground/75">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
             <span>
-              Score de priorité (0–100) = réservoir d’abstention (45 %) + marginalité, écart 1<sup>er</sup>/2<sup>e</sup> faible (35 %)
-              + taille en inscrits (20 %), normalisés sur la circonscription. Source : Législatives 2024 · 1<sup>er</sup> tour.
+              {blocMeta ? (
+                <>
+                  Priorité pour <span className="font-medium" style={{ color: blocMeta.color }}>{blocMeta.label}</span> = compétitivité du
+                  bloc, proche de gagner (45 %) + base à mobiliser, part du bloc × abstention (35 %) + taille (20 %). Un bureau ancré
+                  contre votre camp est déprioritisé.
+                </>
+              ) : (
+                <>Score générique = réservoir d’abstention (45 %) + marginalité (35 %) + taille (20 %). Choisissez un positionnement pour un ciblage politique.</>
+              )}
+              {" "}Source : Législatives 2024 · 1<sup>er</sup> tour.
             </span>
           </div>
 
@@ -94,14 +152,14 @@ export function CiblageView() {
                   <th className="px-3 py-2 font-medium">Bureau</th>
                   <th className="px-3 py-2 font-medium text-right">Inscrits</th>
                   <th className="px-3 py-2 font-medium text-right">Abstention</th>
-                  <th className="px-3 py-2 font-medium text-right">Écart 1<sup>er</sup>/2<sup>e</sup></th>
+                  <th className="px-3 py-2 font-medium text-right">{blocMeta ? `Part ${blocMeta.label.split(" ")[0]}` : "Écart 1er/2e"}</th>
                   <th className="px-3 py-2 font-medium">Tête</th>
                   <th className="px-3 py-2 font-medium">Priorité</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((b, i) => (
-                  <Row key={b.code} b={b} rank={i + 1} />
+                  <Row key={b.code} b={b} rank={i + 1} blocMode={!!blocMeta} />
                 ))}
               </tbody>
             </table>
@@ -112,7 +170,8 @@ export function CiblageView() {
   );
 }
 
-function Row({ b, rank }: { b: TargetBureau; rank: number }) {
+function Row({ b, rank, blocMode }: { b: TargetBureau; rank: number; blocMode: boolean }) {
+  const reason = REASON[b.reason];
   return (
     <tr className="border-b border-border/40 last:border-0">
       <td className="px-3 py-2 tabular-nums text-muted-foreground">{rank}</td>
@@ -120,10 +179,15 @@ function Row({ b, rank }: { b: TargetBureau; rank: number }) {
         <Link href={`/bureau/${encodeURIComponent(b.code)}`} className="font-medium hover:text-warm">
           {b.name}
         </Link>
+        {reason && (
+          <span className={cn("ml-2 rounded-pill px-1.5 py-0.5 text-[10px] font-medium align-middle", reason.className)}>{reason.label}</span>
+        )}
       </td>
       <td className="px-3 py-2 text-right tabular-nums">{fmtInt(b.inscrits)}</td>
       <td className="px-3 py-2 text-right tabular-nums">{fmtPct(b.abstentionRate, 0)}</td>
-      <td className="px-3 py-2 text-right tabular-nums">{b.marginPct == null ? "—" : fmtPct(b.marginPct, 1)}</td>
+      <td className="px-3 py-2 text-right tabular-nums">
+        {blocMode ? (b.blocShare == null ? "—" : fmtPct(b.blocShare, 1)) : b.marginPct == null ? "—" : fmtPct(b.marginPct, 1)}
+      </td>
       <td className="px-3 py-2">
         {b.winnerNuance ? (
           <span className="inline-flex items-center gap-1.5">
