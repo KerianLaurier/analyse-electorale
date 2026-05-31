@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { GitCompare, Activity, ArrowRight, Loader2, Layers, Crosshair, SlidersHorizontal, Gauge } from "lucide-react";
+import { GitCompare, Activity, ArrowRight, Loader2, Layers, Crosshair, SlidersHorizontal, Gauge, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
 import type { Choropleth } from "@/components/map";
@@ -106,6 +106,7 @@ export function AnalyserView() {
         <ToolLink href="/analyser/marginalite" icon={Crosshair} title="Sièges marginaux" desc="Circonscriptions les plus disputées" />
         <ToolLink href="/analyser/simulateur" icon={SlidersHorizontal} title="Simulateur" desc="Projection de sièges par bloc" />
         <ToolLink href="/analyser/potentiel" icon={Gauge} title="Potentiel" desc="Sur / sous-performance vs sociologie" />
+        <ToolLink href="/analyser/ciblage" icon={Target} title="Ciblage terrain" desc="Bureaux prioritaires d'une circo" />
       </div>
 
       {mode === "comparaison" ? <ComparaisonMode /> : <CorrelationMode />}

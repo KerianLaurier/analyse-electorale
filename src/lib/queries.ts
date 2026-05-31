@@ -256,6 +256,138 @@ export async function fetchTerritoryBureaux(target: {
   return { bureaux, splitCommunes };
 }
 
+// ─── Ciblage : bureaux d'une circo classés par potentiel de campagne ──────────
+
+export type TargetBureau = {
+  code: string;
+  name: string;
+  insee: string;
+  inscrits: number;
+  abstentionRate: number; // 0..1
+  marginPct: number | null; // écart 1er/2e en part des exprimés (0..1)
+  winnerNuance: string | null;
+  /** Score composite 0..100 (plus haut = plus prioritaire à travailler). */
+  priority: number;
+};
+
+/** Liste des communes appartenant à une SEULE circo (attribuables sans ambiguïté). */
+async function communesOfCirco(circo: string): Promise<string[]> {
+  const res = await fetch("/electoral/commune_circo.json");
+  if (!res.ok) return [];
+  const map = (await res.json()) as Record<string, string[]>;
+  const communes: string[] = [];
+  for (const [insee, circos] of Object.entries(map)) {
+    if (circos.length === 1 && circos[0] === circo) communes.push(insee);
+  }
+  return communes;
+}
+
+/**
+ * Pour une circonscription, renvoie ses bureaux de vote (Légis. 2024 T1) avec
+ * un score de priorité de campagne : réservoir d'abstention, marginalité
+ * (écart 1er/2e faible = bascule possible) et taille (inscrits). Les trois
+ * composantes sont normalisées au sein de la circo puis combinées.
+ */
+export async function fetchCircoTargeting(circo: string): Promise<TargetBureau[]> {
+  const communes = await communesOfCirco(circo);
+  if (communes.length === 0) return [];
+  const inList = communes.map((c) => `'${sanitizeCode(c)}'`).join(",");
+  const terr = aggUrl("legis-2024-t1", "territoires", "bureaux");
+  const cand = aggUrl("legis-2024-t1", "candidats", "bureaux");
+
+  const [terrRows, candRows] = await Promise.all([
+    query<{ code: string; libelle: string | null; inscrits: number; exprimes: number; abstentions: number }>(
+      `
+        SELECT code, libelle, inscrits, exprimes, abstentions
+        FROM read_parquet('${terr}')
+        WHERE maille = 'bureaux' AND split_part(code, '_', 1) IN (${inList})
+      `,
+    ),
+    query<{ code: string; v1: number | null; nuance1: string | null; v2: number | null }>(
+      `
+        WITH ranked AS (
+          SELECT code, nuance, voix,
+                 row_number() OVER (PARTITION BY code ORDER BY voix DESC NULLS LAST) AS rk
+          FROM read_parquet('${cand}')
+          WHERE maille = 'bureaux' AND voix IS NOT NULL AND split_part(code, '_', 1) IN (${inList})
+        )
+        SELECT code,
+               max(CASE WHEN rk = 1 THEN voix END) AS v1,
+               max(CASE WHEN rk = 1 THEN nuance END) AS nuance1,
+               max(CASE WHEN rk = 2 THEN voix END) AS v2
+        FROM ranked GROUP BY code
+      `,
+    ),
+  ]);
+
+  const candByCode = new Map(candRows.map((c) => [c.code, c]));
+  const base = terrRows.map((t) => {
+    const c = candByCode.get(t.code);
+    const inscrits = Number(t.inscrits ?? 0);
+    const exprimes = Number(t.exprimes ?? 0);
+    const abstentionRate = inscrits > 0 ? Number(t.abstentions ?? 0) / inscrits : 0;
+    const v1 = c?.v1 != null ? Number(c.v1) : null;
+    const v2 = c?.v2 != null ? Number(c.v2) : null;
+    const marginPct = exprimes > 0 && v1 != null && v2 != null ? (v1 - v2) / exprimes : null;
+    return {
+      code: t.code,
+      name: t.libelle?.trim() || `Bureau ${t.code.split("_")[1] ?? t.code}`,
+      insee: t.code.split("_")[0] ?? "",
+      inscrits,
+      abstentionRate,
+      marginPct,
+      winnerNuance: c?.nuance1 ?? null,
+    };
+  });
+
+  // Normalisation min-max au sein de la circo.
+  const absts = base.map((b) => b.abstentionRate);
+  const sizes = base.map((b) => b.inscrits);
+  const margins = base.map((b) => b.marginPct).filter((m): m is number => m != null);
+  const minA = Math.min(...absts, 0), maxA = Math.max(...absts, 1);
+  const minS = Math.min(...sizes, 0), maxS = Math.max(...sizes, 1);
+  const maxM = margins.length ? Math.max(...margins) : 1;
+  const norm = (v: number, lo: number, hi: number) => (hi > lo ? (v - lo) / (hi - lo) : 0);
+
+  return base
+    .map((b) => {
+      const abstN = norm(b.abstentionRate, minA, maxA);
+      const sizeN = norm(b.inscrits, minS, maxS);
+      // marge faible → score élevé ; bureau sans 2e (non disputé) → 0.
+      const marginN = b.marginPct == null ? 0 : 1 - norm(b.marginPct, 0, maxM || 1);
+      const priority = Math.round(100 * (0.45 * abstN + 0.35 * marginN + 0.2 * sizeN));
+      return { ...b, priority };
+    })
+    .sort((a, b) => b.priority - a.priority);
+}
+
+export function useCircoTargeting(circo: string | null) {
+  return useQuery({
+    enabled: !!circo,
+    queryKey: ["circo-targeting", circo],
+    queryFn: () => fetchCircoTargeting(circo as string),
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+export type CircoListItem = { code: string; libelle: string };
+
+/** Liste des circonscriptions (code + libellé) pour un sélecteur. */
+export function useCircoList() {
+  return useQuery({
+    queryKey: ["circo-list"],
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    queryFn: async (): Promise<CircoListItem[]> => {
+      const url = aggUrl("legis-2024-t1", "territoires", "circonscriptions");
+      const rows = await query<{ code: string; libelle: string | null }>(
+        `SELECT code, any_value(libelle) AS libelle FROM read_parquet('${url}') WHERE maille = 'circonscriptions' GROUP BY code ORDER BY code`,
+      );
+      return rows.map((r) => ({ code: String(r.code), libelle: r.libelle ?? String(r.code) }));
+    },
+  });
+}
+
 /**
  * Regroupe des candidats par nuance (somme des voix). `multiCirco` est vrai si
  * au moins une nuance comptait plusieurs candidats (= plusieurs circonscriptions).
