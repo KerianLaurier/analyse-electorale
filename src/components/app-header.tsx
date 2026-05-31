@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
@@ -22,24 +22,31 @@ const PRIMARY_NAV = [
   { href: "/suivre", label: "Suivre" },
 ] as const;
 
-const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement"]);
+const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
 
 export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null);
-      setUserId(data.user?.id ?? null);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setEmail(session?.user?.email ?? null);
-      setUserId(session?.user?.id ?? null);
-    });
+    async function syncUser(id: string | null, mail: string | null) {
+      setEmail(mail);
+      setUserId(id);
+      if (!id) {
+        setIsSuperAdmin(false);
+        return;
+      }
+      const { data } = await supabase.from("profiles").select("is_super_admin").eq("id", id).single();
+      setIsSuperAdmin(data?.is_super_admin === true);
+    }
+    supabase.auth.getUser().then(({ data }) => syncUser(data.user?.id ?? null, data.user?.email ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
+      syncUser(session?.user?.id ?? null, session?.user?.email ?? null),
+    );
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -153,6 +160,12 @@ export function AppHeader() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="truncate">{email ?? "Compte"}</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              {isSuperAdmin && (
+                <DropdownMenuItem onSelect={() => router.push("/admin")}>
+                  <ShieldCheck className="h-4 w-4" />
+                  Back-office
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onSelect={() => router.push("/espace")}>
                 <Star className="h-4 w-4" />
                 Mes épingles
@@ -160,6 +173,10 @@ export function AppHeader() {
               <DropdownMenuItem onSelect={() => router.push("/auth/team")}>
                 <Users className="h-4 w-4" />
                 Équipe & abonnement
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push("/auth/reset")}>
+                <KeyRound className="h-4 w-4" />
+                Changer le mot de passe
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={signOut}>

@@ -104,7 +104,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               placeholder="••••••••"
               autoComplete={isLogin ? "current-password" : "new-password"}
               required
-              action={isLogin ? <button type="button" className="text-[11px] font-medium text-muted-foreground hover:text-foreground">Oublié ?</button> : undefined}
+              action={isLogin ? <Link href="/auth/forgot" className="text-[11px] font-medium text-muted-foreground hover:text-foreground">Oublié ?</Link> : undefined}
             />
 
             {status === "check-email" && (
