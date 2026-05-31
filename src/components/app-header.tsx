@@ -44,9 +44,13 @@ export function AppHeader() {
       setIsSuperAdmin(data?.is_super_admin === true);
     }
     supabase.auth.getUser().then(({ data }) => syncUser(data.user?.id ?? null, data.user?.email ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
-      syncUser(session?.user?.id ?? null, session?.user?.email ?? null),
-    );
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      // Différé hors du callback : appeler supabase (ici une requête profiles)
+      // dans onAuthStateChange tient le verrou d'auth et provoque un deadlock.
+      const id = session?.user?.id ?? null;
+      const mail = session?.user?.email ?? null;
+      setTimeout(() => void syncUser(id, mail), 0);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 

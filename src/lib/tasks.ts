@@ -132,7 +132,11 @@ function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
   void load();
-  createClient().auth.onAuthStateChange(() => void load());
+  createClient().auth.onAuthStateChange(() => {
+    // Différé hors du callback : appeler supabase dans onAuthStateChange (qui
+    // tient le verrou d'auth) provoque un deadlock ré-entrant.
+    setTimeout(() => void load(), 0);
+  });
 }
 
 export async function reloadTasks(): Promise<void> {
