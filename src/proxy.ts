@@ -33,18 +33,33 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Connecté → vérifie l'abonnement (actif, ou essai non expiré).
+  // Connecté → profil (abonnement + statut super-admin).
   const { data: profile } = await supabase
     .from("profiles")
-    .select("subscription_status, trial_ends_at")
+    .select("subscription_status, trial_ends_at, is_super_admin")
     .eq("id", user.id)
     .single();
 
+  const isSuperAdmin = profile?.is_super_admin === true;
+
+  // Back-office : réservé aux super-admins.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    if (!isSuperAdmin) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/explorer";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
+  // Le super-admin a toujours accès ; sinon abonnement actif ou essai en cours.
   const hasAccess =
-    !!profile &&
-    (profile.subscription_status === "active" ||
-      (profile.subscription_status === "trial" &&
-        (!profile.trial_ends_at || new Date(profile.trial_ends_at as string) > new Date())));
+    isSuperAdmin ||
+    (!!profile &&
+      (profile.subscription_status === "active" ||
+        (profile.subscription_status === "trial" &&
+          (!profile.trial_ends_at || new Date(profile.trial_ends_at as string) > new Date()))));
 
   if (!hasAccess && pathname !== "/auth/abonnement") {
     const url = request.nextUrl.clone();
