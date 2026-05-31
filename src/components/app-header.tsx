@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
@@ -22,7 +22,7 @@ const PRIMARY_NAV = [
   { href: "/suivre", label: "Suivre" },
 ] as const;
 
-const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement"]);
+const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -160,6 +160,10 @@ export function AppHeader() {
               <DropdownMenuItem onSelect={() => router.push("/auth/team")}>
                 <Users className="h-4 w-4" />
                 Équipe & abonnement
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push("/auth/reset")}>
+                <KeyRound className="h-4 w-4" />
+                Changer le mot de passe
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={signOut}>

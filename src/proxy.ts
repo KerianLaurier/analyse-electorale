@@ -3,7 +3,14 @@ import { updateSession } from "@/lib/supabase/proxy";
 
 // Routes publiques (pas de compte requis) : landing + écrans d'authentification.
 // /auth/team (réglages in-app) reste protégé.
-const PUBLIC_PATHS = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement"]);
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/auth/login",
+  "/auth/signup",
+  "/auth/abonnement",
+  "/auth/forgot",
+  "/auth/reset",
+]);
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname);
 }
