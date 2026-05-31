@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ArrowLeft, Crosshair, Loader2, MapPin, Info } from "lucide-react";
+import { ArrowLeft, Crosshair, Loader2, MapPin, Info, Plus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCircoList, useCircoBureaux, scoreBureaux, type TargetBureau, type TargetReason } from "@/lib/queries";
 import { BLOCS, blocById, type BlocId } from "@/lib/analysis";
+import { useHasTeam, addSectorsBulk } from "@/lib/campaign";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
@@ -55,6 +56,24 @@ export function CiblageView() {
     () => (raw.data ? scoreBureaux(raw.data, bloc || null) : []),
     [raw.data, bloc],
   );
+
+  const hasTeam = useHasTeam();
+  const [pushing, setPushing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  async function pushToPlan() {
+    if (pushing || rows.length === 0) return;
+    setPushing(true);
+    setNotice(null);
+    const added = await addSectorsBulk(
+      rows.map((b) => ({ name: b.name, registered: b.inscrits, bureauCode: b.code, priority: b.priority })),
+    );
+    setPushing(false);
+    setNotice(
+      added > 0
+        ? `${added} bureau${added > 1 ? "x" : ""} ajouté${added > 1 ? "s" : ""} au plan de terrain du QG (onglet Campagne).`
+        : "Ces bureaux sont déjà dans votre plan de terrain.",
+    );
+  }
 
   const totalInscrits = rows.reduce((s, b) => s + b.inscrits, 0);
   const avgAbst = rows.length ? rows.reduce((s, b) => s + b.abstentionRate, 0) / rows.length : 0;
@@ -143,6 +162,34 @@ export function CiblageView() {
               {" "}Source : Législatives 2024 · 1<sup>er</sup> tour.
             </span>
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[12px] text-muted-foreground">
+              {rows.length} bureaux classés{blocMeta ? ` pour ${blocMeta.label}` : ""}.
+            </p>
+            {hasTeam ? (
+              <button
+                type="button"
+                onClick={pushToPlan}
+                disabled={pushing}
+                className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+              >
+                {pushing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Ajouter au plan de terrain
+              </button>
+            ) : (
+              <Link href="/auth/team" className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3.5 py-1.5 text-[12px] font-medium text-foreground/80 hover:bg-surface-soft">
+                Créer une équipe pour un plan de terrain
+              </Link>
+            )}
+          </div>
+
+          {notice && (
+            <div className="mt-2 flex items-start gap-2 rounded-md bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+              <span>{notice}</span>
+            </div>
+          )}
 
           <div className="mt-3 overflow-x-auto rounded-lg border border-black/5 bg-surface shadow-card">
             <table className="w-full border-collapse text-[12.5px]">
