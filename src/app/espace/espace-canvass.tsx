@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { DoorOpen, Plus, Users, Trash2, MapPin, Loader2, Info, ClipboardList, Target } from "lucide-react";
+import { DoorOpen, Plus, Users, Trash2, MapPin, Loader2, Info, ClipboardList, Target, TrendingUp, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useReports, addReport, deleteReport, summarize, bySector, type CanvassReport } from "@/lib/canvass";
-import { useSectors, useHasTeam, updateSector, type Sector } from "@/lib/campaign";
+import { useReports, addReport, deleteReport, summarize, bySector, weeklyTrend, type CanvassReport, type SectorAgg, type WeekPoint } from "@/lib/canvass";
+import { useSectors, useHasTeam, useCampaign, voteGoal, updateSector, type Sector } from "@/lib/campaign";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const fmtPct = (n: number, d = 0) =>
@@ -40,8 +40,10 @@ export function EspaceCanvass() {
 function CanvassContent() {
   const reports = useReports();
   const sectors = useSectors();
+  const campaign = useCampaign();
   const summary = useMemo(() => summarize(reports), [reports]);
   const agg = useMemo(() => bySector(reports), [reports]);
+  const trend = useMemo(() => weeklyTrend(reports), [reports]);
   const [showForm, setShowForm] = useState(false);
   const [presetSector, setPresetSector] = useState<string | null>(null);
 
@@ -50,6 +52,16 @@ function CanvassContent() {
     [sectors],
   );
   const coveredSectors = sectors.filter((s) => s.status === "done").length;
+  const workedSectors = agg.size; // secteurs avec ≥ 1 compte-rendu
+  const goal = voteGoal(campaign);
+
+  // Secteurs travaillés (avec CR), du plus visité au moins visité.
+  const sectorSentiment = useMemo(() => {
+    return [...agg.entries()]
+      .map(([id, a]) => ({ sector: sectors.find((s) => s.id === id), agg: a }))
+      .filter((x) => x.sector)
+      .sort((a, b) => b.agg.met - a.agg.met) as { sector: Sector; agg: SectorAgg }[];
+  }, [agg, sectors]);
 
   function openForm(sectorId: string | null) {
     setPresetSector(sectorId);
@@ -96,7 +108,39 @@ function CanvassContent() {
           <KPI label="Rencontrées" value={fmtInt(summary.met)} />
           <KPI label="Taux de contact" value={summary.doors ? fmtPct(summary.contactRate) : "—"} />
         </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Progress
+            label="Terrain couvert"
+            value={sectors.length ? workedSectors / sectors.length : 0}
+            detail={`${fmtInt(workedSectors)} / ${fmtInt(sectors.length)} secteurs`}
+          />
+          {goal != null && goal > 0 ? (
+            <Progress
+              label="Voix favorables identifiées"
+              value={Math.min(1, summary.favorable / goal)}
+              detail={`${fmtInt(summary.favorable)} / ${fmtInt(goal)} voix cible`}
+              accent
+            />
+          ) : (
+            <Progress label="Voix favorables identifiées" value={0} detail="Définissez un objectif dans l’onglet Campagne" muted />
+          )}
+        </div>
       </section>
+
+      {/* ── Évolution hebdomadaire ────────────────────────────────────── */}
+      {trend.length > 0 && (
+        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+          <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <TrendingUp className="h-3.5 w-3.5" /> Évolution du sentiment · par semaine
+          </h2>
+          <div className="mt-3 flex flex-col gap-2">
+            {trend.map((w) => (
+              <WeekRow key={w.week} w={w} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Plan d'action ────────────────────────────────────────────── */}
       <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
@@ -119,6 +163,21 @@ function CanvassContent() {
           </div>
         )}
       </section>
+
+      {/* ── Sentiment par secteur ────────────────────────────────────── */}
+      {sectorSentiment.length > 0 && (
+        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+          <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <LayoutGrid className="h-3.5 w-3.5" /> Sentiment par secteur
+          </h2>
+          <p className="mt-1 text-[11px] text-muted-foreground">Comparer les zones travaillées : où le terrain est le plus favorable.</p>
+          <div className="mt-3 flex flex-col gap-2.5">
+            {sectorSentiment.map(({ sector, agg: a }) => (
+              <SectorSentimentRow key={sector.id} name={sector.name} agg={a} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Comptes-rendus ───────────────────────────────────────────── */}
       <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
@@ -314,6 +373,61 @@ function Num({ label, value, onChange, accent }: { label: string; value: string;
       <span className={cn("text-[10.5px] font-medium uppercase tracking-wide", accent === "emerald" ? "text-emerald-600" : accent === "red" ? "text-red-600" : "text-muted-foreground")}>{label}</span>
       <input type="number" inputMode="numeric" min={0} value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" className={field} />
     </label>
+  );
+}
+
+function Progress({ label, value, detail, accent, muted }: { label: string; value: number; detail: string; accent?: boolean; muted?: boolean }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 text-[12px]">
+        <span className="font-medium">{label}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">{detail}</span>
+      </div>
+      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-pill bg-surface-soft/70">
+        <div
+          className={cn("h-full rounded-pill transition-all", muted ? "bg-slate-300" : accent ? "bg-warm" : "bg-emerald-500")}
+          style={{ width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SentimentBar({ favorable, neutral, unfavorable }: { favorable: number; neutral: number; unfavorable: number }) {
+  const op = favorable + neutral + unfavorable || 1;
+  return (
+    <div className="flex h-2.5 flex-1 overflow-hidden rounded-pill">
+      <span className="bg-emerald-500" style={{ width: `${(favorable / op) * 100}%` }} />
+      <span className="bg-slate-400" style={{ width: `${(neutral / op) * 100}%` }} />
+      <span className="bg-red-500" style={{ width: `${(unfavorable / op) * 100}%` }} />
+    </div>
+  );
+}
+
+function WeekRow({ w }: { w: WeekPoint }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-16 shrink-0 text-[11.5px] text-muted-foreground">{w.label}</span>
+      <SentimentBar favorable={w.favorable} neutral={w.neutral} unfavorable={w.unfavorable} />
+      <span className="w-28 shrink-0 text-right text-[11.5px] tabular-nums">
+        <span className="font-semibold text-emerald-600">{fmtPct(w.favPct)}</span>
+        <span className="text-muted-foreground"> · {fmtInt(w.met)} renc.</span>
+      </span>
+    </div>
+  );
+}
+
+function SectorSentimentRow({ name, agg: a }: { name: string; agg: SectorAgg }) {
+  const op = a.favorable + a.neutral + a.unfavorable || 1;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-40 shrink-0 truncate text-[12.5px] font-medium" title={name}>{name}</span>
+      <SentimentBar favorable={a.favorable} neutral={a.neutral} unfavorable={a.unfavorable} />
+      <span className="w-28 shrink-0 text-right text-[11.5px] tabular-nums">
+        <span className="font-semibold text-emerald-600">{fmtPct(a.favorable / op)}</span>
+        <span className="text-muted-foreground"> · {fmtInt(a.met)} renc.</span>
+      </span>
+    </div>
   );
 }
 

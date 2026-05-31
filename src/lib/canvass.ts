@@ -212,16 +212,78 @@ export function summarize(reports: CanvassReport[]): CanvassSummary {
   };
 }
 
-/** Agrégat par secteur (pour afficher la progression du plan d'action). */
-export function bySector(reports: CanvassReport[]): Map<string, { sessions: number; met: number; favorable: number }> {
-  const m = new Map<string, { sessions: number; met: number; favorable: number }>();
+export type SectorAgg = {
+  sessions: number;
+  doors: number;
+  met: number;
+  favorable: number;
+  neutral: number;
+  unfavorable: number;
+};
+
+/** Agrégat par secteur (progression du plan d'action + sentiment par zone). */
+export function bySector(reports: CanvassReport[]): Map<string, SectorAgg> {
+  const m = new Map<string, SectorAgg>();
   for (const r of reports) {
     if (!r.sectorId) continue;
-    const cur = m.get(r.sectorId) ?? { sessions: 0, met: 0, favorable: 0 };
+    const cur = m.get(r.sectorId) ?? { sessions: 0, doors: 0, met: 0, favorable: 0, neutral: 0, unfavorable: 0 };
     cur.sessions += 1;
+    cur.doors += r.doors;
     cur.met += r.met;
     cur.favorable += r.favorable;
+    cur.neutral += r.neutral;
+    cur.unfavorable += r.unfavorable;
     m.set(r.sectorId, cur);
   }
   return m;
+}
+
+export type WeekPoint = {
+  week: string; // date du lundi (ISO)
+  label: string;
+  sessions: number;
+  met: number;
+  favorable: number;
+  neutral: number;
+  unfavorable: number;
+  favPct: number;
+};
+
+/** Lundi de la semaine d'une date (ISO yyyy-mm-dd, en heure locale). */
+function mondayOf(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  const day = (d.getDay() + 6) % 7; // 0 = lundi
+  d.setDate(d.getDate() - day);
+  // Format local (éviter le décalage UTC de toISOString).
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+/** Tendance hebdomadaire du sentiment (ordre chronologique croissant). */
+export function weeklyTrend(reports: CanvassReport[]): WeekPoint[] {
+  const m = new Map<string, WeekPoint>();
+  for (const r of reports) {
+    const wk = mondayOf(r.date);
+    const cur =
+      m.get(wk) ??
+      ({ week: wk, label: "", sessions: 0, met: 0, favorable: 0, neutral: 0, unfavorable: 0, favPct: 0 } as WeekPoint);
+    cur.sessions += 1;
+    cur.met += r.met;
+    cur.favorable += r.favorable;
+    cur.neutral += r.neutral;
+    cur.unfavorable += r.unfavorable;
+    m.set(wk, cur);
+  }
+  return [...m.values()]
+    .sort((a, b) => (a.week < b.week ? -1 : 1))
+    .map((w) => {
+      const op = w.favorable + w.neutral + w.unfavorable;
+      return {
+        ...w,
+        favPct: op > 0 ? w.favorable / op : 0,
+        label: new Date(w.week + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }),
+      };
+    });
 }
