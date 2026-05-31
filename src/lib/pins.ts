@@ -124,7 +124,11 @@ function ensureLoaded() {
   loadStarted = true;
   void load();
   // Recharge quand la session change (connexion / déconnexion).
-  createClient().auth.onAuthStateChange(() => void load());
+  createClient().auth.onAuthStateChange(() => {
+    // Différé hors du callback : appeler supabase dans onAuthStateChange (qui
+    // tient le verrou d'auth) provoque un deadlock ré-entrant.
+    setTimeout(() => void load(), 0);
+  });
 }
 
 /** Force un rechargement (ex. après création / changement d'équipe). */
