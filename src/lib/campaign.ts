@@ -30,6 +30,7 @@ export type Sector = {
   favorable: number;
   bureauCode: string | null;
   priority: number | null;
+  address: string | null;
 };
 
 export const SECTOR_STATUS_LABELS: Record<SectorStatus, string> = {
@@ -58,6 +59,7 @@ type SectorRow = {
   favorable: number;
   bureau_code: string | null;
   priority: number | null;
+  address: string | null;
 };
 
 function mapSector(r: SectorRow): Sector {
@@ -70,6 +72,7 @@ function mapSector(r: SectorRow): Sector {
     favorable: r.favorable,
     bureauCode: r.bureau_code ?? null,
     priority: r.priority ?? null,
+    address: r.address ?? null,
   };
 }
 
@@ -243,6 +246,7 @@ export type SectorPatch = {
   status?: SectorStatus;
   contacted?: number;
   favorable?: number;
+  address?: string | null;
 };
 
 export async function updateSector(id: string, patch: SectorPatch): Promise<void> {

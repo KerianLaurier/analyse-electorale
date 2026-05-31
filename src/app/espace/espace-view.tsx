@@ -2,30 +2,32 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, ListTodo, StickyNote, Star, Users, Megaphone, Contact, CalendarClock } from "lucide-react";
+import { LayoutDashboard, ListTodo, StickyNote, Star, Users, Megaphone, Contact, CalendarClock, DoorOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WsContext } from "@/app/espace/types";
 import { EspaceOverview } from "@/app/espace/espace-overview";
 import { EspaceCampaign } from "@/app/espace/espace-campaign";
 import { EspaceTasks } from "@/app/espace/espace-tasks";
 import { EspaceShifts } from "@/app/espace/espace-shifts";
+import { EspaceCanvass } from "@/app/espace/espace-canvass";
 import { EspaceContacts } from "@/app/espace/espace-contacts";
 import { EspaceNotes } from "@/app/espace/espace-notes";
 import { EspacePins } from "@/app/espace/espace-pins";
 
-export type Tab = "overview" | "campaign" | "tasks" | "shifts" | "contacts" | "notes" | "pins";
+export type Tab = "overview" | "campaign" | "tasks" | "shifts" | "canvass" | "contacts" | "notes" | "pins";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
   { id: "campaign", label: "Campagne", icon: Megaphone },
   { id: "tasks", label: "Actions", icon: ListTodo },
   { id: "shifts", label: "Permanences", icon: CalendarClock },
+  { id: "canvass", label: "Porte-à-porte", icon: DoorOpen },
   { id: "contacts", label: "Contacts", icon: Contact },
   { id: "notes", label: "Notes", icon: StickyNote },
   { id: "pins", label: "Épingles", icon: Star },
 ];
 
-const TAB_IDS = new Set<Tab>(["overview", "campaign", "tasks", "shifts", "contacts", "notes", "pins"]);
+const TAB_IDS = new Set<Tab>(["overview", "campaign", "tasks", "shifts", "canvass", "contacts", "notes", "pins"]);
 
 export function EspaceView({ ctx, initialTab }: { ctx: WsContext; initialTab?: string }) {
   const [tab, setTab] = useState<Tab>(initialTab && TAB_IDS.has(initialTab as Tab) ? (initialTab as Tab) : "overview");
@@ -83,6 +85,7 @@ export function EspaceView({ ctx, initialTab }: { ctx: WsContext; initialTab?: s
           {tab === "campaign" && <EspaceCampaign />}
           {tab === "tasks" && <EspaceTasks ctx={ctx} />}
           {tab === "shifts" && <EspaceShifts ctx={ctx} />}
+          {tab === "canvass" && <EspaceCanvass />}
           {tab === "contacts" && <EspaceContacts ctx={ctx} />}
           {tab === "notes" && <EspaceNotes ctx={ctx} />}
           {tab === "pins" && <EspacePins />}
