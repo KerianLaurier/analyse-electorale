@@ -1,38 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { ListTodo, CheckCircle2, Star, StickyNote, CalendarClock, MapPin, Flag, ArrowRight, Target } from "lucide-react";
+import { useMemo } from "react";
+import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTasks, TASK_KIND_LABELS, type Task } from "@/lib/tasks";
 import { useNotes } from "@/lib/notes";
 import { usePins } from "@/lib/pins";
+import { useShifts, SHIFT_KIND_LABELS, type Shift } from "@/lib/shifts";
+import { useContacts } from "@/lib/contacts";
+import { useReports, summarize } from "@/lib/canvass";
 import { useCampaign, useSectors, voteGoal } from "@/lib/campaign";
 import { memberName, type WsContext } from "@/app/espace/types";
 import type { Tab } from "@/app/espace/espace-view";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-
+const fmtPct = (n: number) => `${Math.round(n * 100)} %`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmtDue = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+const fmtTime = (t: string | null) => (t ? t.slice(0, 5) : null);
 
 export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Tab) => void }) {
   const tasks = useTasks();
   const notes = useNotes();
   const pins = usePins();
+  const shifts = useShifts();
+  const contacts = useContacts();
+  const reports = useReports();
   const campaign = useCampaign();
   const sectors = useSectors();
 
   const goal = voteGoal(campaign);
   const identified = sectors.reduce((s, x) => s + x.favorable, 0);
   const goalProgress = goal && goal > 0 ? Math.min(1, identified / goal) : 0;
+  const coveredSectors = sectors.filter((s) => s.status === "done").length;
+  const coverage = sectors.length ? coveredSectors / sectors.length : 0;
 
   const active = tasks.filter((t) => t.status !== "done");
-  const done = tasks.filter((t) => t.status === "done");
-  const upcoming = active
-    .filter((t) => t.dueDate != null)
-    .sort((a, b) => (a.dueDate! < b.dueDate! ? -1 : 1))
-    .slice(0, 5);
-  const highPrio = active.filter((t) => t.priority === "high").slice(0, 5);
+  const today = todayISO();
+  const upcoming = useMemo(
+    () => active.filter((t) => t.dueDate != null).sort((a, b) => (a.dueDate! < b.dueDate! ? -1 : 1)).slice(0, 5),
+    [active],
+  );
+  const upcomingShifts = useMemo(() => shifts.filter((s) => s.date >= today).slice(0, 5), [shifts, today]);
+  const summary = useMemo(() => summarize(reports), [reports]);
+  const benevoles = contacts.filter((c) => c.kind === "benevole").length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -43,12 +55,15 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
           onClick={() => setTab("campaign")}
           className="flex flex-col gap-2 rounded-lg border border-warm/30 bg-warm/[0.06] p-4 text-left shadow-card transition-colors hover:bg-warm/[0.1]"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-warm">
               <Target className="h-3.5 w-3.5" /> Objectif de campagne
               {campaign?.target && <span className="font-medium normal-case text-foreground/70">· {campaign.target.label}</span>}
             </span>
-            <span className="text-[12px] font-semibold tabular-nums">{fmtInt(identified)} / {fmtInt(goal)} voix</span>
+            <span className="text-[12px] font-semibold tabular-nums">
+              {fmtInt(identified)} / {fmtInt(goal)} voix
+              {sectors.length > 0 && <span className="ml-2 font-normal text-muted-foreground">· {fmtPct(coverage)} couvert</span>}
+            </span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-pill bg-surface-soft/70">
             <span className="block h-full rounded-pill bg-warm transition-all" style={{ width: `${goalProgress * 100}%` }} />
@@ -56,13 +71,39 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
         </button>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* Stats — un par module */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat icon={ListTodo} label="Actions en cours" value={active.length} onClick={() => setTab("tasks")} accent />
-        <Stat icon={CheckCircle2} label="Actions faites" value={done.length} onClick={() => setTab("tasks")} />
-        <Stat icon={Star} label="Épingles" value={pins.length} onClick={() => setTab("pins")} />
+        <Stat icon={CalendarClock} label="Permanences à venir" value={upcomingShifts.length} onClick={() => setTab("shifts")} />
+        <Stat icon={DoorOpen} label="Rencontrées (P-à-P)" value={summary.met} onClick={() => setTab("canvass")} />
+        <Stat icon={Contact} label="Contacts" value={contacts.length} onClick={() => setTab("contacts")} />
         <Stat icon={StickyNote} label="Notes" value={notes.length} onClick={() => setTab("notes")} />
+        <Stat icon={Star} label="Épingles" value={pins.length} onClick={() => setTab("pins")} />
       </div>
+
+      {/* Sondage terrain (porte-à-porte) */}
+      {summary.opinions > 0 && (
+        <button
+          type="button"
+          onClick={() => setTab("canvass")}
+          className="rounded-lg border border-black/5 bg-surface p-4 text-left shadow-card transition-colors hover:border-warm/30"
+        >
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <DoorOpen className="h-3.5 w-3.5" /> Sondage terrain
+            </span>
+            <span className="text-[12px]">
+              <span className="font-semibold text-emerald-600">{fmtPct(summary.favPct)}</span>
+              <span className="text-muted-foreground"> favorables · {fmtInt(summary.opinions)} rencontrées</span>
+            </span>
+          </div>
+          <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-pill">
+            <span className="bg-emerald-500" style={{ width: `${summary.favPct * 100}%` }} />
+            <span className="bg-slate-400" style={{ width: `${summary.neuPct * 100}%` }} />
+            <span className="bg-red-500" style={{ width: `${summary.unfPct * 100}%` }} />
+          </div>
+        </button>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Échéances proches */}
@@ -78,14 +119,14 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
           )}
         </Panel>
 
-        {/* Priorités hautes */}
-        <Panel title="Priorités hautes" icon={Flag} onSeeAll={() => setTab("tasks")}>
-          {highPrio.length === 0 ? (
-            <Empty>Aucune action prioritaire en attente.</Empty>
+        {/* Prochaines permanences */}
+        <Panel title="Prochaines permanences" icon={Clock} onSeeAll={() => setTab("shifts")}>
+          {upcomingShifts.length === 0 ? (
+            <Empty>Aucune permanence planifiée.</Empty>
           ) : (
             <ul className="flex flex-col divide-y divide-border/60">
-              {highPrio.map((t) => (
-                <TaskLine key={t.id} task={t} ctx={ctx} />
+              {upcomingShifts.map((s) => (
+                <ShiftLine key={s.id} shift={s} />
               ))}
             </ul>
           )}
@@ -112,6 +153,12 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
           </ul>
         )}
       </Panel>
+
+      {benevoles > 0 && (
+        <p className="text-center text-[11px] text-muted-foreground">
+          {benevoles} bénévole{benevoles > 1 ? "s" : ""} dans le carnet de contacts · {sectors.length} secteurs au plan de terrain
+        </p>
+      )}
     </div>
   );
 }
@@ -125,7 +172,7 @@ function Stat({
 }: {
   icon: typeof ListTodo;
   label: string;
-  value: number;
+  value: number | string;
   onClick: () => void;
   accent?: boolean;
 }) {
@@ -185,6 +232,19 @@ function TaskLine({ task, ctx }: { task: Task; ctx: WsContext }) {
           {fmtDue(task.dueDate)}
         </span>
       )}
+    </li>
+  );
+}
+
+function ShiftLine({ shift }: { shift: Shift }) {
+  const time = fmtTime(shift.startTime);
+  const count = shift.signups.length;
+  return (
+    <li className="flex items-center gap-2 py-2 text-[12.5px]">
+      <span className="min-w-0 flex-1 truncate">{shift.title}</span>
+      <span className="shrink-0 text-[11px] text-muted-foreground">{SHIFT_KIND_LABELS[shift.kind]}</span>
+      <span className="shrink-0 text-[11px] text-muted-foreground">· {count}{shift.capacity != null ? `/${shift.capacity}` : ""}</span>
+      <span className="shrink-0 text-[11px] text-muted-foreground">{fmtDue(shift.date)}{time ? ` ${time}` : ""}</span>
     </li>
   );
 }

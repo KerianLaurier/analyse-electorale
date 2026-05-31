@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
@@ -20,6 +20,7 @@ const PRIMARY_NAV = [
   { href: "/explorer", label: "Explorer" },
   { href: "/analyser", label: "Analyser" },
   { href: "/suivre", label: "Suivre" },
+  { href: "/espace", label: "Mon QG" },
 ] as const;
 
 const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
@@ -135,7 +136,7 @@ export function AppHeader() {
             <Search className="h-4 w-4" />
           </button>
           <Link
-            href="/espace"
+            href="/espace?tab=pins"
             aria-label="Mes épingles"
             title="Mes épingles"
             className="grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
@@ -171,6 +172,10 @@ export function AppHeader() {
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onSelect={() => router.push("/espace")}>
+                <Megaphone className="h-4 w-4" />
+                Mon QG
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push("/espace?tab=pins")}>
                 <Star className="h-4 w-4" />
                 Mes épingles
               </DropdownMenuItem>
