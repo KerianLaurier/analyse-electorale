@@ -1,9 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, Search, Info, Users } from "lucide-react";
+import { ShieldCheck, Search, Info, Users, UserPlus, Copy, CheckCircle2, Check, X, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+
+function genPassword(): string {
+  const a = Math.random().toString(36).slice(2, 7);
+  const b = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `Mvc-${a}${b}${Math.floor(Math.random() * 90 + 10)}`;
+}
+const addDays = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+};
 
 export type AdminAccount = {
   id: string;
@@ -44,6 +55,9 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AdminAccount["status"] | "all">("all");
   const [notice, setNotice] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const q = query.trim().toLowerCase();
   const visible = accounts.filter((a) => {
@@ -95,14 +109,63 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
     }
   }
 
+  async function createAccount(payload: CreatePayload): Promise<boolean> {
+    const { data, error } = await createClient().rpc("admin_create_account", {
+      p_email: payload.email.trim(),
+      p_password: payload.password,
+      p_full_name: payload.fullName.trim() || null,
+      p_organisation: payload.organisation.trim() || null,
+      p_status: payload.status,
+      p_tier: payload.tier,
+      p_trial_ends_at: payload.trialEndsAt ? new Date(payload.trialEndsAt + "T00:00:00").toISOString() : null,
+      p_super: payload.isSuperAdmin,
+    });
+    if (error) {
+      flash(`Échec : ${error.message}`);
+      return false;
+    }
+    const newId = data as string;
+    setAccounts((arr) => [
+      {
+        id: newId,
+        email: payload.email.trim().toLowerCase(),
+        fullName: payload.fullName.trim() || null,
+        organisation: payload.organisation.trim() || null,
+        role: "member",
+        status: payload.status,
+        tier: payload.tier,
+        trialEndsAt: payload.trialEndsAt ? new Date(payload.trialEndsAt + "T00:00:00").toISOString() : null,
+        isSuperAdmin: payload.isSuperAdmin,
+        teamName: null,
+        createdAt: new Date().toISOString(),
+      },
+      ...arr,
+    ]);
+    setCreated({ email: payload.email.trim().toLowerCase(), password: payload.password });
+    setCopied(false);
+    setShowCreate(false);
+    return true;
+  }
+
   return (
     <div className="flex-1 bg-canvas">
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Administration</p>
-        <h1 className="mt-1 inline-flex items-center gap-2 text-[28px] font-semibold tracking-tight">
-          <ShieldCheck className="h-6 w-6 text-warm" /> Back-office
-        </h1>
-        <p className="mt-1.5 text-[13px] text-muted-foreground">Gestion des comptes, abonnements et accès super-admin.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Administration</p>
+            <h1 className="mt-1 inline-flex items-center gap-2 text-[28px] font-semibold tracking-tight">
+              <ShieldCheck className="h-6 w-6 text-warm" /> Back-office
+            </h1>
+            <p className="mt-1.5 text-[13px] text-muted-foreground">Gestion des comptes, abonnements et accès super-admin.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setShowCreate((v) => !v); setCreated(null); }}
+            className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground hover:opacity-90"
+          >
+            <UserPlus className="h-4 w-4" /> Nouveau compte
+          </button>
+        </div>
 
         {notice && (
           <div className="mt-4 flex items-start gap-2 rounded-md bg-warm/12 px-3 py-2.5 text-[12.5px] text-foreground/80">
@@ -110,6 +173,31 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
             <span>{notice}</span>
           </div>
         )}
+
+        {created && (
+          <div className="mt-4 flex items-start gap-2 rounded-md bg-emerald-50 px-3 py-3 text-[12.5px] text-emerald-800">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">Compte créé. Communiquez ces identifiants à l’utilisateur :</p>
+              <p className="mt-1 font-mono text-[12px]">
+                {created.email} · <span className="font-semibold">{created.password}</span>
+              </p>
+              <p className="mt-1 text-[11px] text-emerald-700/80">L’utilisateur pourra changer son mot de passe via « Mot de passe oublié » ou son compte.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { void navigator.clipboard?.writeText(`${created.email} / ${created.password}`); setCopied(true); }}
+              className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-white/70 px-2.5 py-1 text-[11px] font-medium hover:bg-white"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copié" : "Copier"}
+            </button>
+            <button type="button" onClick={() => setCreated(null)} aria-label="Fermer" className="shrink-0 text-emerald-700/70 hover:text-emerald-900">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {showCreate && <CreateAccountForm onSubmit={createAccount} onCancel={() => setShowCreate(false)} />}
 
         {/* Stats */}
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -221,6 +309,97 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "em
       <p className={cn("text-[22px] font-semibold tabular-nums leading-none", tone === "emerald" ? "text-emerald-600" : tone === "warm" ? "text-warm" : "")}>{value}</p>
       <p className="mt-1 text-[11.5px] text-muted-foreground">{label}</p>
     </div>
+  );
+}
+
+type CreatePayload = {
+  email: string;
+  password: string;
+  fullName: string;
+  organisation: string;
+  status: AdminAccount["status"];
+  tier: string;
+  trialEndsAt: string;
+  isSuperAdmin: boolean;
+};
+
+function CreateAccountForm({
+  onSubmit,
+  onCancel,
+}: {
+  onSubmit: (p: CreatePayload) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [organisation, setOrganisation] = useState("");
+  const [password, setPassword] = useState(genPassword);
+  const [status, setStatus] = useState<AdminAccount["status"]>("trial");
+  const [tier, setTier] = useState("candidat");
+  const [trialEndsAt, setTrialEndsAt] = useState(addDays(14));
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    if (!email.trim() || !email.includes("@")) return setErr("E-mail invalide.");
+    if (password.length < 8) return setErr("Mot de passe : 8 caractères minimum.");
+    setErr(null);
+    setBusy(true);
+    const ok = await onSubmit({ email, password, fullName, organisation, status, tier, trialEndsAt: status === "trial" ? trialEndsAt : "", isSuperAdmin });
+    setBusy(false);
+    if (ok) {
+      setEmail("");
+      setFullName("");
+      setOrganisation("");
+      setPassword(genPassword());
+    }
+  }
+
+  const f = cn(field, "py-1.5");
+
+  return (
+    <form onSubmit={submit} className="mt-4 flex flex-col gap-3 rounded-lg border border-border/60 bg-surface p-4 shadow-card">
+      <p className="text-[12px] font-semibold">Créer un compte</p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail *" type="email" className={f} autoComplete="off" />
+        <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nom" className={f} />
+        <input value={organisation} onChange={(e) => setOrganisation(e.target.value)} placeholder="Organisation" className={f} />
+      </div>
+      <div className="flex flex-wrap items-stretch gap-2">
+        <div className="relative flex-1 min-w-[220px]">
+          <input value={password} onChange={(e) => setPassword(e.target.value)} className={cn(f, "w-full pr-9 font-mono")} />
+          <button type="button" onClick={() => setPassword(genPassword())} title="Générer" className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-surface-soft hover:text-foreground">
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <select value={status} onChange={(e) => setStatus(e.target.value as AdminAccount["status"])} className={f}>
+          {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+        </select>
+        <select value={tier} onChange={(e) => setTier(e.target.value)} className={f}>
+          {TIERS.map((t) => <option key={t} value={t}>{TIER_LABELS[t]}</option>)}
+        </select>
+        {status === "trial" && (
+          <input type="date" value={trialEndsAt} onChange={(e) => setTrialEndsAt(e.target.value)} className={f} title="Fin d’essai" />
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
+          <input type="checkbox" checked={isSuperAdmin} onChange={(e) => setIsSuperAdmin(e.target.checked)} className="h-4 w-4 accent-[var(--warm,#c8743c)]" />
+          <ShieldCheck className="h-3.5 w-3.5" /> Super-admin
+        </label>
+        {err && <span className="text-[12px] text-destructive">{err}</span>}
+        <div className="ml-auto flex items-center gap-2">
+          <button type="button" onClick={onCancel} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
+          <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
+            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Créer le compte
+          </button>
+        </div>
+      </div>
+      <p className="text-[10.5px] text-muted-foreground">Le compte est créé avec l’e-mail déjà confirmé : l’utilisateur peut se connecter immédiatement.</p>
+    </form>
   );
 }
 
