@@ -457,6 +457,68 @@ export function useCircoList() {
   });
 }
 
+// ─── Bornes géographiques d'un territoire (pour cadrer une carte) ─────────────
+
+export type LngLatBounds = [number, number, number, number]; // [ouest, sud, est, nord]
+
+type GeoPolygon = { coordinates?: number[][][] };
+function bboxFromPolygon(poly: GeoPolygon | null | undefined): LngLatBounds | null {
+  const ring = poly?.coordinates?.[0];
+  if (!ring || ring.length === 0) return null;
+  let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+  for (const pt of ring) {
+    const [lng, lat] = pt;
+    if (lng < w) w = lng;
+    if (lng > e) e = lng;
+    if (lat < s) s = lat;
+    if (lat > n) n = lat;
+  }
+  return Number.isFinite(w) ? [w, s, e, n] : null;
+}
+const unionBounds = (a: LngLatBounds, b: LngLatBounds): LngLatBounds => [
+  Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3]),
+];
+
+/** Bornes d'un territoire (commune ou circo) via l'API Géo (data.gouv). */
+export async function fetchTerritoryBounds(target: { type: string; id: string }): Promise<LngLatBounds | null> {
+  try {
+    if (target.type === "commune") {
+      const r = await fetch(`https://geo.api.gouv.fr/communes/${encodeURIComponent(sanitizeCode(target.id))}?fields=bbox`);
+      if (!r.ok) return null;
+      const j = (await r.json()) as { bbox?: GeoPolygon };
+      return bboxFromPolygon(j.bbox);
+    }
+    if (target.type === "circo") {
+      const communes = new Set(await communesOfCirco(target.id));
+      if (communes.size === 0) return null;
+      const dept = target.id.slice(0, Math.max(2, target.id.length - 2));
+      const r = await fetch(`https://geo.api.gouv.fr/departements/${encodeURIComponent(dept)}/communes?fields=code,bbox`);
+      if (!r.ok) return null;
+      const arr = (await r.json()) as { code: string; bbox?: GeoPolygon }[];
+      let b: LngLatBounds | null = null;
+      for (const c of arr) {
+        if (!communes.has(c.code)) continue;
+        const bb = bboxFromPolygon(c.bbox);
+        if (bb) b = b ? unionBounds(b, bb) : bb;
+      }
+      return b;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function useTerritoryBounds(target: { type: string; id: string } | null) {
+  return useQuery({
+    enabled: !!target,
+    queryKey: ["territory-bounds", target?.type, target?.id],
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    queryFn: () => fetchTerritoryBounds(target as { type: string; id: string }),
+  });
+}
+
 /**
  * Regroupe des candidats par nuance (somme des voix). `multiCirco` est vrai si
  * au moins une nuance comptait plusieurs candidats (= plusieurs circonscriptions).

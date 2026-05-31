@@ -6,6 +6,7 @@ import { DoorOpen, Plus, Users, Trash2, MapPin, Loader2, Info, ClipboardList, Ta
 import { cn } from "@/lib/utils";
 import { useReports, addReport, deleteReport, summarize, bySector, weeklyTrend, type CanvassReport, type SectorAgg, type WeekPoint } from "@/lib/canvass";
 import { useSectors, useHasTeam, useCampaign, voteGoal, updateSector, type Sector } from "@/lib/campaign";
+import { CanvassMap } from "@/app/espace/canvass-map";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const fmtPct = (n: number, d = 0) =>
@@ -46,6 +47,7 @@ function CanvassContent() {
   const trend = useMemo(() => weeklyTrend(reports), [reports]);
   const [showForm, setShowForm] = useState(false);
   const [presetSector, setPresetSector] = useState<string | null>(null);
+  const [showMap, setShowMap] = useState(false);
 
   const sortedSectors = useMemo(
     () => [...sectors].sort((a, b) => (b.priority ?? -1) - (a.priority ?? -1)),
@@ -163,6 +165,27 @@ function CanvassContent() {
           </div>
         )}
       </section>
+
+      {/* ── Carte de couverture ──────────────────────────────────────── */}
+      {campaign?.target && sectors.some((s) => s.bureauCode) && (
+        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" /> Carte de couverture
+            </h2>
+            <button type="button" onClick={() => setShowMap((v) => !v)} className="text-[11.5px] font-medium text-warm hover:underline">
+              {showMap ? "Masquer la carte" : "Afficher la carte"}
+            </button>
+          </div>
+          {showMap ? (
+            <div className="mt-3">
+              <CanvassMap target={campaign.target} sectors={sectors} agg={agg} />
+            </div>
+          ) : (
+            <p className="mt-2 text-[12px] text-muted-foreground">Visualisez l’avancement du porte-à-porte bureau par bureau sur la carte.</p>
+          )}
+        </section>
+      )}
 
       {/* ── Sentiment par secteur ────────────────────────────────────── */}
       {sectorSentiment.length > 0 && (

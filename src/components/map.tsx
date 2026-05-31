@@ -134,6 +134,8 @@ type MapProps = {
   onFeatureClick?: (info: { maille: Maille; properties: Record<string, unknown> }) => void;
   choropleth?: Choropleth | null;
   selectedCode?: string | null;
+  /** Cadrer la carte sur des bornes [ouest, sud, est, nord]. */
+  bounds?: [number, number, number, number] | null;
 };
 
 export function Map({
@@ -142,6 +144,7 @@ export function Map({
   onFeatureClick,
   choropleth,
   selectedCode,
+  bounds,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -385,6 +388,21 @@ export function Map({
     if (styleLoadedRef.current || map.isStyleLoaded()) apply();
     else map.once("load", apply);
   }, [selectedCode, maille]);
+
+  // Cadrage sur des bornes données.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bounds) return;
+    const apply = () => {
+      try {
+        map.fitBounds(bounds, { padding: 30, maxZoom: 14, duration: 600 });
+      } catch {
+        /* bornes invalides : on ignore */
+      }
+    };
+    if (styleLoadedRef.current || map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [bounds]);
 
   return <div ref={containerRef} className={className} />;
 }

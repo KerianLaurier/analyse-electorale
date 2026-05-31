@@ -308,7 +308,7 @@ function SectorsCard({
       if (bureaux.length === 0) {
         setNotice("Aucun bureau de vote trouvé pour ce territoire dans les données.");
       } else {
-        const added = await addSectorsBulk(bureaux.map((b) => ({ name: b.name, registered: b.registered })));
+        const added = await addSectorsBulk(bureaux.map((b) => ({ name: b.name, registered: b.registered, bureauCode: b.code })));
         const skipped = bureaux.length - added;
         setNotice(
           `${added} secteur${added > 1 ? "s" : ""} ajouté${added > 1 ? "s" : ""} depuis les bureaux de vote` +
