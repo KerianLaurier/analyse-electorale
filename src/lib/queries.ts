@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { inseeUrl, parquetUrl, query } from "@/lib/duckdb";
 import type { Maille } from "@/lib/map-config";
 import { SCRUTIN_META, isElection, type Scrutin } from "@/lib/url-state";
+import { blocById, type BlocId } from "@/lib/analysis";
 
 const FILOSOFI_PARQUET = "filosofi_2021_commune.parquet";
 const RP_PARQUET = "rp_2022_commune.parquet";
@@ -254,6 +255,206 @@ export async function fetchTerritoryBureaux(target: {
     registered: Number(r.inscrits ?? 0),
   }));
   return { bureaux, splitCommunes };
+}
+
+// ─── Ciblage : bureaux d'une circo classés par potentiel de campagne ──────────
+
+export type BureauCand = { nuance: string | null; voix: number };
+
+/** Données brutes d'un bureau (récupérées une fois, scorées ensuite). */
+export type CircoBureauRaw = {
+  code: string;
+  name: string;
+  insee: string;
+  inscrits: number;
+  exprimes: number;
+  abstentions: number;
+  cands: BureauCand[]; // triés par voix décroissantes
+};
+
+export type TargetReason =
+  | "bascule" // 2e à portée du 1er
+  | "bastion" // bloc en tête → mobiliser la base
+  | "conquete" // bloc en retrait mais atteignable
+  | "reservoir" // forte abstention (mode indifférent)
+  | "dispute" // écart 1er/2e serré (mode indifférent)
+  | "defavorable" // peu de potentiel
+  | "neutre";
+
+export type TargetBureau = {
+  code: string;
+  name: string;
+  insee: string;
+  inscrits: number;
+  abstentionRate: number; // 0..1
+  marginPct: number | null; // écart 1er/2e en part des exprimés (0..1)
+  winnerNuance: string | null;
+  /** Part du bloc choisi (0..1) ; null en mode indifférent. */
+  blocShare: number | null;
+  reason: TargetReason;
+  /** Score composite 0..100 (plus haut = plus prioritaire à travailler). */
+  priority: number;
+};
+
+/** Liste des communes appartenant à une SEULE circo (attribuables sans ambiguïté). */
+async function communesOfCirco(circo: string): Promise<string[]> {
+  const res = await fetch("/electoral/commune_circo.json");
+  if (!res.ok) return [];
+  const map = (await res.json()) as Record<string, string[]>;
+  const communes: string[] = [];
+  for (const [insee, circos] of Object.entries(map)) {
+    if (circos.length === 1 && circos[0] === circo) communes.push(insee);
+  }
+  return communes;
+}
+
+/**
+ * Récupère les bureaux d'une circo avec leurs candidats (Légis. 2024 T1).
+ * Données brutes : le scoring (dépendant du positionnement) se fait ensuite
+ * côté client via `scoreBureaux`, ce qui permet de re-scorer instantanément.
+ */
+export async function fetchCircoBureaux(circo: string): Promise<CircoBureauRaw[]> {
+  const communes = await communesOfCirco(circo);
+  if (communes.length === 0) return [];
+  const inList = communes.map((c) => `'${sanitizeCode(c)}'`).join(",");
+  const terr = aggUrl("legis-2024-t1", "territoires", "bureaux");
+  const cand = aggUrl("legis-2024-t1", "candidats", "bureaux");
+
+  const [terrRows, candRows] = await Promise.all([
+    query<{ code: string; libelle: string | null; inscrits: number; exprimes: number; abstentions: number }>(
+      `SELECT code, libelle, inscrits, exprimes, abstentions
+       FROM read_parquet('${terr}')
+       WHERE maille = 'bureaux' AND split_part(code, '_', 1) IN (${inList})`,
+    ),
+    query<{ code: string; nuance: string | null; voix: number }>(
+      `SELECT code, nuance, voix FROM read_parquet('${cand}')
+       WHERE maille = 'bureaux' AND voix IS NOT NULL AND split_part(code, '_', 1) IN (${inList})`,
+    ),
+  ]);
+
+  const candsByCode = new Map<string, BureauCand[]>();
+  for (const c of candRows) {
+    const arr = candsByCode.get(c.code) ?? [];
+    arr.push({ nuance: c.nuance ?? null, voix: Number(c.voix ?? 0) });
+    candsByCode.set(c.code, arr);
+  }
+
+  return terrRows.map((t) => ({
+    code: t.code,
+    name: t.libelle?.trim() || `Bureau ${t.code.split("_")[1] ?? t.code}`,
+    insee: t.code.split("_")[0] ?? "",
+    inscrits: Number(t.inscrits ?? 0),
+    exprimes: Number(t.exprimes ?? 0),
+    abstentions: Number(t.abstentions ?? 0),
+    cands: (candsByCode.get(t.code) ?? []).sort((a, b) => b.voix - a.voix),
+  }));
+}
+
+export function useCircoBureaux(circo: string | null) {
+  return useQuery({
+    enabled: !!circo,
+    queryKey: ["circo-bureaux", circo],
+    queryFn: () => fetchCircoBureaux(circo as string),
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+function pickBlocReason(blocShare: number, deficit: number): TargetReason {
+  if (blocShare < 0.06) return "defavorable";
+  if (deficit <= 0.005) return "bastion"; // le bloc est en tête
+  if (deficit <= 0.07) return "bascule"; // 2e très proche du 1er
+  if (deficit <= 0.18) return "conquete"; // en retrait mais atteignable
+  return "defavorable";
+}
+
+/**
+ * Classe les bureaux selon le **positionnement politique** (bloc) :
+ * - compétitivité du bloc (proche de gagner) — 45 %
+ * - base à mobiliser (part du bloc × abstention) — 35 %
+ * - taille (inscrits) — 20 %
+ * Sans bloc (« indifférent »), score générique (abstention + marginalité + taille).
+ */
+export function scoreBureaux(raw: CircoBureauRaw[], blocId: BlocId | null): TargetBureau[] {
+  const blocCodes = blocId ? new Set(blocById(blocId).codes) : null;
+
+  const inter = raw.map((b) => {
+    const abstentionRate = b.inscrits > 0 ? b.abstentions / b.inscrits : 0;
+    const top1 = b.cands[0]?.voix ?? 0;
+    const top2 = b.cands[1]?.voix ?? 0;
+    const marginPct = b.exprimes > 0 && b.cands.length >= 2 ? (top1 - top2) / b.exprimes : null;
+    const winnerNuance = b.cands[0]?.nuance ?? null;
+    let blocShare: number | null = null;
+    let deficit = 0;
+    let competitiveness = 0;
+    if (blocCodes && b.exprimes > 0) {
+      const blocVoix = b.cands.filter((c) => c.nuance && blocCodes.has(c.nuance)).reduce((s, c) => s + c.voix, 0);
+      blocShare = blocVoix / b.exprimes;
+      deficit = Math.max(0, top1 / b.exprimes - blocShare);
+      competitiveness = blocShare <= 0.02 ? 0 : clamp01(1 - deficit / 0.2);
+    }
+    return { b, abstentionRate, marginPct, winnerNuance, blocShare, deficit, competitiveness };
+  });
+
+  const sizes = inter.map((x) => x.b.inscrits);
+  const minS = Math.min(...sizes, 0), maxS = Math.max(...sizes, 1);
+  const norm = (v: number, lo: number, hi: number) => (hi > lo ? clamp01((v - lo) / (hi - lo)) : 0);
+
+  const head = (x: (typeof inter)[number]) => ({
+    code: x.b.code,
+    name: x.b.name,
+    insee: x.b.insee,
+    inscrits: x.b.inscrits,
+    abstentionRate: x.abstentionRate,
+    marginPct: x.marginPct,
+    winnerNuance: x.winnerNuance,
+  });
+
+  if (blocCodes) {
+    const maxMob = Math.max(...inter.map((x) => (x.blocShare ?? 0) * x.abstentionRate), 0.0001);
+    return inter
+      .map((x): TargetBureau => {
+        const sizeN = norm(x.b.inscrits, minS, maxS);
+        const mobN = ((x.blocShare ?? 0) * x.abstentionRate) / maxMob;
+        const priority = Math.round(100 * (0.45 * x.competitiveness + 0.35 * mobN + 0.2 * sizeN));
+        return { ...head(x), blocShare: x.blocShare, reason: pickBlocReason(x.blocShare ?? 0, x.deficit), priority };
+      })
+      .sort((a, b) => b.priority - a.priority);
+  }
+
+  const absts = inter.map((x) => x.abstentionRate);
+  const minA = Math.min(...absts, 0), maxA = Math.max(...absts, 1);
+  const margins = inter.map((x) => x.marginPct).filter((m): m is number => m != null);
+  const maxM = margins.length ? Math.max(...margins) : 1;
+  return inter
+    .map((x): TargetBureau => {
+      const abstN = norm(x.abstentionRate, minA, maxA);
+      const sizeN = norm(x.b.inscrits, minS, maxS);
+      const marginN = x.marginPct == null ? 0 : 1 - norm(x.marginPct, 0, maxM || 1);
+      const priority = Math.round(100 * (0.45 * abstN + 0.35 * marginN + 0.2 * sizeN));
+      const reason: TargetReason = x.marginPct != null && x.marginPct < 0.05 ? "dispute" : abstN > 0.6 ? "reservoir" : "neutre";
+      return { ...head(x), blocShare: null, reason, priority };
+    })
+    .sort((a, b) => b.priority - a.priority);
+}
+
+export type CircoListItem = { code: string; libelle: string };
+
+/** Liste des circonscriptions (code + libellé) pour un sélecteur. */
+export function useCircoList() {
+  return useQuery({
+    queryKey: ["circo-list"],
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    queryFn: async (): Promise<CircoListItem[]> => {
+      const url = aggUrl("legis-2024-t1", "territoires", "circonscriptions");
+      const rows = await query<{ code: string; libelle: string | null }>(
+        `SELECT code, any_value(libelle) AS libelle FROM read_parquet('${url}') WHERE maille = 'circonscriptions' GROUP BY code ORDER BY code`,
+      );
+      return rows.map((r) => ({ code: String(r.code), libelle: r.libelle ?? String(r.code) }));
+    },
+  });
 }
 
 /**

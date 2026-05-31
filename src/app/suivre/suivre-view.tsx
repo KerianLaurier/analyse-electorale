@@ -19,8 +19,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Newspaper,
+  MapPin,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import type { NewsArticle } from "@/app/api/news/route";
 import {
   useNotices,
   cleanLabel,
@@ -62,10 +65,11 @@ function usePaged<T>(items: T[]) {
   return { pageItems, page: safePage, setPage, pageCount, total: items.length };
 }
 
-type Category = "actualite" | "sondages" | "votes" | "lois" | "agenda";
+type Category = "actualite" | "presse" | "sondages" | "votes" | "lois" | "agenda";
 
 const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
   { id: "actualite", label: "Actualité", icon: Newspaper },
+  { id: "presse", label: "Presse locale", icon: MapPin },
   { id: "sondages", label: "Sondages", icon: BarChart3 },
   { id: "votes", label: "Votes AN", icon: Vote },
   { id: "lois", label: "Lois & PPL", icon: FileText },
@@ -106,11 +110,137 @@ export function SuivreView() {
 
       {/* Contenu par catégorie */}
       {category === "actualite" && <ActualiteView />}
+      {category === "presse" && <PresseLocaleView />}
       {category === "sondages" && <SondagesView />}
       {category === "votes" && <VotesView />}
       {category === "lois" && <LoisView />}
       {category === "agenda" && <AgendaView />}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PRESSE LOCALE & ADVERSAIRES (Google Actualités, live)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const fmtNewsDate = (d: string | null) => {
+  if (!d) return "";
+  const date = new Date(d);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+};
+
+function PresseLocaleView() {
+  const [input, setInput] = useState("");
+  const [q, setQ] = useState("");
+
+  const { data, isLoading, isFetching, error } = useQuery({
+    enabled: q.length >= 2,
+    queryKey: ["local-news", q],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<NewsArticle[]> => {
+      const res = await fetch(`/api/news?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error("indisponible");
+      const j = (await res.json()) as { articles?: NewsArticle[] };
+      return j.articles ?? [];
+    },
+  });
+  const articles = data ?? [];
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const v = input.trim();
+    if (v.length >= 2) setQ(v);
+  }
+  function quick(v: string) {
+    setInput(v);
+    setQ(v);
+  }
+
+  return (
+    <section className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg bg-surface p-4 shadow-card">
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Veille presse</p>
+        <h2 className="text-[18px] font-semibold tracking-tight">Presse locale &amp; adversaires</h2>
+        <p className="text-[12px] text-muted-foreground">
+          Suivez votre territoire et vos concurrents : cherchez une commune, une circonscription, ou le nom d’un candidat.
+        </p>
+      </div>
+
+      <form onSubmit={submit} className="flex flex-wrap gap-2">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ex. Aurillac · Cantal · nom d’un candidat adverse…"
+            className="w-full rounded-md border border-border bg-surface py-2 pl-8 pr-3 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
+          />
+        </div>
+        <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground hover:opacity-90">
+          Rechercher
+        </button>
+      </form>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] text-muted-foreground">Exemples :</span>
+        {["Élections législatives", "Conseil municipal", "Mobilisation locale"].map((ex) => (
+          <button key={ex} type="button" onClick={() => quick(ex)} className="rounded-pill bg-black/[0.04] px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-black/[0.08]">
+            {ex}
+          </button>
+        ))}
+      </div>
+
+      <div className="min-h-0 flex-1">
+        {q.length < 2 ? (
+          <p className="px-1 py-8 text-center text-[12.5px] text-muted-foreground">
+            Saisissez un lieu ou un nom pour afficher la presse correspondante.
+          </p>
+        ) : error ? (
+          <p className="px-1 py-8 text-center text-[12.5px] text-muted-foreground">Source momentanément indisponible — réessayez.</p>
+        ) : isLoading ? (
+          <p className="inline-flex items-center gap-2 px-1 py-8 text-[12.5px] text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Recherche…
+          </p>
+        ) : articles.length === 0 ? (
+          <p className="px-1 py-8 text-center text-[12.5px] text-muted-foreground">Aucun article pour « {q} ».</p>
+        ) : (
+          <>
+            <p className="mb-2 inline-flex items-center gap-2 text-[11px] text-muted-foreground">
+              {articles.length} article{articles.length > 1 ? "s" : ""} pour « {q} »
+              {isFetching && <Loader2 className="h-3 w-3 animate-spin" />}
+            </p>
+            <ul className="flex flex-col gap-2">
+              {articles.map((a, i) => (
+                <li key={`${a.url}-${i}`}>
+                  <a
+                    href={a.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border border-black/5 bg-canvas/40 p-3 transition-colors hover:border-warm/40"
+                  >
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 font-medium">
+                        <Newspaper className="h-3 w-3" /> {a.source ?? "Presse"}
+                      </span>
+                      <span>{fmtNewsDate(a.date)}</span>
+                    </div>
+                    <p className="mt-1 inline-flex items-start gap-1 text-[13.5px] font-medium leading-snug">
+                      {a.title}
+                      <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                    </p>
+                    {a.snippet && <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">{a.snippet}</p>}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+
+      <p className="text-[10px] text-muted-foreground/70">Source : Google Actualités (presse régionale et nationale). Résultats en temps réel.</p>
+    </section>
   );
 }
 

@@ -28,6 +28,8 @@ export type Sector = {
   status: SectorStatus;
   contacted: number;
   favorable: number;
+  bureauCode: string | null;
+  priority: number | null;
 };
 
 export const SECTOR_STATUS_LABELS: Record<SectorStatus, string> = {
@@ -54,7 +56,22 @@ type SectorRow = {
   status: SectorStatus;
   contacted: number;
   favorable: number;
+  bureau_code: string | null;
+  priority: number | null;
 };
+
+function mapSector(r: SectorRow): Sector {
+  return {
+    id: r.id,
+    name: r.name,
+    registered: r.registered,
+    status: r.status,
+    contacted: r.contacted,
+    favorable: r.favorable,
+    bureauCode: r.bureau_code ?? null,
+    priority: r.priority ?? null,
+  };
+}
 
 let myTeamId: string | null = null;
 let hasTeam = false;
@@ -112,7 +129,7 @@ async function load() {
     supabase.from("campaign_sectors").select("*").eq("team_id", myTeamId).order("created_at", { ascending: true }),
   ]);
   campaign = c ? mapCampaign(c as CampaignRow) : null;
-  sectors = (s ?? []).map((r) => r as SectorRow);
+  sectors = (s ?? []).map((r) => mapSector(r as SectorRow));
   emit();
 }
 
@@ -169,7 +186,12 @@ export async function saveCampaign(patch: CampaignPatch): Promise<void> {
   );
 }
 
-export type NewSector = { name: string; registered?: number | null };
+export type NewSector = {
+  name: string;
+  registered?: number | null;
+  bureauCode?: string | null;
+  priority?: number | null;
+};
 
 export async function addSector(input: NewSector): Promise<void> {
   if (!myTeamId) return;
@@ -180,25 +202,36 @@ export async function addSector(input: NewSector): Promise<void> {
     .select("*")
     .single();
   if (data) {
-    sectors = [...sectors, data as SectorRow];
+    sectors = [...sectors, mapSector(data as SectorRow)];
     emit();
   }
 }
 
-/** Ajoute plusieurs secteurs d'un coup (génération depuis les bureaux), en
- *  ignorant ceux dont le nom existe déjà. Renvoie le nombre réellement ajouté. */
+/** Ajoute plusieurs secteurs d'un coup (génération / ciblage). Dédoublonne par
+ *  code bureau si présent, sinon par nom. Renvoie le nombre réellement ajouté. */
 export async function addSectorsBulk(items: NewSector[]): Promise<number> {
   if (!myTeamId || items.length === 0) return 0;
-  const existing = new Set(sectors.map((s) => s.name));
-  const fresh = items.filter((i) => i.name && !existing.has(i.name));
+  const existingCodes = new Set(sectors.map((s) => s.bureauCode).filter(Boolean));
+  const existingNames = new Set(sectors.map((s) => s.name));
+  const fresh = items.filter((i) =>
+    i.name && (i.bureauCode ? !existingCodes.has(i.bureauCode) : !existingNames.has(i.name)),
+  );
   if (fresh.length === 0) return 0;
   const supabase = createClient();
   const { data } = await supabase
     .from("campaign_sectors")
-    .insert(fresh.map((i) => ({ team_id: myTeamId, name: i.name, registered: i.registered ?? null })))
+    .insert(
+      fresh.map((i) => ({
+        team_id: myTeamId,
+        name: i.name,
+        registered: i.registered ?? null,
+        bureau_code: i.bureauCode ?? null,
+        priority: i.priority ?? null,
+      })),
+    )
     .select("*");
   if (data) {
-    sectors = [...sectors, ...(data as SectorRow[])];
+    sectors = [...sectors, ...(data as SectorRow[]).map(mapSector)];
     emit();
   }
   return data?.length ?? 0;

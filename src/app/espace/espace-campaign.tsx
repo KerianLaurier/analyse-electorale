@@ -389,9 +389,11 @@ function SectorsCard({
               </tr>
             </thead>
             <tbody>
-              {sectors.map((s) => (
-                <SectorRow key={s.id} sector={s} />
-              ))}
+              {[...sectors]
+                .sort((a, b) => (b.priority ?? -1) - (a.priority ?? -1))
+                .map((s) => (
+                  <SectorRow key={s.id} sector={s} />
+                ))}
             </tbody>
           </table>
         </div>
@@ -411,7 +413,20 @@ function SectorRow({ sector }: { sector: Sector }) {
     "w-20 rounded-md border border-transparent bg-canvas/40 px-2 py-1 text-right text-[12.5px] tabular-nums outline-none focus:border-warm focus:bg-surface";
   return (
     <tr className="border-t border-border/50">
-      <td className="py-2 pr-2 font-medium">{sector.name}</td>
+      <td className="py-2 pr-2 font-medium">
+        {sector.name}
+        {sector.priority != null && (
+          <span
+            title="Priorité de ciblage"
+            className={cn(
+              "ml-2 rounded-pill px-1.5 py-0.5 text-[10px] font-semibold align-middle",
+              sector.priority >= 66 ? "bg-red-100 text-red-700" : sector.priority >= 40 ? "bg-amber-100 text-amber-700" : "bg-surface-soft text-muted-foreground",
+            )}
+          >
+            P{sector.priority}
+          </span>
+        )}
+      </td>
       <td className="px-2 py-2">
         <span className="inline-flex items-center gap-1.5">
           <span className={cn("h-2 w-2 rounded-full", STATUS_DOT[sector.status])} />

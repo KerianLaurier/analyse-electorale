@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Loader2, Map as MapIcon } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Loader2, Map as MapIcon, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCircoHistory, type CircoTimelinePoint } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
@@ -107,6 +107,13 @@ export function CircoFiche({ code }: { code: string }) {
             pin={{ type: "circo", id: code, label: num != null ? `${ORDINAL(num)} circonscription` : `Circonscription ${code}`, sublabel: `Circonscription · dépt ${dept}`, href: `/circo/${code}` }}
           />
           {ordered.length > 0 && <ExportButton onClick={exportCsv} />}
+          <Link
+            href={`/analyser/ciblage?circo=${encodeURIComponent(code)}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-black/[0.08]"
+          >
+            <Crosshair className="h-3.5 w-3.5" />
+            Ciblage terrain
+          </Link>
           <Link
             href={`/explorer?maille=circonscriptions&scrutin=legis-2024-t2&code=${encodeURIComponent(code)}`}
             className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
