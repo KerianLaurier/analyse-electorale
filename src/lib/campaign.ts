@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getIdentity, onIdentityChange } from "@/lib/identity";
 
 /**
  * Campagne locale d'une équipe (1 par équipe) : territoire visé, objectif
@@ -106,11 +107,8 @@ function mapCampaign(r: CampaignRow): Campaign {
 }
 
 async function load() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const { userId, teamId } = await getIdentity();
+  if (!userId) {
     hasTeam = false;
     myTeamId = null;
     campaign = null;
@@ -118,9 +116,9 @@ async function load() {
     emit();
     return;
   }
-  const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", user.id).single();
-  myTeamId = (prof?.team_id as string | null) ?? null;
+  myTeamId = teamId;
   hasTeam = myTeamId != null;
+  const supabase = createClient();
   if (!myTeamId) {
     campaign = null;
     sectors = [];
@@ -140,11 +138,7 @@ function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
   void load();
-  createClient().auth.onAuthStateChange(() => {
-    // Différé hors du callback : appeler supabase dans onAuthStateChange (qui
-    // tient le verrou d'auth) provoque un deadlock ré-entrant.
-    setTimeout(() => void load(), 0);
-  });
+  onIdentityChange(() => void load());
 }
 
 export async function reloadCampaign(): Promise<void> {

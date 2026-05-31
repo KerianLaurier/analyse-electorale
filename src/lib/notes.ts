@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getIdentity, onIdentityChange } from "@/lib/identity";
 
 /**
  * Notes de terrain — persistées côté serveur (table `notes`). Personnelles
@@ -72,19 +73,16 @@ function mapRow(r: Row): Note {
 }
 
 async function load() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  myUserId = user?.id ?? null;
-  if (!user) {
+  const { userId, teamId } = await getIdentity();
+  myUserId = userId;
+  if (!userId) {
     myTeamId = null;
     notes = [];
     emit();
     return;
   }
-  const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", user.id).single();
-  myTeamId = (prof?.team_id as string | null) ?? null;
+  myTeamId = teamId;
+  const supabase = createClient();
   const { data } = await supabase
     .from("notes")
     .select("*")
@@ -97,11 +95,7 @@ function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
   void load();
-  createClient().auth.onAuthStateChange(() => {
-    // Différé hors du callback : appeler supabase dans onAuthStateChange (qui
-    // tient le verrou d'auth) provoque un deadlock ré-entrant.
-    setTimeout(() => void load(), 0);
-  });
+  onIdentityChange(() => void load());
 }
 
 export async function reloadNotes(): Promise<void> {
@@ -116,17 +110,15 @@ export type NewNote = {
 };
 
 export async function addNote(input: NewNote): Promise<void> {
+  const { userId } = await getIdentity();
+  if (!userId) return;
+  myUserId = userId;
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-  myUserId = user.id;
   const team_id = input.shared && myTeamId ? myTeamId : null;
   const { data } = await supabase
     .from("notes")
     .insert({
-      user_id: user.id,
+      user_id: userId,
       team_id,
       title: input.title ?? null,
       body: input.body,

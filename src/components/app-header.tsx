@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
 import {
   DropdownMenu,
@@ -20,6 +21,7 @@ const PRIMARY_NAV = [
   { href: "/explorer", label: "Explorer" },
   { href: "/analyser", label: "Analyser" },
   { href: "/suivre", label: "Suivre" },
+  { href: "/espace", label: "Mon QG" },
 ] as const;
 
 const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
@@ -32,26 +34,22 @@ export function AppHeader() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
-    async function syncUser(id: string | null, mail: string | null) {
-      setEmail(mail);
-      setUserId(id);
-      if (!id) {
-        setIsSuperAdmin(false);
-        return;
-      }
-      const { data } = await supabase.from("profiles").select("is_super_admin").eq("id", id).single();
-      setIsSuperAdmin(data?.is_super_admin === true);
+    let alive = true;
+    async function sync() {
+      // Identité partagée (résolue une seule fois pour toute l'app) : pas de
+      // getUser réseau ni de requête profiles propre au header.
+      const id = await getIdentity();
+      if (!alive) return;
+      setEmail(id.email);
+      setUserId(id.userId);
+      setIsSuperAdmin(id.isSuperAdmin);
     }
-    supabase.auth.getUser().then(({ data }) => syncUser(data.user?.id ?? null, data.user?.email ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      // Différé hors du callback : appeler supabase (ici une requête profiles)
-      // dans onAuthStateChange tient le verrou d'auth et provoque un deadlock.
-      const id = session?.user?.id ?? null;
-      const mail = session?.user?.email ?? null;
-      setTimeout(() => void syncUser(id, mail), 0);
-    });
-    return () => sub.subscription.unsubscribe();
+    void sync();
+    const off = onIdentityChange(() => void sync());
+    return () => {
+      alive = false;
+      off();
+    };
   }, []);
 
   const notifs = useNotifications(userId);
@@ -135,7 +133,7 @@ export function AppHeader() {
             <Search className="h-4 w-4" />
           </button>
           <Link
-            href="/espace"
+            href="/espace?tab=pins"
             aria-label="Mes épingles"
             title="Mes épingles"
             className="grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
@@ -171,6 +169,10 @@ export function AppHeader() {
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onSelect={() => router.push("/espace")}>
+                <Megaphone className="h-4 w-4" />
+                Mon QG
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push("/espace?tab=pins")}>
                 <Star className="h-4 w-4" />
                 Mes épingles
               </DropdownMenuItem>

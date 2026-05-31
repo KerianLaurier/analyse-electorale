@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getIdentity, onIdentityChange } from "@/lib/identity";
 
 /**
  * Territoires & personnes épinglés — persistés côté serveur (table `pins`).
@@ -91,25 +92,17 @@ function recompute() {
 }
 
 async function load() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  myUserId = user?.id ?? null;
-  if (!user) {
+  const { userId, teamId } = await getIdentity();
+  myUserId = userId;
+  if (!userId) {
     myTeamId = null;
     rows = [];
     recompute();
     emit();
     return;
   }
-  const { data: prof } = await supabase
-    .from("profiles")
-    .select("team_id")
-    .eq("id", user.id)
-    .single();
-  myTeamId = (prof?.team_id as string | null) ?? null;
-
+  myTeamId = teamId;
+  const supabase = createClient();
   const { data } = await supabase
     .from("pins")
     .select("type,item_id,label,sublabel,href,created_at,user_id,team_id")
@@ -123,12 +116,8 @@ function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
   void load();
-  // Recharge quand la session change (connexion / déconnexion).
-  createClient().auth.onAuthStateChange(() => {
-    // Différé hors du callback : appeler supabase dans onAuthStateChange (qui
-    // tient le verrou d'auth) provoque un deadlock ré-entrant.
-    setTimeout(() => void load(), 0);
-  });
+  // Recharge quand l'utilisateur change (connexion / déconnexion).
+  onIdentityChange(() => void load());
 }
 
 /** Force un rechargement (ex. après création / changement d'équipe). */
@@ -174,23 +163,21 @@ export async function setPinScope(
   pin: Omit<Pin, "addedAt" | "shared" | "mine">,
   scope: PinScope,
 ): Promise<void> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-  myUserId = user.id;
+  const { userId } = await getIdentity();
+  if (!userId) return;
+  myUserId = userId;
   if (scope === "team" && !myTeamId) scope = "personal"; // garde-fou : pas d'équipe
 
   applyOptimistic(pin, scope);
 
+  const supabase = createClient();
   if (scope === "none") {
-    await supabase.from("pins").delete().eq("user_id", user.id).eq("type", pin.type).eq("item_id", pin.id);
+    await supabase.from("pins").delete().eq("user_id", userId).eq("type", pin.type).eq("item_id", pin.id);
     return;
   }
   await supabase.from("pins").upsert(
     {
-      user_id: user.id,
+      user_id: userId,
       type: pin.type,
       item_id: pin.id,
       label: pin.label,

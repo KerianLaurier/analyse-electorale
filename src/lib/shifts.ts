@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getIdentity, onIdentityChange } from "@/lib/identity";
 
 /**
  * Permanences / créneaux de terrain d'une campagne — table `shifts` + table
@@ -68,20 +69,16 @@ function emit() {
 }
 
 async function load() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  myUserId = user?.id ?? null;
-  if (!user) {
+  const { userId, teamId } = await getIdentity();
+  myUserId = userId;
+  if (!userId) {
     myTeamId = null;
     shifts = [];
     emit();
     return;
   }
-  const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", user.id).single();
-  myTeamId = (prof?.team_id as string | null) ?? null;
-
+  myTeamId = teamId;
+  const supabase = createClient();
   const [{ data: rows }, { data: signupRows }] = await Promise.all([
     supabase.from("shifts").select("*").order("date", { ascending: true }),
     supabase.from("shift_signups").select("shift_id, user_id"),
@@ -121,11 +118,7 @@ function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
   void load();
-  createClient().auth.onAuthStateChange(() => {
-    // Différé hors du callback : appeler supabase dans onAuthStateChange (qui
-    // tient le verrou d'auth) provoque un deadlock ré-entrant.
-    setTimeout(() => void load(), 0);
-  });
+  onIdentityChange(() => void load());
 }
 
 export type NewShift = {
@@ -141,17 +134,15 @@ export type NewShift = {
 };
 
 export async function addShift(input: NewShift): Promise<void> {
+  const { userId } = await getIdentity();
+  if (!userId) return;
+  myUserId = userId;
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-  myUserId = user.id;
   const team_id = input.shared && myTeamId ? myTeamId : null;
   const { data } = await supabase
     .from("shifts")
     .insert({
-      user_id: user.id,
+      user_id: userId,
       team_id,
       title: input.title,
       kind: input.kind ?? "porte",
@@ -214,27 +205,23 @@ function setJoinedLocal(id: string, joined: boolean) {
 }
 
 export async function joinShift(id: string): Promise<void> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-  myUserId = user.id;
+  const { userId } = await getIdentity();
+  if (!userId) return;
+  myUserId = userId;
   const shift = shifts.find((s) => s.id === id);
   setJoinedLocal(id, true);
+  const supabase = createClient();
   await supabase
     .from("shift_signups")
-    .insert({ shift_id: id, user_id: user.id, team_id: shift?.teamId ?? null });
+    .insert({ shift_id: id, user_id: userId, team_id: shift?.teamId ?? null });
 }
 
 export async function leaveShift(id: string): Promise<void> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
+  const { userId } = await getIdentity();
+  if (!userId) return;
   setJoinedLocal(id, false);
-  await supabase.from("shift_signups").delete().eq("shift_id", id).eq("user_id", user.id);
+  const supabase = createClient();
+  await supabase.from("shift_signups").delete().eq("shift_id", id).eq("user_id", userId);
 }
 
 function subscribe(l: () => void): () => void {
