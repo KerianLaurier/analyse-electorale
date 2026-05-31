@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getIdentity, onIdentityChange } from "@/lib/identity";
 
 /**
  * Comptes-rendus de porte-à-porte (table `canvass_reports`) — partagés avec
@@ -79,19 +80,16 @@ function mapRow(r: Row): CanvassReport {
 }
 
 async function load() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  myUserId = user?.id ?? null;
-  if (!user) {
+  const { userId, teamId } = await getIdentity();
+  myUserId = userId;
+  if (!userId) {
     myTeamId = null;
     reports = [];
     emit();
     return;
   }
-  const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", user.id).single();
-  myTeamId = (prof?.team_id as string | null) ?? null;
+  myTeamId = teamId;
+  const supabase = createClient();
   const { data } = await supabase.from("canvass_reports").select("*").order("date", { ascending: false });
   reports = (data ?? []).map((r) => mapRow(r as Row));
   emit();
@@ -101,9 +99,7 @@ function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
   void load();
-  createClient().auth.onAuthStateChange(() => {
-    setTimeout(() => void load(), 0);
-  });
+  onIdentityChange(() => void load());
 }
 
 export type NewReport = {
@@ -121,17 +117,15 @@ export type NewReport = {
 };
 
 export async function addReport(input: NewReport): Promise<void> {
+  const { userId } = await getIdentity();
+  if (!userId) return;
+  myUserId = userId;
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-  myUserId = user.id;
   const team_id = input.shared && myTeamId ? myTeamId : null;
   const { data } = await supabase
     .from("canvass_reports")
     .insert({
-      user_id: user.id,
+      user_id: userId,
       team_id,
       sector_id: input.sectorId ?? null,
       zone: input.zone ?? null,
