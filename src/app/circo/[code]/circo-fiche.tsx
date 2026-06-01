@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Loader2, Map as MapIcon, Crosshair } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Loader2, Map as MapIcon, Crosshair, Target, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCircoHistory, type CircoTimelinePoint } from "@/lib/queries";
+import { CircoStrategie } from "./circo-strategie";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { candidatSlug } from "@/lib/personnes";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
@@ -35,9 +36,12 @@ function decodeCircoCode(code: string): { dept: string; num: number | null } {
 
 const ORDINAL = (n: number) => (n === 1 ? "1ʳᵉ" : `${n}ᵉ`);
 
+type CircoTab = "strategie" | "resultats";
+
 export function CircoFiche({ code }: { code: string }) {
   const history = useCircoHistory(code);
   const { dept, num } = decodeCircoCode(code);
+  const [tab, setTab] = useState<CircoTab>("strategie");
 
   const byScrutin = useMemo(() => {
     const map = new Map<Scrutin, CircoTimelinePoint>();
@@ -129,7 +133,35 @@ export function CircoFiche({ code }: { code: string }) {
       ) : ordered.length === 0 ? (
         <Empty code={code} />
       ) : (
-        <div className="mt-6 flex flex-col gap-8">
+        <>
+          <nav className="mt-5 inline-flex items-center gap-1 rounded-pill bg-surface-soft/70 p-1 text-[13px]">
+            {([
+              { id: "strategie", label: "Stratégie", icon: Target },
+              { id: "resultats", label: "Résultats", icon: BarChart3 },
+            ] as const).map((t) => {
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(10,10,12,0.18)]"
+                      : "text-foreground/70 hover:text-foreground hover:bg-surface/60",
+                  )}
+                >
+                  <t.icon className="h-3.5 w-3.5" /> {t.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {tab === "strategie" && <CircoStrategie code={code} history={history.data ?? []} />}
+
+          {tab === "resultats" && (
+            <div className="mt-6 flex flex-col gap-8">
           {deputy && latestLegis && (
             <section>
               <SectionTitle>Député·e en exercice (législatives 2024)</SectionTitle>
@@ -194,7 +226,9 @@ export function CircoFiche({ code }: { code: string }) {
               </div>
             </section>
           )}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
