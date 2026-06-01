@@ -11,7 +11,7 @@ import type { SectorAgg } from "@/lib/canvass";
 const Map = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[440px] items-center justify-center rounded-lg border border-black/5 bg-surface text-[13px] text-muted-foreground">
+    <div className="flex h-[440px] items-center justify-center rounded-lg border border-foreground/5 bg-surface text-[13px] text-muted-foreground">
       <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement de la carte…
     </div>
   ),
@@ -55,7 +55,7 @@ export function CanvassMap({
         maille="bureaux"
         choropleth={choropleth}
         bounds={(bounds.data as LngLatBounds | null) ?? null}
-        className="h-[440px] w-full overflow-hidden rounded-lg border border-black/5"
+        className="h-[440px] w-full overflow-hidden rounded-lg border border-foreground/5"
       />
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
         <Legend color="#16a34a" label="Travaillé" />

@@ -281,8 +281,8 @@ function CorrBar({ label, color, r }: { label: string; color: string; r: number 
           {r >= 0 ? "+" : ""}{r.toFixed(2)}
         </span>
       </div>
-      <div className="relative mt-1 h-2 rounded-full bg-black/[0.05]">
-        <span className="absolute left-1/2 top-0 h-full w-px bg-black/15" />
+      <div className="relative mt-1 h-2 rounded-full bg-foreground/[0.05]">
+        <span className="absolute left-1/2 top-0 h-full w-px bg-foreground/15" />
         <span
           className="absolute top-0 h-full rounded-full"
           style={{

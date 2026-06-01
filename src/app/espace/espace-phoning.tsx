@@ -39,7 +39,7 @@ export function EspacePhoning() {
   if (!phoningLoaded || !campaignLoaded) return <PanelsSkeleton />;
   if (!hasTeam) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-16 text-center">
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-16 text-center">
         <span className="grid h-12 w-12 place-items-center rounded-pill bg-warm/15 text-warm">
           <Phone className="h-5 w-5" />
         </span>
@@ -92,7 +92,7 @@ function ListsOverview({
   return (
     <div className="flex flex-col gap-5">
       {/* Sondage terrain phoning */}
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+      <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Target className="h-3.5 w-3.5" /> Sondage terrain · phoning
         </h2>
@@ -130,7 +130,7 @@ function ListsOverview({
       </section>
 
       {/* Listes d'appels */}
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+      <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <ListChecks className="h-3.5 w-3.5" /> Listes d’appels · {lists.length}
@@ -143,7 +143,7 @@ function ListsOverview({
         {creating && <NewListForm onDone={() => setCreating(false)} />}
 
         {lists.length === 0 && !creating ? (
-          <p className="mt-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
+          <p className="mt-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
             Aucune liste. Créez une liste d’appels (ex. « Adhérents 2024 ») puis importez les numéros à contacter.
           </p>
         ) : (
@@ -161,7 +161,7 @@ function ListsOverview({
 function ListCard({ list, contacts, onOpen }: { list: PhoneList; contacts: PhoneContact[]; onOpen: () => void }) {
   const s = summarizePhoning(contacts);
   return (
-    <button type="button" onClick={onOpen} className="group flex flex-col gap-2 rounded-lg border border-black/5 bg-canvas/40 p-4 text-left transition-colors hover:border-warm/40">
+    <button type="button" onClick={onOpen} className="group flex flex-col gap-2 rounded-lg border border-foreground/5 bg-canvas/40 p-4 text-left transition-colors hover:border-warm/40">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-[14px] font-medium">{list.name}</p>
@@ -231,14 +231,14 @@ function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: 
           <button
             type="button"
             onClick={() => { if (confirm(`Supprimer la liste « ${list.name} » et tous ses numéros ?`)) void deleteList(list.id); }}
-            className="inline-flex items-center gap-1.5 rounded-pill bg-black/[0.04] px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600"
+            className="inline-flex items-center gap-1.5 rounded-pill bg-foreground/[0.04] px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600"
           >
             <Trash2 className="h-3.5 w-3.5" /> Supprimer la liste
           </button>
         </div>
       </div>
 
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+      <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <KPI label="Numéros" value={fmtInt(s.total)} />
           <KPI label="Appelés" value={fmtInt(s.handled)} />
@@ -251,7 +251,7 @@ function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: 
       </section>
 
       {/* Import de numéros */}
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+      <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
         <div className="flex items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <Upload className="h-3.5 w-3.5" /> Importer des numéros
@@ -276,7 +276,7 @@ function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: 
       )}
 
       {/* File à appeler */}
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+      <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
         <h3 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Phone className="h-3.5 w-3.5" /> À appeler · {todo.length}
         </h3>
@@ -293,7 +293,7 @@ function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: 
 
       {/* Traités */}
       {handled.length > 0 && (
-        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+        <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
           <h3 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <Check className="h-3.5 w-3.5" /> Traités · {handled.length}
           </h3>
@@ -365,7 +365,7 @@ function ContactRow({ contact, defaultOpen }: { contact: PhoneContact; defaultOp
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-black/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-foreground hover:bg-black/[0.08]"
+          className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-foreground/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-foreground hover:bg-foreground/[0.08]"
         >
           {handled ? "Modifier" : <><PhoneCall className="h-3.5 w-3.5" /> Appeler</>}
         </button>
@@ -403,7 +403,7 @@ function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => vo
               key={st}
               type="button"
               onClick={() => setStatus(st)}
-              className={cn("rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors", status === st ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]")}
+              className={cn("rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors", status === st ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]")}
             >
               {CALL_STATUS_LABELS[st]}
             </button>
@@ -422,7 +422,7 @@ function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => vo
                 onClick={() => setOpinion((v) => (v === op ? null : op))}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                  opinion === op ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+                  opinion === op ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
                 )}
               >
                 <span className={cn("h-2 w-2 rounded-full", OPINION_TONE[op])} /> {CALL_OPINION_LABELS[op]}

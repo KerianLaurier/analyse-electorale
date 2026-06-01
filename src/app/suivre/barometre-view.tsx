@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useTheme } from "next-themes";
 import { Loader2, ExternalLink, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePolls2027, buildSeries, candidateColor, candidateShort, type SeriesPoint } from "@/lib/polls";
+import { usePolls2027, buildSeries, candidateColor, candidateShort, readableColor, type SeriesPoint } from "@/lib/polls";
 
 // Géométrie du graphe (viewBox responsive). Marge droite large = place pour les
 // étiquettes en bout de courbe (bien plus lisible qu'une légende de couleurs).
@@ -38,6 +39,11 @@ export function BarometreView() {
   const [institut, setInstitut] = useState<string | null>(null);
   const inst = institut ?? instituts[0] ?? null;
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+
+  // Couleur du candidat, éclaircie si besoin pour rester lisible en mode sombre.
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const col = useCallback((c: string) => readableColor(candidateColor(c), isDark), [isDark]);
 
   const series = useMemo<Map<string, SeriesPoint[]>>(
     () => (data && inst ? buildSeries(data.polls, inst, since) : new Map<string, SeriesPoint[]>()),
@@ -80,7 +86,7 @@ export function BarometreView() {
 
     // Étiquettes de fin : on écarte verticalement celles qui se chevauchent.
     const labels = visible
-      .map((s) => ({ cand: s.cand, color: candidateColor(s.cand), value: s.last, y: y(s.last) }))
+      .map((s) => ({ cand: s.cand, value: s.last, y: y(s.last) }))
       .sort((a, b) => a.y - b.y);
     const GAP = 15;
     for (let k = 1; k < labels.length; k++) {
@@ -130,7 +136,7 @@ export function BarometreView() {
             onClick={() => { setInstitut(n); setHidden(new Set()); }}
             className={cn(
               "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-              n === inst ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+              n === inst ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
             )}
           >
             {n}
@@ -168,14 +174,14 @@ export function BarometreView() {
             ))}
             {/* Courbes */}
             {geo.visible.map(({ cand, pts }) => {
-              const color = candidateColor(cand);
+              const color = col(cand);
               const last = pts[pts.length - 1];
               const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${geo.x(p.date).toFixed(1)},${geo.y(p.value).toFixed(1)}`).join(" ");
               return (
                 <g key={cand}>
                   <path d={d} fill="none" stroke={color} strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
                   {pts.map((p, i) => (
-                    <circle key={i} cx={geo.x(p.date)} cy={geo.y(p.value)} r={i === pts.length - 1 ? 3.5 : 2} fill={color} stroke="var(--surface, #fff)" strokeWidth={i === pts.length - 1 ? 1.5 : 0} />
+                    <circle key={i} cx={geo.x(p.date)} cy={geo.y(p.value)} r={i === pts.length - 1 ? 3.5 : 2} fill={color} stroke="var(--surface)" strokeWidth={i === pts.length - 1 ? 1.5 : 0} />
                   ))}
                   {/* Trait de liaison vers l'étiquette */}
                   <line
@@ -192,7 +198,7 @@ export function BarometreView() {
             })}
             {/* Étiquettes en bout de courbe (écartées si chevauchement) */}
             {geo.labels.map((l) => (
-              <text key={l.cand} x={W - PAD.r + 12} y={l.y + 3.5} className="text-[11px]" fill={l.color}>
+              <text key={l.cand} x={W - PAD.r + 12} y={l.y + 3.5} className="text-[11px]" fill={col(l.cand)}>
                 <tspan className="font-semibold">{candidateShort(l.cand)}</tspan>
                 <tspan className="font-bold tabular-nums"> {l.value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}</tspan>
               </text>
@@ -211,7 +217,7 @@ export function BarometreView() {
                   className={cn("inline-flex items-center gap-1.5 text-[12px] transition-opacity hover:opacity-100", off ? "opacity-35" : "opacity-90")}
                   aria-pressed={!off}
                 >
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: candidateColor(cand) }} />
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: col(cand) }} />
                   {candidateShort(cand)}
                 </button>
               );

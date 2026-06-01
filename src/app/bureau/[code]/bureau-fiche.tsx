@@ -79,7 +79,7 @@ export function BureauFiche({ code }: { code: string }) {
         Explorer
       </Link>
 
-      <header className="mt-3 flex flex-wrap items-end justify-between gap-3 border-b border-black/5 pb-5">
+      <header className="mt-3 flex flex-wrap items-end justify-between gap-3 border-b border-foreground/5 pb-5">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Bureau de vote
@@ -99,7 +99,7 @@ export function BureauFiche({ code }: { code: string }) {
           {insee && (
             <Link
               href={`/commune/${encodeURIComponent(insee)}`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-black/[0.08]"
+              className="inline-flex items-center gap-1.5 rounded-full bg-foreground/[0.04] px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-foreground/[0.08]"
             >
               <Building2 className="h-3.5 w-3.5" />
               Commune
@@ -107,7 +107,7 @@ export function BureauFiche({ code }: { code: string }) {
           )}
           <Link
             href={`/explorer?maille=bureaux&scrutin=legis-2024-t2&code=${encodeURIComponent(code)}`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
             <MapIcon className="h-3.5 w-3.5" />
             Voir sur la carte
@@ -152,7 +152,7 @@ export function BureauFiche({ code }: { code: string }) {
           {latest && (
             <section>
               <SectionTitle>Détail — {SCRUTIN_META[latest.scrutin].short}</SectionTitle>
-              <div className="mt-2 rounded-2xl border border-black/5 bg-white/60 p-5">
+              <div className="mt-2 rounded-2xl border border-foreground/5 bg-surface/60 p-5">
                 <ResultBars detail={latest} />
               </div>
             </section>
@@ -166,7 +166,7 @@ export function BureauFiche({ code }: { code: string }) {
 function ScrutinRow({ point }: { point: CircoTimelinePoint }) {
   const winner = point.candidates[0];
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-black/5 bg-white/60 px-3.5 py-3">
+    <div className="flex items-center gap-3 rounded-xl border border-foreground/5 bg-surface/60 px-3.5 py-3">
       <div className="w-[112px] shrink-0">
         <p className="text-[12px] font-medium leading-tight">{SCRUTIN_META[point.scrutin].short}</p>
         <p className="text-[10px] text-muted-foreground">Part. {fmtPct(point.participation, 0)}</p>
@@ -200,7 +200,7 @@ function ResultBars({ detail }: { detail: CircoTimelinePoint }) {
             </span>
             <span className="shrink-0 tabular-nums text-muted-foreground">{fmtPct(c.pct)}</span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.05]">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.05]">
             <div
               className="h-full rounded-full"
               style={{ width: `${(c.pct / max) * 100}%`, background: nuanceColor(c.nuance) }}
@@ -222,7 +222,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function KPI({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-white/60 p-3">
+    <div className="rounded-xl border border-foreground/5 bg-surface/60 p-3">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-[15px] font-semibold tabular-nums tracking-tight">{value}</p>
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
@@ -241,14 +241,14 @@ function Loading() {
 
 function Empty({ code }: { code: string }) {
   return (
-    <div className="mt-10 rounded-2xl border border-black/5 bg-white/60 p-8 text-center">
+    <div className="mt-10 rounded-2xl border border-foreground/5 bg-surface/60 p-8 text-center">
       <p className="text-[13px] font-medium">Aucune donnée pour le bureau {code}</p>
       <p className="mt-1 text-[12px] text-muted-foreground">
         Format attendu : « {`{INSEE}_{numéro}`} » (ex. « 01001_0001 »).
       </p>
       <Link
         href="/explorer?maille=bureaux&scrutin=legis-2024-t2"
-        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
       >
         <MapIcon className="h-3.5 w-3.5" />
         Ouvrir l&apos;explorateur

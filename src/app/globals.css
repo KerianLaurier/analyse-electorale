@@ -60,14 +60,11 @@
   --radius-xl: 16px;
   --radius-pill: 999px;
 
-  --shadow-card: 0 1px 2px rgba(10, 10, 12, 0.04), 0 0 0 1px rgba(10, 10, 12, 0.08);
-  --shadow-floating:
-    0 24px 64px -16px rgba(10, 10, 12, 0.16),
-    0 6px 18px rgba(10, 10, 12, 0.06);
-  --shadow-ring: 0 0 0 1px rgba(0, 0, 0, 0.1);
-  --shadow-ring-strong:
-    0 0 0 2px rgba(255, 255, 255, 0.9),
-    0 0 0 3px rgba(10, 10, 12, 0.1);
+  /* Ombres pilotées par des variables → adaptées au thème (cf. :root / .dark). */
+  --shadow-card: var(--sh-card);
+  --shadow-floating: var(--sh-floating);
+  --shadow-ring: var(--sh-ring);
+  --shadow-ring-strong: var(--sh-ring-strong);
 }
 
 :root {
@@ -131,6 +128,12 @@
   --sidebar-accent-foreground: #1f1f23;
   --sidebar-border: #c8c8cc;
   --sidebar-ring: rgba(10, 10, 12, 0.18);
+
+  /* Ombres — thème clair */
+  --sh-card: 0 1px 2px rgba(10, 10, 12, 0.04), 0 0 0 1px rgba(10, 10, 12, 0.08);
+  --sh-floating: 0 24px 64px -16px rgba(10, 10, 12, 0.16), 0 6px 18px rgba(10, 10, 12, 0.06);
+  --sh-ring: 0 0 0 1px rgba(0, 0, 0, 0.1);
+  --sh-ring-strong: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 0 3px rgba(10, 10, 12, 0.1);
 }
 
 .dark {
@@ -187,6 +190,12 @@
   --sidebar-accent-foreground: #fafaf8;
   --sidebar-border: rgba(250, 250, 248, 0.12);
   --sidebar-ring: rgba(250, 250, 248, 0.18);
+
+  /* Ombres — thème sombre : hairline clair pour détacher les cartes du canvas */
+  --sh-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(250, 250, 248, 0.1);
+  --sh-floating: 0 24px 64px -16px rgba(0, 0, 0, 0.7), 0 6px 18px rgba(0, 0, 0, 0.45);
+  --sh-ring: 0 0 0 1px rgba(250, 250, 248, 0.14);
+  --sh-ring-strong: 0 0 0 2px rgba(10, 10, 12, 0.9), 0 0 0 3px rgba(250, 250, 248, 0.18);
 }
 
 @layer base {

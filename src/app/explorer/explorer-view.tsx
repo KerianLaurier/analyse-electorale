@@ -347,7 +347,7 @@ function ExplorerView() {
         />
       </div>
 
-      <aside className="z-10 flex w-[340px] shrink-0 flex-col border-l border-black/5 bg-white/70 backdrop-blur">
+      <aside className="z-10 flex w-[340px] shrink-0 flex-col border-l border-foreground/5 bg-surface/70 backdrop-blur">
         <FicheTerritoire
           code={code}
           maille={maille}
@@ -381,7 +381,7 @@ function ControlsPanel({
   const colorations = colorationsFor(scrutin);
 
   return (
-    <div className="z-10 flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-black/5 bg-white/70 p-4 backdrop-blur">
+    <div className="z-10 flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-foreground/5 bg-surface/70 p-4 backdrop-blur">
       <div className="flex items-center justify-between">
         <h2 className="text-[13px] font-semibold tracking-tight">Explorer</h2>
         {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
@@ -389,7 +389,7 @@ function ControlsPanel({
 
       <ScrutinPicker scrutin={scrutin} update={update} />
 
-      <div className="h-px bg-black/5" />
+      <div className="h-px bg-foreground/5" />
 
       <Section title="Maille">
         <div className="flex flex-col gap-1">
@@ -399,11 +399,11 @@ function ControlsPanel({
               onClick={() => update({ maille: m, code: null })}
               className={cn(
                 "flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition-colors",
-                maille === m ? "bg-black text-white" : "hover:bg-black/[0.04]",
+                maille === m ? "bg-primary text-primary-foreground" : "hover:bg-foreground/[0.04]",
               )}
             >
               <span>{MAILLE_LABELS[m]}</span>
-              <span className={cn("text-[10px] tabular-nums", maille === m ? "text-white/60" : "text-muted-foreground")}>
+              <span className={cn("text-[10px] tabular-nums", maille === m ? "text-primary-foreground/60" : "text-muted-foreground")}>
                 {fmtInt(MAILLE_COUNTS[m])}
               </span>
             </button>
@@ -463,7 +463,7 @@ function ScrutinPicker({
                 "rounded-lg px-2.5 py-1.5 text-center text-[12px] font-medium transition-colors",
                 family === f
                   ? "bg-warm/15 text-foreground ring-1 ring-warm/40"
-                  : "bg-black/[0.04] text-muted-foreground hover:bg-black/[0.08]",
+                  : "bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.08]",
               )}
             >
               {FAMILY_LABELS[f]}
@@ -484,7 +484,7 @@ function ScrutinPicker({
             </div>
           </Section>
           <Section title="Tour">
-            <div className="inline-flex rounded-lg bg-black/[0.04] p-0.5">
+            <div className="inline-flex rounded-lg bg-foreground/[0.04] p-0.5">
               {tours.map((t) => (
                 <button
                   key={t}
@@ -492,7 +492,7 @@ function ScrutinPicker({
                   className={cn(
                     "rounded-md px-3 py-1 text-[11px] font-medium transition-colors",
                     tour === t
-                      ? "bg-black text-white shadow-sm"
+                      ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -522,7 +522,7 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={onClick}
       className={cn(
         "rounded-full px-3 py-1 text-[11px] font-medium transition-colors",
-        active ? "bg-black text-white" : "bg-black/[0.04] text-muted-foreground hover:bg-black/[0.08]",
+        active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.08]",
       )}
     >
       {children}
@@ -535,16 +535,16 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
 function MapTopBar({ scrutin, onOpenSearch }: { scrutin: Scrutin; onOpenSearch: () => void }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between p-3">
-      <div className="pointer-events-auto rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground shadow-sm backdrop-blur">
+      <div className="pointer-events-auto rounded-full bg-surface/90 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground shadow-sm backdrop-blur">
         {SCRUTIN_META[scrutin].long}
       </div>
       <button
         onClick={onOpenSearch}
-        className="pointer-events-auto flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-[12px] text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground"
+        className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-[12px] text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground"
       >
         <Search className="h-3.5 w-3.5" />
         Rechercher un territoire
-        <kbd className="rounded bg-black/[0.06] px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+        <kbd className="rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[10px]">⌘K</kbd>
       </button>
     </div>
   );
@@ -562,7 +562,7 @@ function MapBottomLegend({
   winnerRows?: WinningNuanceRow[];
 }) {
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[280px] rounded-xl bg-white/90 p-3 shadow-sm backdrop-blur">
+    <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[280px] rounded-xl bg-surface/90 p-3 shadow-sm backdrop-blur">
       <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {COLORATION_LABELS[coloration]}
       </p>
@@ -684,7 +684,7 @@ function FicheTerritoire({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-start justify-between gap-2 border-b border-black/5 p-4">
+      <div className="flex items-start justify-between gap-2 border-b border-foreground/5 p-4">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {MAILLE_LABELS[maille]}
@@ -708,13 +708,13 @@ function FicheTerritoire({
         </div>
         <button
           onClick={onClear}
-          className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-black/[0.05] hover:text-foreground"
+          className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="flex gap-1 border-b border-black/5 px-3 pt-2">
+      <div className="flex gap-1 border-b border-foreground/5 px-3 pt-2">
         {tabs.filter((t) => t.enabled).map((t) => (
           <button
             key={t.id}
@@ -776,7 +776,7 @@ function ResultsBlock({ detail }: { detail: ScrutinDetail }) {
               </span>
               <span className="shrink-0 tabular-nums text-muted-foreground">{fmtPct(c.pct)}</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.05]">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.05]">
               <div
                 className="h-full rounded-full"
                 style={{ width: `${(c.pct / maxPct) * 100}%`, background: nuanceColor(c.nuance) }}
@@ -853,7 +853,7 @@ function FranceBlock({
           ? `${up ? "+" : ""}${(delta * (r.label === "Participation" ? 100 : 1)).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pts`
           : `${up ? "+" : ""}${((delta / r.national) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
         return (
-          <div key={r.label} className="rounded-xl border border-black/5 bg-white/60 p-3">
+          <div key={r.label} className="rounded-xl border border-foreground/5 bg-surface/60 p-3">
             <p className="text-[11px] text-muted-foreground">{r.label}</p>
             <div className="mt-0.5 flex items-baseline justify-between gap-2">
               <span className="text-[16px] font-semibold tabular-nums">{r.fmt(r.local)}</span>
@@ -871,7 +871,7 @@ function FranceBlock({
 
 function KPICard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-white/60 p-2.5">
+    <div className="rounded-xl border border-foreground/5 bg-surface/60 p-2.5">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-[15px] font-semibold tabular-nums tracking-tight">{value}</p>
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
@@ -897,10 +897,10 @@ function FicheUnavailable() {
 function FicheLoading() {
   return (
     <div className="flex flex-col gap-3">
-      <div className="h-6 w-2/3 animate-pulse rounded bg-black/[0.06]" />
-      <div className="h-2 w-full animate-pulse rounded bg-black/[0.06]" />
-      <div className="h-2 w-5/6 animate-pulse rounded bg-black/[0.06]" />
-      <div className="h-2 w-4/6 animate-pulse rounded bg-black/[0.06]" />
+      <div className="h-6 w-2/3 animate-pulse rounded bg-foreground/[0.06]" />
+      <div className="h-2 w-full animate-pulse rounded bg-foreground/[0.06]" />
+      <div className="h-2 w-5/6 animate-pulse rounded bg-foreground/[0.06]" />
+      <div className="h-2 w-4/6 animate-pulse rounded bg-foreground/[0.06]" />
     </div>
   );
 }

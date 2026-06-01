@@ -92,7 +92,7 @@ export function CircoFiche({ code }: { code: string }) {
         Explorer
       </Link>
 
-      <header className="mt-3 flex flex-wrap items-end justify-between gap-3 border-b border-black/5 pb-5">
+      <header className="mt-3 flex flex-wrap items-end justify-between gap-3 border-b border-foreground/5 pb-5">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Circonscription législative
@@ -114,14 +114,14 @@ export function CircoFiche({ code }: { code: string }) {
           {ordered.length > 0 && <ExportButton onClick={exportCsv} />}
           <Link
             href={`/analyser/ciblage?circo=${encodeURIComponent(code)}`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-black/[0.08]"
+            className="inline-flex items-center gap-1.5 rounded-full bg-foreground/[0.04] px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-foreground/[0.08]"
           >
             <Crosshair className="h-3.5 w-3.5" />
             Ciblage terrain
           </Link>
           <Link
             href={`/explorer?maille=circonscriptions&scrutin=legis-2024-t2&code=${encodeURIComponent(code)}`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
             <MapIcon className="h-3.5 w-3.5" />
             Voir sur la carte
@@ -174,7 +174,7 @@ export function CircoFiche({ code }: { code: string }) {
               <SectionTitle>Député·e en exercice (législatives 2024)</SectionTitle>
               <Link
                 href={`/elu/${encodeURIComponent(code)}`}
-                className="mt-2 flex flex-wrap items-center gap-4 rounded-2xl border border-black/5 bg-white/60 p-5 transition-colors hover:bg-white"
+                className="mt-2 flex flex-wrap items-center gap-4 rounded-2xl border border-foreground/5 bg-surface/60 p-5 transition-colors hover:bg-surface"
               >
                 <div
                   className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-white"
@@ -222,7 +222,7 @@ export function CircoFiche({ code }: { code: string }) {
               <SectionTitle>
                 Détail — {SCRUTIN_META[latestLegis.scrutin].short}
               </SectionTitle>
-              <div className="mt-2 rounded-2xl border border-black/5 bg-white/60 p-5">
+              <div className="mt-2 rounded-2xl border border-foreground/5 bg-surface/60 p-5">
                 <ResultBars detail={latestLegis} />
                 <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <KPI label="Inscrits" value={fmtInt(latestLegis.inscrits)} />
@@ -246,7 +246,7 @@ function ScrutinRow({ point }: { point: CircoTimelinePoint }) {
   const winner = top[0];
   const margin = top.length >= 2 ? top[0].pct - top[1].pct : top[0]?.pct ?? 0;
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-black/5 bg-white/60 px-3.5 py-3">
+    <div className="flex items-center gap-3 rounded-xl border border-foreground/5 bg-surface/60 px-3.5 py-3">
       <div className="w-[112px] shrink-0">
         <p className="text-[12px] font-medium leading-tight">{SCRUTIN_META[point.scrutin].short}</p>
         <p className="text-[10px] text-muted-foreground">Part. {fmtPct(point.participation, 0)}</p>
@@ -273,7 +273,7 @@ function ScrutinRow({ point }: { point: CircoTimelinePoint }) {
         <span className="flex-1 text-[12px] text-muted-foreground">Données indisponibles</span>
       )}
       <span
-        className="shrink-0 rounded-full bg-black/[0.04] px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground"
+        className="shrink-0 rounded-full bg-foreground/[0.04] px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground"
         title="Avance du 1er sur le 2e (marginalité)"
       >
         +{fmtPts(margin)}
@@ -305,7 +305,7 @@ function ResultBars({ detail }: { detail: CircoTimelinePoint }) {
             </span>
             <span className="shrink-0 tabular-nums text-muted-foreground">{fmtPct(c.pct)}</span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.05]">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.05]">
             <div
               className="h-full rounded-full"
               style={{ width: `${(c.pct / max) * 100}%`, background: nuanceColor(c.nuance) }}
@@ -327,7 +327,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function KPI({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-white/60 p-2.5">
+    <div className="rounded-xl border border-foreground/5 bg-surface/60 p-2.5">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-[15px] font-semibold tabular-nums tracking-tight">{value}</p>
     </div>
@@ -345,7 +345,7 @@ function Loading() {
 
 function Empty({ code }: { code: string }) {
   return (
-    <div className="mt-10 rounded-2xl border border-black/5 bg-white/60 p-8 text-center">
+    <div className="mt-10 rounded-2xl border border-foreground/5 bg-surface/60 p-8 text-center">
       <p className="text-[13px] font-medium">Aucune donnée pour la circonscription {code}</p>
       <p className="mt-1 text-[12px] text-muted-foreground">
         Vérifie le code (format INSEE, ex. « 2602 ») ou explore la carte.
@@ -353,8 +353,8 @@ function Empty({ code }: { code: string }) {
       <Link
         href="/explorer?maille=circonscriptions&scrutin=legis-2024-t2"
         className={cn(
-          "mt-4 inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5",
-          "text-[12px] font-medium text-white transition-opacity hover:opacity-90",
+          "mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5",
+          "text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90",
         )}
       >
         <MapIcon className="h-3.5 w-3.5" />

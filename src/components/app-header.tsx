@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { initials } from "@/lib/team";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
+import { ThemeSwitch } from "@/components/theme-switch";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -199,6 +200,11 @@ export function AppHeader() {
                 Changer le mot de passe
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <div className="px-2 py-1.5">
+                <p className="mb-1.5 px-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Apparence</p>
+                <ThemeSwitch />
+              </div>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut}>
                 <LogOut className="h-4 w-4" />
                 Se déconnecter
@@ -212,7 +218,7 @@ export function AppHeader() {
       {/* Navigation basse (mobile) — sections principales, ergonomie pouce */}
       <nav
         aria-label="Sections principales"
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-canvas/95 backdrop-blur supports-[backdrop-filter]:bg-canvas/80 lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-canvas/95 backdrop-blur supports-[backdrop-filter]:bg-canvas/80 lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {PRIMARY_NAV.map((item) => {
@@ -293,7 +299,7 @@ function NotificationsBell({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-black/10 bg-surface shadow-[0_8px_30px_rgba(10,10,12,0.18)]">
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-foreground/10 bg-surface shadow-[0_8px_30px_rgba(10,10,12,0.18)]">
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-[12px] font-semibold">Notifications</span>
             {count > 0 && (
@@ -330,7 +336,7 @@ function NotificationsBell({
                       type="button"
                       onClick={() => dismissNotification(n.id)}
                       aria-label="Marquer comme lu"
-                      className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground"
+                      className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>

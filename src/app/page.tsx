@@ -92,7 +92,7 @@ export default async function HomePage() {
   return (
     <div className="flex-1 bg-canvas">
       {/* En-tête landing (header propre, sans navbar applicative) */}
-      <header className="sticky top-0 z-40 border-b border-black/5 bg-canvas/80 backdrop-blur supports-[backdrop-filter]:bg-canvas/70">
+      <header className="sticky top-0 z-40 border-b border-foreground/5 bg-canvas/80 backdrop-blur supports-[backdrop-filter]:bg-canvas/70">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <span aria-hidden className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground">
@@ -413,10 +413,10 @@ function HeroMockup() {
     <div className="relative lg:pl-4">
       <div
         aria-hidden
-        className="overflow-hidden rounded-xl border border-black/10 bg-surface shadow-[0_24px_60px_-24px_rgba(10,10,12,0.30)]"
+        className="overflow-hidden rounded-xl border border-foreground/10 bg-surface shadow-[0_24px_60px_-24px_rgba(10,10,12,0.30)]"
       >
         {/* Chrome navigateur */}
-        <div className="flex items-center gap-1.5 border-b border-black/5 bg-surface-soft/60 px-3 py-2">
+        <div className="flex items-center gap-1.5 border-b border-foreground/5 bg-surface-soft/60 px-3 py-2">
           <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
@@ -440,14 +440,14 @@ function HeroMockup() {
               ["Permanences", "5"],
               ["Contactées", "1 847"],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-lg border border-black/5 bg-canvas/40 p-2.5">
+              <div key={label} className="rounded-lg border border-foreground/5 bg-canvas/40 p-2.5">
                 <p className="text-[16px] font-semibold tabular-nums leading-none">{value}</p>
                 <p className="mt-1 text-[9px] text-muted-foreground">{label}</p>
               </div>
             ))}
           </div>
           {/* Sondage terrain */}
-          <div className="mt-3 rounded-lg border border-black/5 p-3">
+          <div className="mt-3 rounded-lg border border-foreground/5 p-3">
             <div className="flex items-center justify-between text-[10px]">
               <span className="font-semibold uppercase tracking-[0.06em] text-muted-foreground">Sondage terrain</span>
               <span className="font-semibold text-emerald-600">58 % favorables</span>

@@ -127,7 +127,7 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
         <button
           type="button"
           onClick={() => setTab("canvass")}
-          className="rounded-lg border border-black/5 bg-surface p-4 text-left shadow-card transition-colors hover:border-warm/30"
+          className="rounded-lg border border-foreground/5 bg-surface p-4 text-left shadow-card transition-colors hover:border-warm/30"
         >
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -181,7 +181,7 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
             {notes.slice(0, 4).map((n) => (
-              <li key={n.id} className="rounded-lg border border-black/5 bg-canvas/40 p-3">
+              <li key={n.id} className="rounded-lg border border-foreground/5 bg-canvas/40 p-3">
                 {n.title && <p className="truncate text-[13px] font-medium">{n.title}</p>}
                 <p className="line-clamp-2 text-[12px] text-muted-foreground">{n.body}</p>
                 {n.context && (
@@ -197,7 +197,7 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
 
       {/* Qui fait quoi — équipe & rôles */}
       {ctx.teamId && ctx.members.length > 0 && (
-        <section className="rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+        <section className="rounded-lg border border-foreground/5 bg-surface p-4 shadow-card">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               <Users2 className="h-3.5 w-3.5" /> Qui fait quoi
@@ -273,7 +273,7 @@ function Stat({
       onClick={onClick}
       className={cn(
         "flex flex-col items-start gap-1 rounded-lg border p-4 text-left shadow-card transition-colors",
-        accent ? "border-warm/30 bg-warm/[0.06] hover:bg-warm/[0.1]" : "border-black/5 bg-surface hover:border-warm/30",
+        accent ? "border-warm/30 bg-warm/[0.06] hover:bg-warm/[0.1]" : "border-foreground/5 bg-surface hover:border-warm/30",
       )}
     >
       <Icon className={cn("h-4 w-4", accent ? "text-warm" : "text-muted-foreground")} />
@@ -295,7 +295,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+    <section className="rounded-lg border border-foreground/5 bg-surface p-4 shadow-card">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Icon className="h-3.5 w-3.5" /> {title}

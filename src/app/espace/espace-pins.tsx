@@ -26,7 +26,7 @@ export function EspacePins() {
 
   if (pins.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-16 text-center">
+      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-16 text-center">
         <span className="grid h-12 w-12 place-items-center rounded-pill bg-warm/15 text-warm">
           <Star className="h-5 w-5" />
         </span>
@@ -71,7 +71,7 @@ export function EspacePins() {
 
 function PinCard({ pin }: { pin: Pin }) {
   return (
-    <div className="group flex items-center gap-3 rounded-lg border border-black/5 bg-surface p-3.5 shadow-card transition-colors hover:border-warm/40">
+    <div className="group flex items-center gap-3 rounded-lg border border-foreground/5 bg-surface p-3.5 shadow-card transition-colors hover:border-warm/40">
       <Link href={pin.href} className="flex min-w-0 flex-1 items-center gap-3">
         <div className="min-w-0">
           <p className="flex items-center gap-2 truncate text-[14px] font-medium">

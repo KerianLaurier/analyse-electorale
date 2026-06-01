@@ -86,7 +86,7 @@ export function CiblageView() {
         <ArrowLeft className="h-3.5 w-3.5" /> Analyser
       </Link>
 
-      <header className="mt-3 border-b border-black/5 pb-5">
+      <header className="mt-3 border-b border-foreground/5 pb-5">
         <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Crosshair className="h-3.5 w-3.5" /> Ciblage terrain
         </p>
@@ -191,7 +191,7 @@ export function CiblageView() {
             </div>
           )}
 
-          <div className="mt-3 overflow-x-auto rounded-lg border border-black/5 bg-surface shadow-card">
+          <div className="mt-3 overflow-x-auto rounded-lg border border-foreground/5 bg-surface shadow-card">
             <table className="w-full border-collapse text-[12.5px]">
               <thead>
                 <tr className="border-b border-border/60 text-left text-[10.5px] uppercase tracking-wide text-muted-foreground">
@@ -247,7 +247,7 @@ function Row({ b, rank, blocMode }: { b: TargetBureau; rank: number; blocMode: b
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center gap-2">
-          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-black/[0.06]">
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-foreground/[0.06]">
             <div className={cn("h-full rounded-full", priorityClass(b.priority))} style={{ width: `${b.priority}%` }} />
           </div>
           <span className="w-6 tabular-nums font-semibold">{b.priority}</span>
@@ -259,7 +259,7 @@ function Row({ b, rank, blocMode }: { b: TargetBureau; rank: number; blocMode: b
 
 function KPI({ label, value, small }: { label: string; value: string; small?: boolean }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-surface p-3 shadow-card">
+    <div className="rounded-xl border border-foreground/5 bg-surface p-3 shadow-card">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className={cn("mt-0.5 font-semibold tabular-nums tracking-tight", small ? "truncate text-[13px]" : "text-[16px]")}>{value}</p>
     </div>
@@ -276,7 +276,7 @@ function Loading() {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-8 flex flex-col items-center gap-2 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-14 text-center">
+    <div className="mt-8 flex flex-col items-center gap-2 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-14 text-center">
       <span className="grid h-11 w-11 place-items-center rounded-pill bg-warm/15 text-warm">
         <MapPin className="h-5 w-5" />
       </span>

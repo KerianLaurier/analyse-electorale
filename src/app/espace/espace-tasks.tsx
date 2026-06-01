@@ -84,7 +84,7 @@ export function EspaceTasks({ ctx }: { ctx: WsContext }) {
           onClick={() => setOnlyMine((v) => !v)}
           className={cn(
             "ml-auto inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-            onlyMine ? "bg-warm/15 text-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+            onlyMine ? "bg-warm/15 text-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
           )}
         >
           <User className="h-3.5 w-3.5" /> Mes actions
@@ -105,7 +105,7 @@ export function EspaceTasks({ ctx }: { ctx: WsContext }) {
       {showForm && <TaskForm ctx={ctx} onDone={() => setShowForm(false)} />}
 
       {visible.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-10 text-center text-[13px] text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-4 py-10 text-center text-[13px] text-muted-foreground">
           Aucune action {filter !== "all" ? `« ${TASK_STATUS_LABELS[filter as TaskStatus]} »` : ""}. Les actions sont les
           tâches d’organisation (communication, logistique, démarches…). Les sessions de terrain
           collectives (porte-à-porte, tractage…) se planifient dans l’onglet Permanences.
@@ -128,7 +128,7 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
       onClick={onClick}
       className={cn(
         "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-        active ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+        active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
       )}
     >
       {children}
@@ -236,7 +236,7 @@ function TaskRow({ task, ctx }: { task: Task; ctx: WsContext }) {
   const StatusIcon = task.status === "doing" ? CircleDot : done ? Check : Circle;
 
   return (
-    <div className={cn("flex items-start gap-3 rounded-lg border border-black/5 bg-surface p-3.5 shadow-card", done && "opacity-70")}>
+    <div className={cn("flex items-start gap-3 rounded-lg border border-foreground/5 bg-surface p-3.5 shadow-card", done && "opacity-70")}>
       <button
         type="button"
         aria-label={done ? "Marquer à faire" : "Marquer comme fait"}

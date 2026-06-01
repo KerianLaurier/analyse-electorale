@@ -191,7 +191,7 @@ function PresseLocaleView() {
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] text-muted-foreground">Exemples :</span>
         {["Élections législatives", "Conseil municipal", "Mobilisation locale"].map((ex) => (
-          <button key={ex} type="button" onClick={() => quick(ex)} className="rounded-pill bg-black/[0.04] px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-black/[0.08]">
+          <button key={ex} type="button" onClick={() => quick(ex)} className="rounded-pill bg-foreground/[0.04] px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-foreground/[0.08]">
             {ex}
           </button>
         ))}
@@ -223,7 +223,7 @@ function PresseLocaleView() {
                     href={a.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block rounded-lg border border-black/5 bg-canvas/40 p-3 transition-colors hover:border-warm/40"
+                    className="block rounded-lg border border-foreground/5 bg-canvas/40 p-3 transition-colors hover:border-warm/40"
                   >
                     <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                       <span className="inline-flex items-center gap-1 font-medium">

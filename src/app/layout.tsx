@@ -40,15 +40,14 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {/* Thème clair forcé : le mode sombre n'est pas encore finalisé (de
-            nombreuses couleurs sont en dur). On évite ainsi un rendu cassé pour
-            les utilisateurs dont l'OS est en sombre. Le dark mode propre pourra
-            être réactivé via `enableSystem`/un sélecteur dans un sprint dédié. */}
+        {/* Thème : clair par défaut, sombre disponible via le sélecteur du menu
+            profil (next-themes pose `.dark` sur <html>). `enableSystem` permet
+            l'option « Système ». Toutes les surfaces/bordures passent par des
+            tokens CSS (cf. globals.css → :root / .dark). */}
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
-          enableSystem={false}
-          forcedTheme="light"
+          enableSystem
           disableTransitionOnChange
         >
           <QueryProvider>

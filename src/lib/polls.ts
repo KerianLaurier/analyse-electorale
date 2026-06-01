@@ -95,6 +95,24 @@ export function candidateColor(label: string): string {
   return FALLBACK[h % FALLBACK.length];
 }
 
+/**
+ * Éclaircit une couleur trop sombre pour rester lisible sur fond sombre
+ * (mélange vers le blanc proportionnel au déficit de luminance). No-op en clair
+ * ou si la couleur est déjà assez claire — la teinte (famille) est préservée.
+ */
+export function readableColor(hex: string, isDark: boolean): string {
+  if (!isDark) return hex;
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  if (lum >= 0.4) return hex;
+  const t = ((0.4 - lum) / 0.4) * 0.6; // jusqu'à 60 % vers le blanc
+  const mix = (c: number) => Math.round(c + (255 - c) * t);
+  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
 /** Libellé court (sans le parti). */
 export function candidateShort(label: string): string {
   return label.replace(/\s*\([^)]*\)\s*/g, "").replace(/\[[a-z0-9]\]/g, "").trim() || label;

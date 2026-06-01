@@ -187,7 +187,7 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
             <button
               type="button"
               onClick={() => { void navigator.clipboard?.writeText(`${created.email} / ${created.password}`); setCopied(true); }}
-              className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-white/70 px-2.5 py-1 text-[11px] font-medium hover:bg-white"
+              className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-surface/70 px-2.5 py-1 text-[11px] font-medium hover:bg-surface"
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copié" : "Copier"}
             </button>
@@ -223,7 +223,7 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
         </div>
 
         {/* Table */}
-        <div className="mt-3 overflow-x-auto rounded-lg border border-black/5 bg-surface shadow-card">
+        <div className="mt-3 overflow-x-auto rounded-lg border border-foreground/5 bg-surface shadow-card">
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
               <tr className="border-b border-border/60 text-left text-[10.5px] uppercase tracking-wide text-muted-foreground">
@@ -305,7 +305,7 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: "emerald" | "warm" }) {
   return (
-    <div className="rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+    <div className="rounded-lg border border-foreground/5 bg-surface p-4 shadow-card">
       <p className={cn("text-[22px] font-semibold tabular-nums leading-none", tone === "emerald" ? "text-emerald-600" : tone === "warm" ? "text-warm" : "")}>{value}</p>
       <p className="mt-1 text-[11.5px] text-muted-foreground">{label}</p>
     </div>
@@ -410,7 +410,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={onClick}
       className={cn(
         "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-        active ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+        active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
       )}
     >
       {children}

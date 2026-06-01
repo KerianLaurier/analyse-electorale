@@ -46,7 +46,7 @@ export function EspaceTerritoire() {
 
   if (!target && geoCount === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-16 text-center">
+      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-16 text-center">
         <span className="grid h-12 w-12 place-items-center rounded-pill bg-warm/15 text-warm">
           <MapPin className="h-5 w-5" />
         </span>
@@ -162,7 +162,7 @@ function CircoSnapshot({
       href={href}
       className={cn(
         "group flex flex-col gap-3 rounded-lg border p-4 shadow-card transition-colors",
-        highlight ? "border-warm/30 bg-warm/[0.06] hover:bg-warm/[0.1]" : "border-black/5 bg-surface hover:border-warm/40",
+        highlight ? "border-warm/30 bg-warm/[0.06] hover:bg-warm/[0.1]" : "border-foreground/5 bg-surface hover:border-warm/40",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -238,7 +238,7 @@ function SimpleTerritoryCard({
       href={href}
       className={cn(
         "group flex items-center gap-3 rounded-lg border p-3.5 shadow-card transition-colors",
-        highlight ? "border-warm/30 bg-warm/[0.06] hover:bg-warm/[0.1]" : "border-black/5 bg-surface hover:border-warm/40",
+        highlight ? "border-warm/30 bg-warm/[0.06] hover:bg-warm/[0.1]" : "border-foreground/5 bg-surface hover:border-warm/40",
       )}
     >
       <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />

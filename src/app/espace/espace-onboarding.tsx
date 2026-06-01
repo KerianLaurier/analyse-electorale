@@ -114,7 +114,7 @@ export function EspaceOnboarding({
           type="button"
           onClick={dismiss}
           aria-label="Masquer la prise en main"
-          className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-black/[0.06] hover:text-foreground"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -159,7 +159,7 @@ function StepCta({ step, highlight }: { step: Step; highlight: boolean }) {
     "inline-flex shrink-0 items-center gap-1 rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
     highlight
       ? "bg-primary text-primary-foreground hover:opacity-90"
-      : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+      : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
   );
   const content = (
     <>

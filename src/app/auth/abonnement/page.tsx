@@ -31,7 +31,7 @@ export default async function AbonnementPage() {
 
         <div className="mt-6 flex flex-col gap-2">
           {TIERS.map((t) => (
-            <div key={t.name} className="rounded-xl border border-black/5 bg-white/60 p-4">
+            <div key={t.name} className="rounded-xl border border-foreground/5 bg-surface/60 p-4">
               <p className="text-[14px] font-semibold">{t.name}</p>
               <p className="mt-0.5 text-[12px] text-muted-foreground">{t.desc}</p>
             </div>

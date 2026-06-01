@@ -24,7 +24,7 @@ export function EspaceCanvass() {
   if (!canvassLoaded || !campaignLoaded) return <PanelsSkeleton />;
   if (!hasTeam) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-16 text-center">
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-16 text-center">
         <span className="grid h-12 w-12 place-items-center rounded-pill bg-warm/15 text-warm">
           <DoorOpen className="h-5 w-5" />
         </span>
@@ -99,7 +99,7 @@ function CanvassContent() {
   return (
     <div className="flex flex-col gap-5">
       {/* ── Sondage terrain ──────────────────────────────────────────── */}
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+      <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Target className="h-3.5 w-3.5" /> Sondage terrain
         </h2>
@@ -158,7 +158,7 @@ function CanvassContent() {
 
       {/* ── Évolution hebdomadaire ────────────────────────────────────── */}
       {trend.length > 0 && (
-        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+        <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
           <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <TrendingUp className="h-3.5 w-3.5" /> Évolution du sentiment · par semaine
           </h2>
@@ -171,7 +171,7 @@ function CanvassContent() {
       )}
 
       {/* ── Plan d'action ────────────────────────────────────────────── */}
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+      <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <MapPin className="h-3.5 w-3.5" /> Plan d’action
@@ -179,7 +179,7 @@ function CanvassContent() {
           <span className="text-[11.5px] text-muted-foreground">{sortedSectors.length} secteurs · {coveredSectors} couverts</span>
         </div>
         {sortedSectors.length === 0 ? (
-          <p className="mt-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
+          <p className="mt-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
             Aucun secteur. Construisez votre plan de terrain dans l’onglet <span className="font-medium">Campagne</span> ou
             poussez les bureaux prioritaires depuis le <Link href="/analyser/ciblage" className="font-medium text-warm hover:underline">ciblage</Link>.
           </p>
@@ -227,7 +227,7 @@ function CanvassContent() {
 
       {/* ── Carte de couverture ──────────────────────────────────────── */}
       {campaign?.target && sectors.some((s) => s.bureauCode) && (
-        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+        <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
           <div className="flex items-center justify-between gap-2">
             <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               <MapPin className="h-3.5 w-3.5" /> Carte de couverture
@@ -248,7 +248,7 @@ function CanvassContent() {
 
       {/* ── Sentiment par secteur ────────────────────────────────────── */}
       {sectorSentiment.length > 0 && (
-        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+        <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
           <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <LayoutGrid className="h-3.5 w-3.5" /> Sentiment par secteur
           </h2>
@@ -262,7 +262,7 @@ function CanvassContent() {
       )}
 
       {/* ── Comptes-rendus ───────────────────────────────────────────── */}
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+      <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <ClipboardList className="h-3.5 w-3.5" /> Comptes-rendus · {reports.length}
@@ -277,7 +277,7 @@ function CanvassContent() {
         )}
 
         {reports.length === 0 && !showForm ? (
-          <p className="mt-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
+          <p className="mt-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
             Aucun compte-rendu. Après chaque sortie de porte-à-porte, saisissez les chiffres pour
             alimenter le sondage terrain.
           </p>
@@ -324,7 +324,7 @@ function PlanRow({ sector, stat, onLog }: { sector: Sector; stat?: { sessions: n
           "—"
         )}
       </span>
-      <button type="button" onClick={onLog} title="Saisir un compte-rendu" className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-black/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-foreground hover:bg-black/[0.08]">
+      <button type="button" onClick={onLog} title="Saisir un compte-rendu" className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-foreground/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-foreground hover:bg-foreground/[0.08]">
         <Plus className="h-3.5 w-3.5" /> CR
       </button>
     </div>
@@ -338,7 +338,7 @@ export function Chip({ active, onClick, children }: { active: boolean; onClick: 
       onClick={onClick}
       className={cn(
         "rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-        active ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+        active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
       )}
     >
       {children}
@@ -429,7 +429,7 @@ function ReportRow({ report, sectorName }: { report: CanvassReport; sectorName: 
   const op = report.favorable + report.neutral + report.unfavorable || 1;
   const label = sectorName ?? report.zone ?? "Zone libre";
   return (
-    <li className="flex flex-wrap items-center gap-3 rounded-lg border border-black/5 bg-canvas/40 p-3">
+    <li className="flex flex-wrap items-center gap-3 rounded-lg border border-foreground/5 bg-canvas/40 p-3">
       <div className="min-w-[140px] flex-1">
         <p className="text-[13px] font-medium">{label}</p>
         <p className="text-[11px] text-muted-foreground">
@@ -528,7 +528,7 @@ export function SectorSentimentRow({ name, agg: a }: { name: string; agg: Sector
 
 export function KPI({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-canvas/40 p-3">
+    <div className="rounded-xl border border-foreground/5 bg-canvas/40 p-3">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-[16px] font-semibold tabular-nums tracking-tight">{value}</p>
     </div>
