@@ -34,14 +34,16 @@ export function usePolls2027() {
 export type SeriesPoint = { date: string; value: number };
 
 /**
- * Construit, pour UN institut donné, une série temporelle par candidat
- * (moyenne des valeurs d'une même date — plusieurs hypothèses par vague).
+ * Construit, pour UN institut donné, une série temporelle par candidat :
+ * un point par vague (date), moyenne des hypothèses publiées ce jour-là.
+ * `since` (ISO) filtre l'historique (ex. dernière année).
  * « Même institut, même donnée » : on ne mélange jamais deux instituts.
  */
-export function buildSeries(polls: Poll[], institut: string): Map<string, SeriesPoint[]> {
+export function buildSeries(polls: Poll[], institut: string, since?: string): Map<string, SeriesPoint[]> {
   const byCand = new Map<string, Map<string, { sum: number; n: number }>>();
   for (const p of polls) {
     if (p.sondeur !== institut) continue;
+    if (since && p.date < since) continue;
     for (const [cand, val] of Object.entries(p.valeurs)) {
       let dates = byCand.get(cand);
       if (!dates) {
@@ -64,15 +66,33 @@ export function buildSeries(polls: Poll[], institut: string): Map<string, Series
   return out;
 }
 
-/** Couleur d'un candidat selon le bloc (parti entre parenthèses du libellé). */
+const accentless = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+
+/** Couleur DISTINCTE par candidat (teinte proche de la famille, mais unique). */
+const CANDIDATE_COLORS: Record<string, string> = {
+  // Extrême droite / RN
+  "le pen": "#1d2c54", "candidat rn": "#1d2c54", bardella: "#46598c", zemmour: "#7c3aed",
+  // Droite
+  retailleau: "#2563eb", "candidat lr": "#2563eb", "candidat rpr": "#1e3a8a", wauquiez: "#60a5fa",
+  // Centre / macronie
+  attal: "#f0a020", macron: "#d97706", "candidat re": "#f0a020", philippe: "#0d9488", villepin: "#b45309",
+  // Gauche
+  melenchon: "#dc2626", "candidat lfi": "#dc2626", "candidat evg": "#f87171",
+  roussel: "#9f1239", glucksmann: "#db2777", "candidat ps / pp": "#db2777", faure: "#e11d48",
+  // Écologistes
+  tondelier: "#16a34a", jadot: "#4d7c0f", "candidat eelv": "#16a34a",
+  // Divers
+  "dupont-aignan": "#0891b2", arthaud: "#7f1d1d", poutou: "#991b1b", autre: "#9ca3af",
+};
+const FALLBACK = ["#0ea5e9", "#a855f7", "#f59e0b", "#10b981", "#ef4444", "#6366f1", "#ec4899", "#14b8a6"];
+
 export function candidateColor(label: string): string {
-  const p = label.toLowerCase();
-  if (/\brn\b|\(rec\)|\(dlf\)|bardella|le pen|zemmour/.test(p)) return "#13294b"; // RN / ext. droite
-  if (/\(lr\)|retailleau/.test(p)) return "#1e40af"; // droite
-  if (/\(re\)|\(hor\)|\(ren\)|attal|philippe|macron/.test(p)) return "#f0a020"; // centre
-  if (/\(le\)|\(eelv\)|tondelier|jadot/.test(p)) return "#16a34a"; // écolo
-  if (/\(lfi\)|\(pcf\)|\(ps\)|\(pp\)|\(lo\)|m[ée]lenchon|roussel|glucksmann|faure/.test(p)) return "#dc2626"; // gauche
-  return "#8a8a93";
+  const k = accentless(candidateShort(label));
+  if (CANDIDATE_COLORS[k]) return CANDIDATE_COLORS[k];
+  // Couleur stable dérivée du nom (candidats hors liste).
+  let h = 0;
+  for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+  return FALLBACK[h % FALLBACK.length];
 }
 
 /** Libellé court (sans le parti). */
