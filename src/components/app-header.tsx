@@ -25,7 +25,9 @@ const PRIMARY_NAV = [
   { href: "/espace", label: "Mon QG", icon: Megaphone },
 ] as const;
 
-const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
+// Pages sans chrome applicatif : écrans d'auth + landing publique (`/`),
+// qui possèdent leur propre en-tête.
+const NO_CHROME = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
 
 export function AppHeader() {
   const pathname = usePathname();

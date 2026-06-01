@@ -10,7 +10,14 @@ import {
   Database,
   Clock,
   ShieldCheck,
+  Megaphone,
+  DoorOpen,
+  Phone,
+  Users,
+  Target,
+  ListChecks,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
 
 const STATS = [
   { value: "10", label: "scrutins · 2017 → 2026" },
@@ -46,6 +53,14 @@ const PILLARS = [
   },
 ];
 
+const QG_FEATURES = [
+  { icon: Target, title: "Stratégie de circonscription", desc: "Diagnostic de marginalité, rapport de force par bloc et profil sociologique de votre territoire cible." },
+  { icon: ListChecks, title: "Plan de terrain", desc: "Importez les bureaux prioritaires, suivez la couverture et l'objectif de voix." },
+  { icon: DoorOpen, title: "Porte-à-porte", desc: "Comptes-rendus, sondage terrain et évolution du sentiment, secteur par secteur." },
+  { icon: Phone, title: "Phoning", desc: "Listes d'appels, file de contacts et résultat détaillé de chaque appel." },
+  { icon: Users, title: "Équipe & rôles", desc: "Invitez vos bénévoles, attribuez des rôles (logistique, communication…), partagez tout en temps réel." },
+];
+
 const TOOLS = [
   { href: "/analyser/comparateur", icon: Layers, title: "Comparateur", desc: "Un territoire, tous les scrutins" },
   { href: "/analyser/marginalite", icon: Crosshair, title: "Sièges marginaux", desc: "Circonscriptions les plus disputées" },
@@ -58,9 +73,52 @@ const TRUST = [
   { icon: ShieldCheck, title: "Mises à jour automatiques", desc: "Sondages, scrutins et dossiers rafraîchis chaque jour." },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const authed = !!user;
+
   return (
     <div className="flex-1 bg-canvas">
+      {/* En-tête landing (header propre, sans navbar applicative) */}
+      <header className="sticky top-0 z-40 border-b border-black/5 bg-canvas/80 backdrop-blur supports-[backdrop-filter]:bg-canvas/70">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+          <Link href="/" className="flex items-center gap-2.5">
+            <span aria-hidden className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground">
+              <span className="block h-3 w-3 rounded-sm bg-primary-foreground" />
+            </span>
+            <span className="text-[13px] font-semibold tracking-tight">MOUVANCIA</span>
+          </Link>
+          <nav className="flex items-center gap-2">
+            {authed ? (
+              <Link
+                href="/espace"
+                className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Accéder à mon QG <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/auth/login"
+                  className="rounded-pill px-3.5 py-2 text-[13px] font-medium text-foreground/80 transition-colors hover:bg-surface-soft hover:text-foreground"
+                >
+                  Se connecter
+                </Link>
+                <Link
+                  href="/auth/signup"
+                  className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  Essai gratuit
+                </Link>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-6 pt-20 pb-14">
         <span className="inline-flex items-center gap-2 rounded-pill bg-warm/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-warm">
@@ -71,23 +129,35 @@ export default function HomePage() {
           <br className="hidden sm:block" /> du national au bureau de vote.
         </h1>
         <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-muted-foreground sm:text-[18px]">
-          MOUVANCIA réunit cartographie, historique des scrutins, sociologie et simulation dans un
-          seul outil. Données ouvertes, requêtes instantanées dans votre navigateur.
+          MOUVANCIA réunit l&apos;analyse électorale (cartographie, historique, sociologie, simulation) et le
+          pilotage de campagne sur le terrain — dans un seul outil. Données ouvertes, requêtes instantanées.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href="/explorer"
-            className="inline-flex items-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[14px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            Ouvrir l&apos;explorateur
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link
-            href="/auth/login"
-            className="inline-flex items-center gap-2 rounded-pill border border-border bg-surface px-5 py-2.5 text-[14px] font-medium text-foreground/80 transition-colors hover:bg-surface-soft"
-          >
-            Se connecter
-          </Link>
+          {authed ? (
+            <Link
+              href="/espace"
+              className="inline-flex items-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[14px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Accéder à mon QG
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/auth/signup"
+                className="inline-flex items-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[14px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Démarrer l&apos;essai gratuit
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/auth/login"
+                className="inline-flex items-center gap-2 rounded-pill border border-border bg-surface px-5 py-2.5 text-[14px] font-medium text-foreground/80 transition-colors hover:bg-surface-soft"
+              >
+                Se connecter
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Stats */}
@@ -101,8 +171,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Piliers */}
+      {/* Piliers analyse */}
       <section className="mx-auto max-w-6xl px-6 pb-8">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Analyser le terrain électoral</p>
         <div className="anim-stagger grid gap-3 lg:grid-cols-3">
           {PILLARS.map((p) => {
             const Icon = p.icon;
@@ -126,13 +197,40 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <span className="mt-5 inline-flex items-center gap-1 text-[13px] font-medium text-foreground">
-                  Ouvrir
-                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                </span>
               </Link>
             );
           })}
+        </div>
+      </section>
+
+      {/* Quartier général — pilotage de campagne */}
+      <section className="mx-auto max-w-6xl px-6 py-10">
+        <div className="rounded-2xl border border-warm/25 bg-warm/[0.05] p-8">
+          <div className="flex items-center gap-2 text-warm">
+            <Megaphone className="h-5 w-5" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.1em]">Mon QG — le cockpit de campagne</span>
+          </div>
+          <h2 className="mt-3 max-w-2xl text-[26px] font-semibold tracking-tight sm:text-[30px]">
+            De l&apos;analyse à l&apos;action, avec votre équipe.
+          </h2>
+          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
+            Transformez vos analyses en plan d&apos;action : ciblez les bureaux, organisez le porte-à-porte
+            et le phoning, suivez le sentiment de terrain et coordonnez vos bénévoles — en temps réel.
+          </p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {QG_FEATURES.map((f) => {
+              const Icon = f.icon;
+              return (
+                <div key={f.title} className="flex flex-col gap-1.5 rounded-lg bg-surface p-4 shadow-card">
+                  <span className="grid h-9 w-9 place-items-center rounded-md bg-warm/15 text-warm">
+                    <Icon className="h-[18px] w-[18px]" />
+                  </span>
+                  <h3 className="mt-1 text-[14px] font-semibold tracking-tight">{f.title}</h3>
+                  <p className="text-[12.5px] leading-relaxed text-muted-foreground">{f.desc}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -182,19 +280,28 @@ export default function HomePage() {
       <section className="mx-auto max-w-6xl px-6 py-12">
         <div className="flex flex-col items-start justify-between gap-5 rounded-lg bg-primary p-8 text-primary-foreground sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-[24px] font-semibold tracking-tight">Prêt à explorer le terrain ?</h2>
+            <h2 className="text-[24px] font-semibold tracking-tight">Prêt à préparer 2027 ?</h2>
             <p className="mt-1.5 text-[14px] text-primary-foreground/70">
-              Ouvrez la carte ou demandez un accès équipe pour vos analyses 2027.
+              {authed ? "Votre QG vous attend." : "Essai gratuit, sans engagement. Données ouvertes, mises à jour quotidiennes."}
             </p>
           </div>
           <div className="flex shrink-0 gap-3">
-            <Link href="/explorer" className="inline-flex items-center gap-2 rounded-pill bg-warm px-5 py-2.5 text-[14px] font-semibold text-[#0A0A0C] transition-opacity hover:opacity-90">
-              Ouvrir l&apos;explorateur
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link href="/auth/signup" className="inline-flex items-center rounded-pill border border-primary-foreground/25 px-5 py-2.5 text-[14px] font-medium text-primary-foreground transition-colors hover:bg-primary-foreground/10">
-              Demander un accès
-            </Link>
+            {authed ? (
+              <Link href="/espace" className="inline-flex items-center gap-2 rounded-pill bg-warm px-5 py-2.5 text-[14px] font-semibold text-[#0A0A0C] transition-opacity hover:opacity-90">
+                Accéder à mon QG
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            ) : (
+              <>
+                <Link href="/auth/signup" className="inline-flex items-center gap-2 rounded-pill bg-warm px-5 py-2.5 text-[14px] font-semibold text-[#0A0A0C] transition-opacity hover:opacity-90">
+                  Démarrer l&apos;essai gratuit
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link href="/auth/login" className="inline-flex items-center rounded-pill border border-primary-foreground/25 px-5 py-2.5 text-[14px] font-medium text-primary-foreground transition-colors hover:bg-primary-foreground/10">
+                  Se connecter
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
