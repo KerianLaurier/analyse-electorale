@@ -11,9 +11,13 @@ import { getIdentity, onIdentityChange } from "@/lib/identity";
  * La synthèse en dérive un « sondage terrain » (déclaratif).
  */
 
+/** Canal de contact : porte-à-porte ou phoning. */
+export type Channel = "porte" | "phone";
+
 export type CanvassReport = {
   id: string;
   authorId: string;
+  channel: Channel;
   sectorId: string | null;
   zone: string | null;
   date: string;
@@ -34,6 +38,7 @@ type Row = {
   id: string;
   user_id: string;
   team_id: string | null;
+  channel: string | null;
   sector_id: string | null;
   zone: string | null;
   date: string;
@@ -62,6 +67,7 @@ function mapRow(r: Row): CanvassReport {
   return {
     id: r.id,
     authorId: r.user_id,
+    channel: r.channel === "phone" ? "phone" : "porte",
     sectorId: r.sector_id,
     zone: r.zone,
     date: r.date,
@@ -103,6 +109,7 @@ function ensureLoaded() {
 }
 
 export type NewReport = {
+  channel?: Channel;
   sectorId?: string | null;
   zone?: string | null;
   date: string;
@@ -127,6 +134,7 @@ export async function addReport(input: NewReport): Promise<void> {
     .insert({
       user_id: userId,
       team_id,
+      channel: input.channel ?? "porte",
       sector_id: input.sectorId ?? null,
       zone: input.zone ?? null,
       date: input.date,

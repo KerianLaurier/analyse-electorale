@@ -75,7 +75,7 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat icon={ListTodo} label="Actions en cours" value={active.length} onClick={() => setTab("tasks")} accent />
         <Stat icon={CalendarClock} label="Permanences à venir" value={upcomingShifts.length} onClick={() => setTab("shifts")} />
-        <Stat icon={DoorOpen} label="Rencontrées (P-à-P)" value={summary.met} onClick={() => setTab("canvass")} />
+        <Stat icon={DoorOpen} label="Personnes contactées" value={summary.met} onClick={() => setTab("canvass")} />
         <Stat icon={Contact} label="Contacts" value={contacts.length} onClick={() => setTab("contacts")} />
         <Stat icon={StickyNote} label="Notes" value={notes.length} onClick={() => setTab("notes")} />
         <Stat icon={Star} label="Épingles" value={pins.length} onClick={() => setTab("pins")} />
