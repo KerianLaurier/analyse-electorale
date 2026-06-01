@@ -56,7 +56,8 @@ export default function RootLayout({
               <RouteProgress />
             </Suspense>
             <AppHeader />
-            <main className="flex-1 flex flex-col">{children}</main>
+            {/* pb-16 : dégagement pour la barre de navigation basse (mobile). */}
+            <main className="flex-1 flex flex-col pb-16 lg:pb-0">{children}</main>
             <CommandPalette />
           </QueryProvider>
         </ThemeProvider>

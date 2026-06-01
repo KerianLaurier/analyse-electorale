@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound, Map as MapIcon, BarChart3, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
@@ -19,10 +19,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const PRIMARY_NAV = [
-  { href: "/explorer", label: "Explorer" },
-  { href: "/analyser", label: "Analyser" },
-  { href: "/suivre", label: "Suivre" },
-  { href: "/espace", label: "Mon QG" },
+  { href: "/explorer", label: "Explorer", icon: MapIcon },
+  { href: "/analyser", label: "Analyser", icon: BarChart3 },
+  { href: "/suivre", label: "Suivre", icon: Activity },
+  { href: "/espace", label: "Mon QG", icon: Megaphone },
 ] as const;
 
 const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
@@ -80,6 +80,7 @@ export function AppHeader() {
   }
 
   return (
+    <>
     <header className="sticky top-0 z-40 bg-canvas/95 supports-[backdrop-filter]:bg-canvas/70 backdrop-blur">
       {/* Grid 3 colonnes : nav centrée géométriquement (justify-self-center)
          indépendamment des largeurs de gauche/droite. */}
@@ -100,9 +101,9 @@ export function AppHeader() {
           </span>
         </Link>
 
-        {/* Nav pill centrée géométriquement */}
+        {/* Nav pill centrée géométriquement (masquée sur mobile → barre basse) */}
         <nav
-          className="inline-flex items-center gap-1 justify-self-center rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)]"
+          className="hidden items-center gap-1 justify-self-center rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] lg:inline-flex"
           aria-label="Sections principales"
         >
           {PRIMARY_NAV.map((item) => {
@@ -205,6 +206,33 @@ export function AppHeader() {
         </div>
       </div>
     </header>
+
+      {/* Navigation basse (mobile) — sections principales, ergonomie pouce */}
+      <nav
+        aria-label="Sections principales"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-canvas/95 backdrop-blur supports-[backdrop-filter]:bg-canvas/80 lg:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {PRIMARY_NAV.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10.5px] font-medium transition-colors",
+                active ? "text-warm" : "text-foreground/60 hover:text-foreground",
+              )}
+            >
+              <Icon className="h-5 w-5" />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }
 
