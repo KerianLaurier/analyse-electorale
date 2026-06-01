@@ -30,13 +30,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install deps (parsing PDF)
+        run: pip install --quiet pdfplumber
+
       # Chaque flux est indépendant : si l'un échoue (HTML source modifié, flux
       # média indispo…), on l'ignore et on continue, afin que les autres soient
       # tout de même rafraîchis et commités. Évite qu'un seul feed fragile bloque
       # la mise à jour quotidienne complète.
       - name: Refresh feeds
         run: |
-          for s in build-cncs-notices build-an-votes build-an-lois build-agenda build-veille; do
+          for s in build-cncs-notices build-cncs-parse build-an-votes build-an-lois build-agenda build-veille; do
             echo "→ $s"
             python3 "scripts/pipeline/$s.py" || echo "::warning::$s a échoué — ignoré"
           done
@@ -44,11 +47,11 @@ jobs:
       - name: Commit if changed
         if: always()
         run: |
-          CHANGED=$(git status --porcelain public/sondages public/suivi)
+          CHANGED=$(git status --porcelain public/sondages public/suivi scripts/pipeline/parse-cache.json)
           if [[ -n "$CHANGED" ]]; then
             git config user.name "mouvancia-bot"
             git config user.email "bot@mouvancia.app"
-            git add public/sondages public/suivi
+            git add public/sondages public/suivi scripts/pipeline/parse-cache.json
             git commit -m "chore(suivi): refresh données $(date -u +%Y-%m-%d)"
             git push
             echo "✓ données mises à jour"

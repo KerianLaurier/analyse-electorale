@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Newspaper,
   MapPin,
+  Info,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -652,6 +653,49 @@ function NoticeDetail({ notice }: { notice: Notice }) {
         <KPI label="Institut" value={notice.institut ?? "n.c."} icon={Building2} />
         <KPI label="Média / commanditaire" value={notice.media ?? "n.c."} />
       </div>
+
+      {(notice.echantillon != null || notice.methode || notice.terrain) && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Méthodologie · extraite du PDF</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {notice.echantillon != null && (
+              <KPI
+                label="Échantillon"
+                value={notice.echantillon.toLocaleString("fr-FR")}
+                hint={notice.effectif_utile ? `effectif utile ${notice.effectif_utile.toLocaleString("fr-FR")}` : "personnes interrogées"}
+                icon={BarChart3}
+              />
+            )}
+            {notice.methode && <KPI label="Mode de recueil" value={notice.methode} />}
+            {notice.terrain && <KPI label="Terrain" value={notice.terrain} icon={Calendar} />}
+          </div>
+        </div>
+      )}
+
+      {notice.intentions && notice.intentions.length > 0 && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Intentions de vote · extraites du PDF</p>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {notice.intentions.map((it, idx) => {
+              const v = it.redresse ?? it.brut;
+              return (
+                <div key={idx} className="flex items-center gap-2 text-[12px]">
+                  <span className="min-w-0 flex-1 truncate" title={it.label}>{it.label}</span>
+                  <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-pill bg-surface-soft/60">
+                    <span className="block h-full rounded-pill bg-warm" style={{ width: `${Math.min(100, v)}%` }} />
+                  </div>
+                  <span className="w-12 shrink-0 text-right font-semibold tabular-nums">
+                    {v.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 inline-flex items-start gap-1 text-[10px] text-muted-foreground/80">
+            <Info className="mt-px h-3 w-3 shrink-0" /> Extraction automatique — la notice officielle (ci-dessous) fait foi.
+          </p>
+        </div>
+      )}
       <div className="rounded-md border border-dashed border-border bg-surface-alt/50 p-4">
         <p className="text-[12px] font-medium">{notice.nature_label}</p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
