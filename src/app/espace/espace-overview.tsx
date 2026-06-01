@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock } from "lucide-react";
+import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock, Users2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTasks, TASK_KIND_LABELS, type Task } from "@/lib/tasks";
 import { useNotes } from "@/lib/notes";
@@ -12,7 +12,8 @@ import { useContacts } from "@/lib/contacts";
 import { useReports, summarize } from "@/lib/canvass";
 import { usePhoneContacts, summarizePhoning } from "@/lib/phoning";
 import { useCampaign, useSectors, voteGoal } from "@/lib/campaign";
-import { memberName, type WsContext } from "@/app/espace/types";
+import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
+import { RoleChips } from "@/components/role-chip";
 import type { Tab } from "@/app/espace/espace-view";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
@@ -174,6 +175,38 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
         )}
       </Panel>
 
+      {/* Qui fait quoi — équipe & rôles */}
+      {ctx.teamId && ctx.members.length > 0 && (
+        <section className="rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <Users2 className="h-3.5 w-3.5" /> Qui fait quoi
+            </h2>
+            <Link href="/auth/team" className="inline-flex items-center gap-1 text-[11.5px] font-medium text-warm hover:underline">
+              Gérer les rôles <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <ul className="flex flex-col divide-y divide-border/60">
+            {ctx.members.map((m) => (
+              <li key={m.id} className="flex items-center gap-2 py-2 text-[12.5px]">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-surface-soft text-[9px] font-semibold text-foreground/70">
+                  {memberInitials(m.name)}
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  {m.name}
+                  {m.id === ctx.meId && <span className="text-muted-foreground"> (moi)</span>}
+                </span>
+                {m.roles.length > 0 ? (
+                  <RoleChips roles={m.roles} max={4} />
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">Aucun rôle</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {benevoles > 0 && (
         <p className="text-center text-[11px] text-muted-foreground">
           {benevoles} bénévole{benevoles > 1 ? "s" : ""} dans le carnet de contacts · {sectors.length} secteurs au plan de terrain
@@ -245,7 +278,10 @@ function TaskLine({ task, ctx }: { task: Task; ctx: WsContext }) {
       <span className="min-w-0 flex-1 truncate">{task.title}</span>
       <span className="shrink-0 text-[11px] text-muted-foreground">{TASK_KIND_LABELS[task.kind]}</span>
       {task.assignee && (
-        <span className="shrink-0 text-[11px] text-muted-foreground">· {memberName(ctx.members, task.assignee)}</span>
+        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+          · {memberName(ctx.members, task.assignee)}
+          <RoleChips roles={memberRolesOf(ctx.members, task.assignee)} max={1} />
+        </span>
       )}
       {task.dueDate && (
         <span className={cn("shrink-0 text-[11px]", overdue ? "font-semibold text-red-600" : "text-muted-foreground")}>

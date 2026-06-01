@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { reloadPins } from "@/lib/pins";
 import { SignOutButton } from "@/components/sign-out-button";
 import { PLANS, ROLE_LABELS, ROLE_SUGGESTIONS, ROLE_COLORS, initials, type Role, type PlanId, type TeamRole } from "@/lib/team";
+import { RoleChip } from "@/components/role-chip";
 
 export type Account = {
   id: string;
@@ -545,14 +546,6 @@ export function TeamView({
         </section>
       </div>
     </div>
-  );
-}
-
-function RoleChip({ role }: { role: TeamRole }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[10.5px] font-medium text-white" style={{ background: role.color }}>
-      {role.name}
-    </span>
   );
 }
 
