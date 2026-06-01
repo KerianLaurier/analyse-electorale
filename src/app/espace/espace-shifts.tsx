@@ -14,7 +14,7 @@ import {
   type Shift,
   type ShiftKind,
 } from "@/lib/shifts";
-import { memberName, memberInitials, type WsContext } from "@/app/espace/types";
+import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
 
 const KINDS = Object.keys(SHIFT_KIND_LABELS) as ShiftKind[];
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -216,15 +216,19 @@ function ShiftCard({ shift, ctx }: { shift: Shift; ctx: WsContext }) {
 
       <div className="mt-0.5 flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1">
-          {shift.signups.slice(0, 6).map((uid) => (
-            <span
-              key={uid}
-              title={memberName(ctx.members, uid)}
-              className="grid h-6 w-6 place-items-center rounded-full bg-surface-soft text-[9px] font-semibold text-foreground/70"
-            >
-              {memberInitials(memberName(ctx.members, uid))}
-            </span>
-          ))}
+          {shift.signups.slice(0, 6).map((uid) => {
+            const roles = memberRolesOf(ctx.members, uid);
+            const title = memberName(ctx.members, uid) + (roles.length ? ` · ${roles.map((r) => r.name).join(", ")}` : "");
+            return (
+              <span
+                key={uid}
+                title={title}
+                className="grid h-6 w-6 place-items-center rounded-full bg-surface-soft text-[9px] font-semibold text-foreground/70"
+              >
+                {memberInitials(memberName(ctx.members, uid))}
+              </span>
+            );
+          })}
           {count === 0 && <span className="text-[11px] text-muted-foreground">Aucun inscrit</span>}
         </div>
         <button

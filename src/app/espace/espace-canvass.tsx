@@ -8,13 +8,13 @@ import { useReports, addReport, deleteReport, summarize, bySector, weeklyTrend, 
 import { useSectors, useHasTeam, useCampaign, voteGoal, updateSector, type Sector } from "@/lib/campaign";
 import { CanvassMap } from "@/app/espace/canvass-map";
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-const fmtPct = (n: number, d = 0) =>
+export const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
+export const fmtPct = (n: number, d = 0) =>
   `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const fmtDate = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+export const todayISO = () => new Date().toISOString().slice(0, 10);
+export const fmtDate = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 
-const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
+export const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
 
 export function EspaceCanvass() {
   const hasTeam = useHasTeam();
@@ -39,7 +39,7 @@ export function EspaceCanvass() {
 }
 
 function CanvassContent() {
-  const reports = useReports();
+  const reports = useReports().filter((r) => r.channel === "porte");
   const sectors = useSectors();
   const campaign = useCampaign();
   const summary = useMemo(() => summarize(reports), [reports]);
@@ -327,7 +327,7 @@ function PlanRow({ sector, stat, onLog }: { sector: Sector; stat?: { sessions: n
   );
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+export function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -458,7 +458,7 @@ function ReportRow({ report, sectorName }: { report: CanvassReport; sectorName: 
   );
 }
 
-function Num({ label, value, onChange, accent }: { label: string; value: string; onChange: (v: string) => void; accent?: "emerald" | "red" }) {
+export function Num({ label, value, onChange, accent }: { label: string; value: string; onChange: (v: string) => void; accent?: "emerald" | "red" }) {
   return (
     <label className="flex flex-col gap-1">
       <span className={cn("text-[10.5px] font-medium uppercase tracking-wide", accent === "emerald" ? "text-emerald-600" : accent === "red" ? "text-red-600" : "text-muted-foreground")}>{label}</span>
@@ -467,7 +467,7 @@ function Num({ label, value, onChange, accent }: { label: string; value: string;
   );
 }
 
-function Progress({ label, value, detail, accent, muted }: { label: string; value: number; detail: string; accent?: boolean; muted?: boolean }) {
+export function Progress({ label, value, detail, accent, muted }: { label: string; value: number; detail: string; accent?: boolean; muted?: boolean }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 text-[12px]">
@@ -484,7 +484,7 @@ function Progress({ label, value, detail, accent, muted }: { label: string; valu
   );
 }
 
-function SentimentBar({ favorable, neutral, unfavorable }: { favorable: number; neutral: number; unfavorable: number }) {
+export function SentimentBar({ favorable, neutral, unfavorable }: { favorable: number; neutral: number; unfavorable: number }) {
   const op = favorable + neutral + unfavorable || 1;
   return (
     <div className="flex h-2.5 flex-1 overflow-hidden rounded-pill">
@@ -495,7 +495,7 @@ function SentimentBar({ favorable, neutral, unfavorable }: { favorable: number; 
   );
 }
 
-function WeekRow({ w }: { w: WeekPoint }) {
+export function WeekRow({ w }: { w: WeekPoint }) {
   return (
     <div className="flex items-center gap-3">
       <span className="w-16 shrink-0 text-[11.5px] text-muted-foreground">{w.label}</span>
@@ -508,7 +508,7 @@ function WeekRow({ w }: { w: WeekPoint }) {
   );
 }
 
-function SectorSentimentRow({ name, agg: a }: { name: string; agg: SectorAgg }) {
+export function SectorSentimentRow({ name, agg: a }: { name: string; agg: SectorAgg }) {
   const op = a.favorable + a.neutral + a.unfavorable || 1;
   return (
     <div className="flex items-center gap-3">
@@ -522,7 +522,7 @@ function SectorSentimentRow({ name, agg: a }: { name: string; agg: SectorAgg }) 
   );
 }
 
-function KPI({ label, value }: { label: string; value: string }) {
+export function KPI({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-black/5 bg-canvas/40 p-3">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
@@ -531,7 +531,7 @@ function KPI({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Legend({ color, label, value }: { color: string; label: string; value: string }) {
+export function Legend({ color, label, value }: { color: string; label: string; value: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={cn("h-2 w-2 rounded-full", color)} /> {label} <span className="font-medium text-foreground">{value}</span>

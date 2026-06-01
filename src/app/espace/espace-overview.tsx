@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock } from "lucide-react";
+import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock, Users2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTasks, TASK_KIND_LABELS, type Task } from "@/lib/tasks";
 import { useNotes } from "@/lib/notes";
@@ -10,8 +10,10 @@ import { usePins } from "@/lib/pins";
 import { useShifts, SHIFT_KIND_LABELS, type Shift } from "@/lib/shifts";
 import { useContacts } from "@/lib/contacts";
 import { useReports, summarize } from "@/lib/canvass";
+import { usePhoneContacts, summarizePhoning } from "@/lib/phoning";
 import { useCampaign, useSectors, voteGoal } from "@/lib/campaign";
-import { memberName, type WsContext } from "@/app/espace/types";
+import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
+import { RoleChips } from "@/components/role-chip";
 import type { Tab } from "@/app/espace/espace-view";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
@@ -43,7 +45,26 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
     [active],
   );
   const upcomingShifts = useMemo(() => shifts.filter((s) => s.date >= today).slice(0, 5), [shifts, today]);
+  const phoneContacts = usePhoneContacts();
   const summary = useMemo(() => summarize(reports), [reports]);
+  // Sondage terrain global = porte-à-porte + phoning fusionnés.
+  const field = useMemo(() => {
+    const ph = summarizePhoning(phoneContacts);
+    const favorable = summary.favorable + ph.favorable;
+    const neutral = summary.neutral + ph.neutre;
+    const unfavorable = summary.unfavorable + ph.defavorable;
+    const opinions = favorable + neutral + unfavorable;
+    return {
+      contacted: summary.met + ph.reached,
+      favorable,
+      neutral,
+      unfavorable,
+      opinions,
+      favPct: opinions ? favorable / opinions : 0,
+      neuPct: opinions ? neutral / opinions : 0,
+      unfPct: opinions ? unfavorable / opinions : 0,
+    };
+  }, [summary, phoneContacts]);
   const benevoles = contacts.filter((c) => c.kind === "benevole").length;
 
   return (
@@ -75,14 +96,14 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat icon={ListTodo} label="Actions en cours" value={active.length} onClick={() => setTab("tasks")} accent />
         <Stat icon={CalendarClock} label="Permanences à venir" value={upcomingShifts.length} onClick={() => setTab("shifts")} />
-        <Stat icon={DoorOpen} label="Rencontrées (P-à-P)" value={summary.met} onClick={() => setTab("canvass")} />
+        <Stat icon={DoorOpen} label="Personnes contactées" value={field.contacted} onClick={() => setTab("canvass")} />
         <Stat icon={Contact} label="Contacts" value={contacts.length} onClick={() => setTab("contacts")} />
         <Stat icon={StickyNote} label="Notes" value={notes.length} onClick={() => setTab("notes")} />
         <Stat icon={Star} label="Épingles" value={pins.length} onClick={() => setTab("pins")} />
       </div>
 
-      {/* Sondage terrain (porte-à-porte) */}
-      {summary.opinions > 0 && (
+      {/* Sondage terrain (porte-à-porte + phoning) */}
+      {field.opinions > 0 && (
         <button
           type="button"
           onClick={() => setTab("canvass")}
@@ -93,14 +114,14 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
               <DoorOpen className="h-3.5 w-3.5" /> Sondage terrain
             </span>
             <span className="text-[12px]">
-              <span className="font-semibold text-emerald-600">{fmtPct(summary.favPct)}</span>
-              <span className="text-muted-foreground"> favorables · {fmtInt(summary.opinions)} rencontrées</span>
+              <span className="font-semibold text-emerald-600">{fmtPct(field.favPct)}</span>
+              <span className="text-muted-foreground"> favorables · {fmtInt(field.opinions)} contacts</span>
             </span>
           </div>
           <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-pill">
-            <span className="bg-emerald-500" style={{ width: `${summary.favPct * 100}%` }} />
-            <span className="bg-slate-400" style={{ width: `${summary.neuPct * 100}%` }} />
-            <span className="bg-red-500" style={{ width: `${summary.unfPct * 100}%` }} />
+            <span className="bg-emerald-500" style={{ width: `${field.favPct * 100}%` }} />
+            <span className="bg-slate-400" style={{ width: `${field.neuPct * 100}%` }} />
+            <span className="bg-red-500" style={{ width: `${field.unfPct * 100}%` }} />
           </div>
         </button>
       )}
@@ -153,6 +174,38 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
           </ul>
         )}
       </Panel>
+
+      {/* Qui fait quoi — équipe & rôles */}
+      {ctx.teamId && ctx.members.length > 0 && (
+        <section className="rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <Users2 className="h-3.5 w-3.5" /> Qui fait quoi
+            </h2>
+            <Link href="/auth/team" className="inline-flex items-center gap-1 text-[11.5px] font-medium text-warm hover:underline">
+              Gérer les rôles <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <ul className="flex flex-col divide-y divide-border/60">
+            {ctx.members.map((m) => (
+              <li key={m.id} className="flex items-center gap-2 py-2 text-[12.5px]">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-surface-soft text-[9px] font-semibold text-foreground/70">
+                  {memberInitials(m.name)}
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  {m.name}
+                  {m.id === ctx.meId && <span className="text-muted-foreground"> (moi)</span>}
+                </span>
+                {m.roles.length > 0 ? (
+                  <RoleChips roles={m.roles} max={4} />
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">Aucun rôle</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {benevoles > 0 && (
         <p className="text-center text-[11px] text-muted-foreground">
@@ -225,7 +278,10 @@ function TaskLine({ task, ctx }: { task: Task; ctx: WsContext }) {
       <span className="min-w-0 flex-1 truncate">{task.title}</span>
       <span className="shrink-0 text-[11px] text-muted-foreground">{TASK_KIND_LABELS[task.kind]}</span>
       {task.assignee && (
-        <span className="shrink-0 text-[11px] text-muted-foreground">· {memberName(ctx.members, task.assignee)}</span>
+        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+          · {memberName(ctx.members, task.assignee)}
+          <RoleChips roles={memberRolesOf(ctx.members, task.assignee)} max={1} />
+        </span>
       )}
       {task.dueDate && (
         <span className={cn("shrink-0 text-[11px]", overdue ? "font-semibold text-red-600" : "text-muted-foreground")}>

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { TeamView, type Account, type Team, type Member } from "@/app/auth/team/team-view";
+import { TeamView, type Account, type Team, type Member, type MemberRole } from "@/app/auth/team/team-view";
+import type { TeamRole } from "@/lib/team";
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -29,24 +30,30 @@ export default async function TeamPage() {
 
   let team: Team | null = null;
   let members: Member[] = [];
+  let teamRoles: TeamRole[] = [];
+  let memberRoles: MemberRole[] = [];
 
   if (account.teamId) {
-    const [{ data: t }, { data: m }] = await Promise.all([
-      supabase.from("teams").select("id, name, join_code").eq("id", account.teamId).single(),
+    const [{ data: t }, { data: m }, { data: roles }, { data: assigns }] = await Promise.all([
+      supabase.from("teams").select("id, name, join_code, created_by").eq("id", account.teamId).single(),
       supabase
         .from("profiles")
         .select("id, full_name, email, role")
         .eq("team_id", account.teamId)
         .order("role", { ascending: true }),
+      supabase.from("team_roles").select("id, name, color").eq("team_id", account.teamId).order("created_at", { ascending: true }),
+      supabase.from("member_roles").select("member_id, role_id").eq("team_id", account.teamId),
     ]);
-    if (t) team = { id: t.id, name: t.name, joinCode: t.join_code };
+    if (t) team = { id: t.id, name: t.name, joinCode: t.join_code, createdBy: (t.created_by as string | null) ?? null };
     members = (m ?? []).map((row) => ({
       id: row.id,
       fullName: row.full_name ?? null,
       email: row.email ?? "",
       role: row.role ?? "member",
     }));
+    teamRoles = (roles ?? []).map((r) => ({ id: r.id as string, name: r.name as string, color: r.color as string }));
+    memberRoles = (assigns ?? []).map((a) => ({ memberId: a.member_id as string, roleId: a.role_id as string }));
   }
 
-  return <TeamView account={account} team={team} members={members} />;
+  return <TeamView account={account} team={team} members={members} teamRoles={teamRoles} memberRoles={memberRoles} />;
 }

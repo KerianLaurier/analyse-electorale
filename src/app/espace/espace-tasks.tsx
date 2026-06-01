@@ -29,7 +29,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
-import { memberName, memberInitials, type WsContext } from "@/app/espace/types";
+import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
+import { RoleChips } from "@/components/role-chip";
 
 const STATUS_ORDER: TaskStatus[] = ["todo", "doing", "done"];
 const KINDS = Object.keys(TASK_KIND_LABELS) as TaskKind[];
@@ -266,6 +267,7 @@ function TaskRow({ task, ctx }: { task: Task; ctx: WsContext }) {
                 {memberInitials(memberName(ctx.members, task.assignee))}
               </span>
               {memberName(ctx.members, task.assignee)}
+              <RoleChips roles={memberRolesOf(ctx.members, task.assignee)} max={2} className="ml-0.5" />
             </span>
           )}
           {task.context && (
@@ -306,7 +308,7 @@ function TaskRow({ task, ctx }: { task: Task; ctx: WsContext }) {
           {task.mine && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => void deleteTask(task.id)} className="text-red-600 focus:text-red-600">
+              <DropdownMenuItem onClick={() => void deleteTask(task.id)} className="text-red-600 focus:text-red-600">
                 <Trash2 className="h-4 w-4" /> Supprimer
               </DropdownMenuItem>
             </>

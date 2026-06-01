@@ -59,3 +59,22 @@ export function initials(name: string, email: string): string {
   const parts = base.split(/[\s@.]+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
+
+/** Rôle de campagne personnalisé (défini par le propriétaire de l'équipe). */
+export type TeamRole = { id: string; name: string; color: string };
+
+/** Suggestions prêtes à l'emploi pour une équipe de campagne. */
+export const ROLE_SUGGESTIONS: { name: string; color: string }[] = [
+  { name: "Logistique", color: "#f59e0b" },
+  { name: "Communication", color: "#3b82f6" },
+  { name: "Trésorier", color: "#16a34a" },
+  { name: "Responsable terrain", color: "#dc2626" },
+  { name: "Mobilisation", color: "#8b5cf6" },
+  { name: "Porte-parole", color: "#ec4899" },
+  { name: "Data / analyse", color: "#0ea5e9" },
+];
+
+/** Palette de couleurs proposée pour un rôle. */
+export const ROLE_COLORS = [
+  "#f59e0b", "#3b82f6", "#16a34a", "#dc2626", "#8b5cf6", "#ec4899", "#0ea5e9", "#64748b",
+];

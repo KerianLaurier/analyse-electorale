@@ -1,4 +1,6 @@
-export type WsMember = { id: string; name: string; email: string };
+import type { TeamRole } from "@/lib/team";
+
+export type WsMember = { id: string; name: string; email: string; roles: TeamRole[] };
 
 export type WsContext = {
   meId: string;
@@ -12,6 +14,12 @@ export type WsContext = {
 export function memberName(members: WsMember[], id: string | null): string {
   if (!id) return "—";
   return members.find((m) => m.id === id)?.name ?? "Membre";
+}
+
+/** Rôles de campagne d'un membre par son id. */
+export function memberRolesOf(members: WsMember[], id: string | null): TeamRole[] {
+  if (!id) return [];
+  return members.find((m) => m.id === id)?.roles ?? [];
 }
 
 export function memberInitials(name: string): string {
