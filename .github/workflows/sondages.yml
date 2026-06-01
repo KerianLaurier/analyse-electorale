@@ -30,15 +30,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Chaque flux est indépendant : si l'un échoue (HTML source modifié, flux
+      # média indispo…), on l'ignore et on continue, afin que les autres soient
+      # tout de même rafraîchis et commités. Évite qu'un seul feed fragile bloque
+      # la mise à jour quotidienne complète.
       - name: Refresh feeds
         run: |
-          python3 scripts/pipeline/build-cncs-notices.py
-          python3 scripts/pipeline/build-an-votes.py
-          python3 scripts/pipeline/build-an-lois.py
-          python3 scripts/pipeline/build-agenda.py
-          python3 scripts/pipeline/build-veille.py
+          for s in build-cncs-notices build-an-votes build-an-lois build-agenda build-veille; do
+            echo "→ $s"
+            python3 "scripts/pipeline/$s.py" || echo "::warning::$s a échoué — ignoré"
+          done
 
       - name: Commit if changed
+        if: always()
         run: |
           CHANGED=$(git status --porcelain public/sondages public/suivi)
           if [[ -n "$CHANGED" ]]; then

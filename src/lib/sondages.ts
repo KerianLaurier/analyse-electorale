@@ -24,6 +24,10 @@ export type Notice = {
   media: string | null;
   nature: NatureCode;
   nature_label: string;
+  /** Personnalités politiques citées (popularité / intentions). */
+  personnalites?: string[];
+  /** Commune sondée (municipales). */
+  commune?: string | null;
   date: string | null;
   pdf: string;
 };

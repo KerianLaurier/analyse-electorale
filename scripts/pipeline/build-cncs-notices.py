@@ -102,6 +102,72 @@ def detect_media(label: str) -> str | None:
     return None
 
 
+# Personnalités politiques citées (popularité / intentions). Les notices CNCS
+# abrègent le prénom (« E Macron », « S Lecornu », « M Le Pen ») → on matche le
+# nom de famille.
+PERSONALITIES: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\bmacron\b", re.I), "Emmanuel Macron"),
+    (re.compile(r"\blecornu\b", re.I), "Sébastien Lecornu"),
+    (re.compile(r"\ble\s*pen\b", re.I), "Marine Le Pen"),
+    (re.compile(r"\bbardella\b", re.I), "Jordan Bardella"),
+    (re.compile(r"\bm[eé]lenchon\b", re.I), "Jean-Luc Mélenchon"),
+    (re.compile(r"\battal\b", re.I), "Gabriel Attal"),
+    (re.compile(r"\bphilippe\b", re.I), "Édouard Philippe"),
+    (re.compile(r"\bretailleau\b", re.I), "Bruno Retailleau"),
+    (re.compile(r"\bglucksmann\b", re.I), "Raphaël Glucksmann"),
+    (re.compile(r"\bfaure\b", re.I), "Olivier Faure"),
+    (re.compile(r"\bwauquiez\b", re.I), "Laurent Wauquiez"),
+    (re.compile(r"\bdarmanin\b", re.I), "Gérald Darmanin"),
+    (re.compile(r"\bruffin\b", re.I), "François Ruffin"),
+    (re.compile(r"\btondelier\b", re.I), "Marine Tondelier"),
+    (re.compile(r"\broussel\b", re.I), "Fabien Roussel"),
+    (re.compile(r"\bzemmour\b", re.I), "Éric Zemmour"),
+    (re.compile(r"\bbayrou\b", re.I), "François Bayrou"),
+    (re.compile(r"\blarcher\b", re.I), "Gérard Larcher"),
+    (re.compile(r"\bvillepin\b", re.I), "Dominique de Villepin"),
+    (re.compile(r"\bdati\b", re.I), "Rachida Dati"),
+    (re.compile(r"\bborne\b", re.I), "Élisabeth Borne"),
+    (re.compile(r"\bcazeneuve\b", re.I), "Bernard Cazeneuve"),
+]
+
+
+def detect_personalites(label: str) -> list[str]:
+    found: list[str] = []
+    for rx, name in PERSONALITIES:
+        if rx.search(label) and name not in found:
+            found.append(name)
+    return found
+
+
+# Communes susceptibles d'être sondées (municipales). Triées par longueur
+# décroissante pour un matching glouton (« Le Havre » avant « Le… »).
+CITIES = sorted(
+    [
+        "Paris", "Marseille", "Lyon", "Toulouse", "Nice", "Nantes", "Montpellier",
+        "Strasbourg", "Bordeaux", "Lille", "Rennes", "Reims", "Le Havre",
+        "Saint-Étienne", "Saint-Etienne", "Toulon", "Grenoble", "Dijon", "Angers",
+        "Nîmes", "Nimes", "Villeurbanne", "Clermont-Ferrand", "Le Mans",
+        "Aix-en-Provence", "Brest", "Tours", "Amiens", "Limoges", "Annecy",
+        "Perpignan", "Besançon", "Besancon", "Metz", "Orléans", "Orleans",
+        "Rouen", "Mulhouse", "Caen", "Nancy", "Argenteuil", "Saint-Denis",
+        "Roubaix", "Tourcoing", "Avignon", "Pau", "Calais", "Béziers", "Beziers",
+        "Colmar", "Bourges", "La Rochelle", "Versailles", "Courbevoie", "Créteil",
+        "Dunkerque", "Poitiers", "Asnières", "Antibes", "La Seyne-sur-Mer",
+        "Cannes", "Quimper", "Valence", "Mérignac", "Cholet", "Niort",
+    ],
+    key=len,
+    reverse=True,
+)
+CITY_RX = [(re.compile(r"\b" + re.escape(c) + r"\b", re.I), c) for c in CITIES]
+
+
+def detect_commune(label: str) -> str | None:
+    for rx, city in CITY_RX:
+        if rx.search(label):
+            return city
+    return None
+
+
 def detect_nature(label: str) -> tuple[str, str]:
     for rx, code, lbl in NATURE_RULES:
         if rx.search(label):
@@ -174,6 +240,8 @@ def main() -> int:
         institut = detect_institut(text)
         media = detect_media(text)
         nature_code, nature_label = detect_nature(text)
+        personalites = detect_personalites(text)
+        commune = detect_commune(text) if scrutin_code == "municipales" else None
 
         # Datation : les notices sont listées de la plus récente à la plus
         # ancienne → on décrémente l'année au passage d'une frontière de mois.
@@ -194,6 +262,8 @@ def main() -> int:
                 "media": media,
                 "nature": nature_code,
                 "nature_label": nature_label,
+                "personnalites": personalites,
+                "commune": commune,
                 "date": iso,
                 "pdf": BASE + href,
             }

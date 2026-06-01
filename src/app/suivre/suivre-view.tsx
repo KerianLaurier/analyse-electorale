@@ -506,6 +506,18 @@ function SondagesOverview({ items, generatedAt }: { items: Notice[]; generatedAt
     return NATURE_ORDER.filter((x) => counts.has(x)).map((x) => ({ code: x, n: counts.get(x) ?? 0 }));
   }, [items]);
 
+  const topVilles = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of items) if (n.commune) m.set(n.commune, (m.get(n.commune) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  }, [items]);
+
+  const topPersonnalites = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of items) for (const p of n.personnalites ?? []) m.set(p, (m.get(p) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  }, [items]);
+
   const latest = items[0] ?? null;
 
   return (
@@ -558,9 +570,38 @@ function SondagesOverview({ items, generatedAt }: { items: Notice[]; generatedAt
         </div>
       )}
 
+      {topVilles.length > 0 && (
+        <RankBlock label="Villes les plus sondées" entries={topVilles} icon={Building2} />
+      )}
+      {topPersonnalites.length > 0 && (
+        <RankBlock label="Personnalités les plus sondées" entries={topPersonnalites} icon={Flag} />
+      )}
+
       <p className="mt-auto text-[10.5px] text-muted-foreground/70">
         Source · Commission des sondages{generatedAt ? ` — généré ${relativeFr(generatedAt)}` : ""}. Sélectionne une notice pour le détail.
       </p>
+    </div>
+  );
+}
+
+function RankBlock({ label, entries, icon: Icon }: { label: string; entries: [string, number][]; icon: typeof Building2 }) {
+  const max = Math.max(1, ...entries.map((e) => e[1]));
+  return (
+    <div>
+      <p className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <Icon className="h-3 w-3" /> {label}
+      </p>
+      <div className="mt-2 flex flex-col gap-1.5">
+        {entries.map(([name, n]) => (
+          <div key={name} className="flex items-center gap-2 text-[12px]">
+            <span className="w-36 shrink-0 truncate">{name}</span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-soft/60">
+              <span className="block h-full rounded-pill bg-warm/70" style={{ width: `${(n / max) * 100}%` }} />
+            </div>
+            <span className="w-7 shrink-0 text-right tabular-nums text-muted-foreground">{n}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -590,6 +631,20 @@ function NoticeDetail({ notice }: { notice: Notice }) {
         </div>
         <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">{notice.institut ?? "Institut non communiqué"}</h2>
         <p className="mt-1.5 text-[13px] text-foreground/80">{cleanLabel(notice)}</p>
+        {(notice.commune || (notice.personnalites && notice.personnalites.length > 0)) && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {notice.commune && (
+              <span className="inline-flex items-center gap-1 rounded-pill bg-surface-soft px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                <Building2 className="h-3 w-3" /> {notice.commune}
+              </span>
+            )}
+            {(notice.personnalites ?? []).map((p) => (
+              <span key={p} className="inline-flex items-center gap-1 rounded-pill bg-warm/15 px-2 py-0.5 text-[11px] font-medium text-warm">
+                <Flag className="h-3 w-3" /> {p}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <KPI label="Date de dépôt" value={notice.date ? formatDateFr(notice.date) : "—"} hint={relativeFr(notice.date)} icon={Calendar} />
