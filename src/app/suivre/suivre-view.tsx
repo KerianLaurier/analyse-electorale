@@ -65,7 +65,7 @@ function usePaged<T>(items: T[]) {
   return { pageItems, page: safePage, setPage, pageCount, total: items.length };
 }
 
-type Category = "actualite" | "presse" | "sondages" | "votes" | "lois" | "agenda";
+export type Category = "actualite" | "presse" | "sondages" | "votes" | "lois" | "agenda";
 
 const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
   { id: "actualite", label: "Actualité", icon: Newspaper },
@@ -76,8 +76,8 @@ const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
   { id: "agenda", label: "Agenda", icon: CalendarDays },
 ];
 
-export function SuivreView() {
-  const [category, setCategory] = useState<Category>("actualite");
+export function SuivreView({ initialCategory = "actualite" }: { initialCategory?: Category }) {
+  const [category, setCategory] = useState<Category>(initialCategory);
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] w-full min-w-0 gap-3 overflow-hidden bg-canvas p-3">
