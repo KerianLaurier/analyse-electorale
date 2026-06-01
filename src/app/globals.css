@@ -193,6 +193,13 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Focus clavier visible et cohérent (WCAG 2.4.7 / 2.4.11). Les éléments qui
+     posent `outline-none` (champs, items de menu) gèrent leur propre focus
+     (ring / fond), les autres héritent de ce repère ambré net. */
+  :focus-visible {
+    outline: 2px solid var(--warm);
+    outline-offset: 2px;
+  }
   /* On force `font-family` au niveau racine pour s'assurer que Geist est bien
      appliquée partout (les variables next/font sont posées sur <html>). */
   html {

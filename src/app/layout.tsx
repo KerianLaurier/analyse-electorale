@@ -40,10 +40,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {/* Thème clair forcé : le mode sombre n'est pas encore finalisé (de
+            nombreuses couleurs sont en dur). On évite ainsi un rendu cassé pour
+            les utilisateurs dont l'OS est en sombre. Le dark mode propre pourra
+            être réactivé via `enableSystem`/un sélecteur dans un sprint dédié. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="light"
+          enableSystem={false}
+          forcedTheme="light"
           disableTransitionOnChange
         >
           <QueryProvider>
