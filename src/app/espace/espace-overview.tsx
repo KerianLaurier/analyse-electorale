@@ -15,6 +15,7 @@ import { useCampaign, useSectors, voteGoal, useLoaded as useCampaignLoaded } fro
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
 import { RoleChips } from "@/components/role-chip";
 import { Skeleton } from "@/components/skeleton";
+import { EspaceOnboarding } from "@/app/espace/espace-onboarding";
 import type { Tab } from "@/app/espace/espace-view";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
@@ -86,6 +87,8 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
 
   return (
     <div className="flex flex-col gap-6">
+      <EspaceOnboarding ctx={ctx} campaign={campaign} sectors={sectors} goal={goal} setTab={setTab} />
+
       {/* Objectif de campagne */}
       {goal != null && (
         <button
