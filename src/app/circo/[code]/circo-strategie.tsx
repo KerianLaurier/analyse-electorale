@@ -11,6 +11,7 @@ import {
   Info,
   Swords,
   TrendingUp,
+  Users2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -27,6 +28,7 @@ import { useHasTeam, addSectorsBulk } from "@/lib/campaign";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 import { nuanceLabel } from "@/lib/nuances";
 import type { Choropleth } from "@/components/map";
+import { CircoSocioProfile } from "@/components/circo-socio-profile";
 
 const TerritoryMap = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -240,6 +242,22 @@ export function CircoStrategie({
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* ── Profil sociologique ────────────────────────────────────────── */}
+      <section>
+        <SectionTitle icon={Users2}>Profil sociologique du territoire</SectionTitle>
+        <div className="mt-3 rounded-2xl border border-black/5 bg-white/60 p-5">
+          <CircoSocioProfile code={code} />
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Indicateurs INSEE (Filosofi 2021 · Recensement 2022) — écart à la moyenne nationale des
+            circonscriptions. Pour l’analyse croisée socio × vote,{" "}
+            <Link href="/analyser/sociologie" className="font-medium text-warm hover:underline">
+              voir Sociologie
+            </Link>
+            .
+          </p>
         </div>
       </section>
 

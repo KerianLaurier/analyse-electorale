@@ -19,6 +19,7 @@ import {
   type SocioIndicator,
   type SocioUnit,
 } from "@/lib/analysis";
+import { CircoSocioProfile } from "@/components/circo-socio-profile";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -122,34 +123,6 @@ export function SociologieView() {
         .sort((a, b) => a.libelle.localeCompare(b.libelle, "fr")),
     [matrix.data],
   );
-
-  const nationalMeans = useMemo(() => {
-    const feat = features.data;
-    if (!feat) return null;
-    const sums = new Array(SOCIO_INDICATORS.length).fill(0);
-    const counts = new Array(SOCIO_INDICATORS.length).fill(0);
-    for (const vec of feat.values()) {
-      vec.forEach((v, i) => {
-        if (Number.isFinite(v)) {
-          sums[i] += v;
-          counts[i] += 1;
-        }
-      });
-    }
-    return sums.map((s, i) => (counts[i] > 0 ? s / counts[i] : 0));
-  }, [features.data]);
-
-  const profile = useMemo(() => {
-    if (!profileCode || !features.data || !nationalMeans) return null;
-    const vec = features.data.get(profileCode);
-    if (!vec) return null;
-    return SOCIO_INDICATORS.map((s, i) => ({
-      meta: s,
-      value: vec[i],
-      national: nationalMeans[i],
-      ratio: nationalMeans[i] ? vec[i] / nationalMeans[i] - 1 : 0,
-    }));
-  }, [profileCode, features.data, nationalMeans]);
 
   const isLoading = socio.isFetching || features.isFetching || matrix.isFetching;
 
@@ -259,12 +232,10 @@ export function SociologieView() {
                 <option key={c.code} value={c.code}>{c.code} · {c.libelle}</option>
               ))}
             </select>
-            {profile ? (
-              <div className="mt-3 flex flex-col gap-2">
-                {profile.map((p) => (
-                  <ProfileRow key={p.meta.id} label={p.meta.label} value={fmtSocio(p.value, p.meta.unit)} ratio={p.ratio} />
-                ))}
-                <p className="mt-1 text-[10px] text-muted-foreground/80">Écart relatif à la moyenne nationale des circonscriptions.</p>
+            {profileCode ? (
+              <div className="mt-3">
+                <CircoSocioProfile code={profileCode} />
+                <p className="mt-2 text-[10px] text-muted-foreground/80">Écart relatif à la moyenne nationale des circonscriptions.</p>
               </div>
             ) : (
               <p className="mt-3 text-[12px] text-muted-foreground">
@@ -307,20 +278,6 @@ function CorrBar({ label, color, r }: { label: string; color: string; r: number 
           }}
         />
       </div>
-    </div>
-  );
-}
-
-function ProfileRow({ label, value, ratio }: { label: string; value: string; ratio: number }) {
-  const pct = Math.round(ratio * 100);
-  const tone = Math.abs(pct) < 5 ? "text-muted-foreground" : pct > 0 ? "text-emerald-600" : "text-red-600";
-  return (
-    <div className="flex items-center justify-between gap-2 text-[12px]">
-      <span className="min-w-0 flex-1 truncate text-muted-foreground">{label}</span>
-      <span className="shrink-0 font-medium tabular-nums">{value}</span>
-      <span className={cn("w-14 shrink-0 text-right text-[11px] font-medium tabular-nums", tone)}>
-        {pct >= 0 ? "+" : ""}{pct} %
-      </span>
     </div>
   );
 }
