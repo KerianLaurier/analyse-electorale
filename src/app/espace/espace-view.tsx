@@ -20,7 +20,7 @@ export type Tab = "overview" | "territoire" | "campaign" | "tasks" | "shifts" | 
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
-  { id: "territoire", label: "Mon territoire", icon: MapPin },
+  { id: "territoire", label: "Territoire", icon: MapPin },
   { id: "campaign", label: "Campagne", icon: Megaphone },
   { id: "tasks", label: "Actions", icon: ListTodo },
   { id: "shifts", label: "Permanences", icon: CalendarClock },
@@ -38,7 +38,7 @@ export function EspaceView({ ctx, initialTab }: { ctx: WsContext; initialTab?: s
 
   return (
     <div className="flex-1 bg-canvas">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className="mx-auto max-w-6xl px-6 py-10">
         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Espace de travail</p>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-[28px] font-semibold tracking-tight">Quartier général</h1>
@@ -61,8 +61,8 @@ export function EspaceView({ ctx, initialTab }: { ctx: WsContext; initialTab?: s
           )}
         </p>
 
-        {/* Onglets */}
-        <nav className="mt-6 inline-flex flex-wrap items-center gap-1 rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)]">
+        {/* Onglets — barre pleine largeur, une seule ligne (scroll horizontal si besoin) */}
+        <nav className="mt-6 flex w-full items-center gap-1 overflow-x-auto rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
@@ -72,13 +72,13 @@ export function EspaceView({ ctx, initialTab }: { ctx: WsContext; initialTab?: s
                 type="button"
                 onClick={() => setTab(t.id)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200",
+                  "inline-flex flex-1 min-w-max items-center justify-center gap-1.5 rounded-pill px-2.5 py-1.5 text-[12.5px] font-medium transition-all duration-200",
                   active
                     ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(10,10,12,0.18)]"
                     : "text-foreground/70 hover:bg-surface/60 hover:text-foreground",
                 )}
               >
-                <Icon className="h-3.5 w-3.5" /> {t.label}
+                <Icon className="h-3.5 w-3.5 shrink-0" /> {t.label}
               </button>
             );
           })}
