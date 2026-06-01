@@ -21,7 +21,9 @@ import {
   Newspaper,
   MapPin,
   Info,
+  TrendingUp,
 } from "lucide-react";
+import { BarometreView } from "@/app/suivre/barometre-view";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import type { NewsArticle } from "@/app/api/news/route";
@@ -66,12 +68,13 @@ function usePaged<T>(items: T[]) {
   return { pageItems, page: safePage, setPage, pageCount, total: items.length };
 }
 
-export type Category = "actualite" | "presse" | "sondages" | "votes" | "lois" | "agenda";
+export type Category = "actualite" | "presse" | "sondages" | "barometre" | "votes" | "lois" | "agenda";
 
 const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
   { id: "actualite", label: "Actualité", icon: Newspaper },
   { id: "presse", label: "Presse locale", icon: MapPin },
   { id: "sondages", label: "Sondages", icon: BarChart3 },
+  { id: "barometre", label: "Baromètre 2027", icon: TrendingUp },
   { id: "votes", label: "Votes AN", icon: Vote },
   { id: "lois", label: "Lois & PPL", icon: FileText },
   { id: "agenda", label: "Agenda", icon: CalendarDays },
@@ -113,6 +116,7 @@ export function SuivreView({ initialCategory = "actualite" }: { initialCategory?
       {category === "actualite" && <ActualiteView />}
       {category === "presse" && <PresseLocaleView />}
       {category === "sondages" && <SondagesView />}
+      {category === "barometre" && <BarometreView />}
       {category === "votes" && <VotesView />}
       {category === "lois" && <LoisView />}
       {category === "agenda" && <AgendaView />}

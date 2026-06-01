@@ -30,8 +30,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install deps (parsing PDF)
-        run: pip install --quiet pdfplumber
+      - name: Install deps (parsing PDF + agrégation sondages)
+        run: pip install --quiet pdfplumber pandas lxml
 
       # Chaque flux est indépendant : si l'un échoue (HTML source modifié, flux
       # média indispo…), on l'ignore et on continue, afin que les autres soient
@@ -39,7 +39,7 @@ jobs:
       # la mise à jour quotidienne complète.
       - name: Refresh feeds
         run: |
-          for s in build-cncs-notices build-cncs-parse build-an-votes build-an-lois build-agenda build-veille; do
+          for s in build-cncs-notices build-cncs-parse build-polls-2027 build-an-votes build-an-lois build-agenda build-veille; do
             echo "→ $s"
             python3 "scripts/pipeline/$s.py" || echo "::warning::$s a échoué — ignoré"
           done
