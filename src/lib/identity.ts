@@ -28,11 +28,12 @@ import { createClient } from "@/lib/supabase/client";
 export type Identity = {
   userId: string | null;
   email: string | null;
+  fullName: string | null;
   teamId: string | null;
   isSuperAdmin: boolean;
 };
 
-const ANON: Identity = { userId: null, email: null, teamId: null, isSuperAdmin: false };
+const ANON: Identity = { userId: null, email: null, fullName: null, teamId: null, isSuperAdmin: false };
 
 let cached: Identity | null = null;
 let inflight: Promise<Identity> | null = null;
@@ -52,12 +53,13 @@ async function resolve(): Promise<Identity> {
   const email = session?.user?.email ?? null;
   const { data: prof } = await supabase
     .from("profiles")
-    .select("team_id, is_super_admin")
+    .select("team_id, is_super_admin, full_name")
     .eq("id", userId)
     .single();
   cached = {
     userId,
     email,
+    fullName: (prof?.full_name as string | null) ?? null,
     teamId: (prof?.team_id as string | null) ?? null,
     isSuperAdmin: prof?.is_super_admin === true,
   };

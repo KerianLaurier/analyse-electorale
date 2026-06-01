@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { initials } from "@/lib/team";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
 import {
   DropdownMenu,
@@ -30,6 +31,7 @@ export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -41,6 +43,7 @@ export function AppHeader() {
       const id = await getIdentity();
       if (!alive) return;
       setEmail(id.email);
+      setFullName(id.fullName);
       setUserId(id.userId);
       setIsSuperAdmin(id.isSuperAdmin);
     }
@@ -64,7 +67,8 @@ export function AppHeader() {
   // (la page équipe /auth/team garde le chrome : c'est un réglage in-app)
   if (NO_CHROME.has(pathname)) return null;
 
-  const initial = (email?.[0] ?? "K").toUpperCase();
+  const avatarInitials = initials(fullName ?? "", email ?? "");
+  const displayName = fullName?.trim() || email;
 
   function openPalette() {
     const event = new KeyboardEvent("keydown", {
@@ -155,13 +159,20 @@ export function AppHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Compte"
-              className="ml-1 grid h-8 w-8 place-items-center rounded-pill bg-warm/90 text-[12px] font-semibold text-on-dark transition-transform duration-150 hover:scale-105 active:scale-95"
+              className="ml-1 grid h-8 w-8 place-items-center rounded-pill bg-warm/90 text-[11px] font-semibold text-on-dark transition-transform duration-150 hover:scale-105 active:scale-95"
             >
-              {initial}
+              {avatarInitials}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="truncate">{email ?? "Compte"}</DropdownMenuLabel>
+              <DropdownMenuLabel className="flex flex-col">
+                <span className="truncate font-semibold">{displayName ?? "Compte"}</span>
+                {fullName && email && <span className="truncate text-[11px] font-normal text-muted-foreground">{email}</span>}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => router.push("/auth/team")}>
+                <UserRound className="h-4 w-4" />
+                Mon compte
+              </DropdownMenuItem>
               {isSuperAdmin && (
                 <DropdownMenuItem onSelect={() => router.push("/admin")}>
                   <ShieldCheck className="h-4 w-4" />

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Info, UserPlus, Mail, Building2, Copy, LogOut, Users, Loader2 } from "lucide-react";
+import { Check, Info, UserPlus, Mail, Building2, Copy, LogOut, Users, Loader2, Pencil, Plus, X, Tag, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { reloadPins } from "@/lib/pins";
 import { SignOutButton } from "@/components/sign-out-button";
-import { PLANS, ROLE_LABELS, initials, type Role, type PlanId } from "@/lib/team";
+import { PLANS, ROLE_LABELS, ROLE_SUGGESTIONS, ROLE_COLORS, initials, type Role, type PlanId, type TeamRole } from "@/lib/team";
 
 export type Account = {
   id: string;
@@ -21,8 +21,9 @@ export type Account = {
   teamId: string | null;
 };
 
-export type Team = { id: string; name: string; joinCode: string };
+export type Team = { id: string; name: string; joinCode: string; createdBy: string | null };
 export type Member = { id: string; fullName: string | null; email: string; role: string };
+export type MemberRole = { memberId: string; roleId: string };
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -48,10 +49,14 @@ export function TeamView({
   account,
   team,
   members,
+  teamRoles,
+  memberRoles,
 }: {
   account: Account;
   team: Team | null;
   members: Member[];
+  teamRoles: TeamRole[];
+  memberRoles: MemberRole[];
 }) {
   const router = useRouter();
   const [notice, setNotice] = useState<string | null>(null);
@@ -63,6 +68,69 @@ export function TeamView({
   const currentPlanId = TIER_TO_PLAN[account.tier] ?? "solo";
   const trialDays = account.status === "trial" ? daysLeft(account.trialEndsAt) : null;
   const displayName = account.fullName?.trim() || account.email;
+  const isOwner = !!team && team.createdBy === account.id;
+
+  // Profil éditable
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [pName, setPName] = useState(account.fullName ?? "");
+  const [pOrg, setPOrg] = useState(account.organisation ?? "");
+
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ full_name: pName.trim() || null, organisation: pOrg.trim() || null })
+      .eq("id", account.id);
+    setBusy(false);
+    if (error) return flash(`Échec de l'enregistrement : ${error.message}`);
+    setEditingProfile(false);
+    flash("Profil mis à jour.");
+    router.refresh();
+  }
+
+  // Rôles de campagne
+  const rolesByMember = new Map<string, string[]>();
+  for (const a of memberRoles) {
+    const arr = rolesByMember.get(a.memberId) ?? [];
+    arr.push(a.roleId);
+    rolesByMember.set(a.memberId, arr);
+  }
+  const roleMemberCount = (roleId: string) => memberRoles.filter((a) => a.roleId === roleId).length;
+
+  async function createRole(name: string, color: string) {
+    if (busy || !team || !name.trim()) return;
+    setBusy(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("team_roles").insert({ team_id: team.id, name: name.trim(), color });
+    setBusy(false);
+    if (error) return flash(`Échec : ${error.message}`);
+    router.refresh();
+  }
+
+  async function removeRole(id: string) {
+    if (busy) return;
+    setBusy(true);
+    const supabase = createClient();
+    await supabase.from("team_roles").delete().eq("id", id);
+    setBusy(false);
+    router.refresh();
+  }
+
+  async function toggleMemberRole(memberId: string, roleId: string, assigned: boolean) {
+    if (busy || !team) return;
+    setBusy(true);
+    const supabase = createClient();
+    if (assigned) {
+      await supabase.from("member_roles").delete().eq("member_id", memberId).eq("role_id", roleId);
+    } else {
+      await supabase.from("member_roles").insert({ member_id: memberId, role_id: roleId, team_id: team.id });
+    }
+    setBusy(false);
+    router.refresh();
+  }
 
   function flash(msg: string) {
     setNotice(msg);
@@ -134,31 +202,62 @@ export function TeamView({
           </div>
         )}
 
-        {/* ── Compte ───────────────────────────────────────────────────── */}
+        {/* ── Compte / profil ──────────────────────────────────────────── */}
         <section className="mt-8">
-          <div className="flex flex-col gap-4 rounded-lg bg-surface p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-pill bg-warm/90 text-[15px] font-semibold text-on-dark">
-                {initials(account.fullName ?? "", account.email)}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-[16px] font-semibold tracking-tight">{displayName}</p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Mail className="h-3.5 w-3.5" /> {account.email}
-                  </span>
-                  {account.organisation && (
+          <div className="rounded-lg bg-surface p-5 shadow-card">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-pill bg-warm/90 text-[15px] font-semibold text-on-dark">
+                  {initials(account.fullName ?? "", account.email)}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-[16px] font-semibold tracking-tight">{displayName}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
-                      <Building2 className="h-3.5 w-3.5" /> {account.organisation}
+                      <Mail className="h-3.5 w-3.5" /> {account.email}
                     </span>
-                  )}
-                  <span className="rounded-pill bg-surface-soft px-2 py-0.5 text-[10.5px] font-medium text-foreground/70">
-                    {roleLabel(account.role)}
-                  </span>
-                </p>
+                    {account.organisation && (
+                      <span className="inline-flex items-center gap-1">
+                        <Building2 className="h-3.5 w-3.5" /> {account.organisation}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1 rounded-pill bg-surface-soft px-2 py-0.5 text-[10.5px] font-medium text-foreground/70">
+                      {isOwner && <Crown className="h-3 w-3 text-warm" />}
+                      {roleLabel(account.role)}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setPName(account.fullName ?? ""); setPOrg(account.organisation ?? ""); setEditingProfile((v) => !v); }}
+                  className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-foreground/80 hover:bg-surface-soft"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Modifier
+                </button>
+                <SignOutButton />
               </div>
             </div>
-            <SignOutButton />
+
+            {editingProfile && (
+              <form onSubmit={saveProfile} className="mt-4 grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Nom complet</span>
+                  <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="ex. Kérian Laurier" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20" />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Organisation</span>
+                  <input value={pOrg} onChange={(e) => setPOrg(e.target.value)} placeholder="ex. MOUVANCIA" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20" />
+                </label>
+                <div className="flex items-center gap-2 sm:col-span-2">
+                  <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
+                    {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enregistrer
+                  </button>
+                  <button type="button" onClick={() => setEditingProfile(false)} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
+                </div>
+              </form>
+            )}
           </div>
         </section>
 
@@ -242,6 +341,7 @@ export function TeamView({
         {/* ── Équipe ───────────────────────────────────────────────────── */}
         <section className="mt-8">
           {team ? (
+            <>
             <div className="flex flex-col gap-4 rounded-lg bg-surface p-5 shadow-card">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -281,9 +381,11 @@ export function TeamView({
                 {members.map((m) => {
                   const isMe = m.id === account.id;
                   const name = m.fullName?.trim() || m.email;
+                  const myRoleIds = rolesByMember.get(m.id) ?? [];
+                  const isTeamOwner = team.createdBy === m.id;
                   return (
-                    <li key={m.id} className="flex items-center gap-3 py-2.5">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-pill bg-surface-soft text-[11px] font-semibold text-foreground/70">
+                    <li key={m.id} className="flex items-start gap-3 py-2.5">
+                      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-pill bg-surface-soft text-[11px] font-semibold text-foreground/70">
                         {initials(m.fullName ?? "", m.email)}
                       </span>
                       <div className="min-w-0 flex-1">
@@ -294,13 +396,97 @@ export function TeamView({
                           )}
                         </p>
                         <p className="truncate text-[11.5px] text-muted-foreground">{m.email}</p>
+                        {myRoleIds.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {myRoleIds.map((rid) => {
+                              const r = teamRoles.find((x) => x.id === rid);
+                              return r ? <RoleChip key={rid} role={r} /> : null;
+                            })}
+                          </div>
+                        )}
                       </div>
-                      <span className="rounded-pill bg-surface-soft px-3 py-1 text-[11.5px] font-medium text-foreground/70">{roleLabel(m.role)}</span>
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-surface-soft px-3 py-1 text-[11.5px] font-medium text-foreground/70">
+                        {isTeamOwner && <Crown className="h-3 w-3 text-warm" />}
+                        {roleLabel(m.role)}
+                      </span>
                     </li>
                   );
                 })}
               </ul>
             </div>
+
+            {/* ── Rôles de campagne ──────────────────────────────────── */}
+            <div className="mt-4 flex flex-col gap-4 rounded-lg bg-surface p-5 shadow-card">
+              <div>
+                <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <Tag className="h-3.5 w-3.5" /> Rôles de campagne
+                </p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  {isOwner
+                    ? "Créez les rôles de votre équipe (logistique, communication…) et attribuez-les aux membres."
+                    : "Les rôles de campagne sont définis par le propriétaire de l’équipe."}
+                </p>
+              </div>
+
+              {teamRoles.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {teamRoles.map((r) => (
+                    <span key={r.id} className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-2.5 py-1 text-[12px]">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: r.color }} />
+                      {r.name}
+                      <span className="text-[10.5px] text-muted-foreground">· {roleMemberCount(r.id)}</span>
+                      {isOwner && (
+                        <button type="button" onClick={() => void removeRole(r.id)} aria-label="Supprimer le rôle" className="ml-0.5 grid h-4 w-4 place-items-center rounded text-muted-foreground hover:text-red-600">
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                !isOwner && <p className="text-[12px] text-muted-foreground">Aucun rôle défini pour l’instant.</p>
+              )}
+
+              {isOwner && <RoleCreator onCreate={createRole} existing={teamRoles} busy={busy} />}
+
+              {isOwner && teamRoles.length > 0 && (
+                <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
+                  <p className="text-[11px] font-medium text-muted-foreground">Attribuer les rôles aux membres</p>
+                  {members.map((m) => {
+                    const myRoleIds = rolesByMember.get(m.id) ?? [];
+                    return (
+                      <div key={m.id} className="flex flex-wrap items-center gap-2">
+                        <span className="w-44 shrink-0 truncate text-[12.5px] font-medium" title={m.fullName?.trim() || m.email}>
+                          {m.fullName?.trim() || m.email}
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {teamRoles.map((r) => {
+                            const assigned = myRoleIds.includes(r.id);
+                            return (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => void toggleMemberRole(m.id, r.id, assigned)}
+                                disabled={busy}
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-[11.5px] font-medium transition-colors disabled:opacity-60",
+                                  assigned ? "border-transparent text-white" : "border-border bg-surface text-foreground/70 hover:bg-surface-soft",
+                                )}
+                                style={assigned ? { background: r.color } : undefined}
+                              >
+                                {assigned ? <Check className="h-3 w-3" /> : <span className="h-2 w-2 rounded-full" style={{ background: r.color }} />}
+                                {r.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            </>
           ) : (
             <div className="flex flex-col gap-4 rounded-lg bg-surface p-5 shadow-card">
               <div className="flex items-center gap-3">
@@ -354,10 +540,82 @@ export function TeamView({
           )}
 
           <p className="mt-4 text-[10.5px] text-muted-foreground/70">
-            Le partage fonctionne au niveau des épingles : depuis une fiche, choisissez « Partager avec l’équipe ». La gestion fine des rôles et la facturation Stripe arriveront ultérieurement.
+            Le partage fonctionne au niveau de l’équipe (épingles, plan de terrain, porte-à-porte, phoning). La facturation Stripe arrivera ultérieurement.
           </p>
         </section>
       </div>
+    </div>
+  );
+}
+
+function RoleChip({ role }: { role: TeamRole }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[10.5px] font-medium text-white" style={{ background: role.color }}>
+      {role.name}
+    </span>
+  );
+}
+
+function RoleCreator({
+  onCreate,
+  existing,
+  busy,
+}: {
+  onCreate: (name: string, color: string) => void | Promise<void>;
+  existing: TeamRole[];
+  busy: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState(ROLE_COLORS[0]);
+  const existingNames = new Set(existing.map((r) => r.name.toLowerCase()));
+  const suggestions = ROLE_SUGGESTIONS.filter((s) => !existingNames.has(s.name.toLowerCase()));
+
+  return (
+    <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nouveau rôle…"
+          className="min-w-[180px] flex-1 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
+        />
+        <div className="flex items-center gap-1">
+          {ROLE_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setColor(c)}
+              aria-label={`Couleur ${c}`}
+              className={cn("h-5 w-5 rounded-full ring-offset-1 transition-all", color === c ? "ring-2 ring-foreground/40" : "ring-0")}
+              style={{ background: c }}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={busy || !name.trim()}
+          onClick={() => { void onCreate(name, color); setName(""); }}
+          className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+        >
+          <Plus className="h-3.5 w-3.5" /> Ajouter
+        </button>
+      </div>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10.5px] text-muted-foreground">Suggestions :</span>
+          {suggestions.map((s) => (
+            <button
+              key={s.name}
+              type="button"
+              disabled={busy}
+              onClick={() => void onCreate(s.name, s.color)}
+              className="inline-flex items-center gap-1 rounded-pill border border-dashed border-border px-2 py-0.5 text-[11px] text-foreground/70 hover:bg-surface-soft disabled:opacity-60"
+            >
+              <span className="h-2 w-2 rounded-full" style={{ background: s.color }} /> {s.name}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
