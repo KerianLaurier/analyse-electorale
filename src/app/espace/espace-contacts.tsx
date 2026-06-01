@@ -6,6 +6,7 @@ import { Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Users, Loader2, Cont
 import { cn } from "@/lib/utils";
 import {
   useContacts,
+  useLoaded,
   addContact,
   updateContact,
   deleteContact,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/contacts";
 import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
 import type { WsContext } from "@/app/espace/types";
+import { TabSkeleton } from "@/components/skeleton";
 
 const KINDS = Object.keys(CONTACT_KIND_LABELS) as ContactKind[];
 const SUPPORTS = Object.keys(CONTACT_SUPPORT_LABELS) as ContactSupport[];
@@ -33,9 +35,12 @@ const field =
 
 export function EspaceContacts({ ctx }: { ctx: WsContext }) {
   const contacts = useContacts();
+  const loaded = useLoaded();
   const [kindFilter, setKindFilter] = useState<ContactKind | "all">("all");
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
+
+  if (!loaded) return <TabSkeleton />;
 
   const q = query.trim().toLowerCase();
   const visible = contacts.filter((c) => {

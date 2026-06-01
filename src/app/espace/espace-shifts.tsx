@@ -5,6 +5,7 @@ import { Plus, CalendarClock, MapPin, Users, Check, Trash2, Pencil, Loader2, Clo
 import { cn } from "@/lib/utils";
 import {
   useShifts,
+  useLoaded,
   addShift,
   updateShift,
   deleteShift,
@@ -15,6 +16,7 @@ import {
   type ShiftKind,
 } from "@/lib/shifts";
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
+import { TabSkeleton } from "@/components/skeleton";
 
 const KINDS = Object.keys(SHIFT_KIND_LABELS) as ShiftKind[];
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -26,8 +28,11 @@ const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13
 
 export function EspaceShifts({ ctx }: { ctx: WsContext }) {
   const shifts = useShifts();
+  const loaded = useLoaded();
   const [scope, setScope] = useState<"upcoming" | "all">("upcoming");
   const [showForm, setShowForm] = useState(false);
+
+  if (!loaded) return <TabSkeleton />;
 
   const today = todayISO();
   const visible = shifts.filter((s) => (scope === "upcoming" ? s.date >= today : true));

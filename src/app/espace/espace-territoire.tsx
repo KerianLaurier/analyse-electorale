@@ -13,9 +13,10 @@ import {
   Crosshair,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePins } from "@/lib/pins";
-import { useCampaign } from "@/lib/campaign";
+import { usePins, useLoaded as usePinsLoaded } from "@/lib/pins";
+import { useCampaign, useLoaded as useCampaignLoaded } from "@/lib/campaign";
 import { useCircoHistory, type CircoTimelinePoint } from "@/lib/queries";
+import { TabSkeleton } from "@/components/skeleton";
 import { marginDiagnostic } from "@/lib/analysis";
 import { nuanceLabel } from "@/lib/nuances";
 import { type Scrutin } from "@/lib/url-state";
@@ -28,6 +29,8 @@ const fmtPts = (n: number) =>
 export function EspaceTerritoire() {
   const pins = usePins();
   const campaign = useCampaign();
+  const pinsLoaded = usePinsLoaded();
+  const campaignLoaded = useCampaignLoaded();
   const target = campaign?.target ?? null;
   const targetCircoId = target?.type === "circo" ? target.id : null;
 
@@ -37,6 +40,8 @@ export function EspaceTerritoire() {
   );
   const communes = useMemo(() => pins.filter((p) => p.type === "commune"), [pins]);
   const bureaux = useMemo(() => pins.filter((p) => p.type === "bureau"), [pins]);
+
+  if (!pinsLoaded || !campaignLoaded) return <TabSkeleton rows={4} controls={false} />;
   const geoCount = circos.length + communes.length + bureaux.length + (targetCircoId ? 1 : 0);
 
   if (!target && geoCount === 0) {

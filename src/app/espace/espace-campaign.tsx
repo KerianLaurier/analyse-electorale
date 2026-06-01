@@ -10,6 +10,7 @@ import {
   useCampaign,
   useSectors,
   useHasTeam,
+  useLoaded,
   saveCampaign,
   addSector,
   addSectorsBulk,
@@ -22,6 +23,7 @@ import {
   type Sector,
   type SectorStatus,
 } from "@/lib/campaign";
+import { PanelsSkeleton } from "@/components/skeleton";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const pctToFrac = (s: string) => {
@@ -34,7 +36,9 @@ const field =
   "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
 
 export function EspaceCampaign() {
+  const loaded = useLoaded();
   const hasTeam = useHasTeam();
+  if (!loaded) return <PanelsSkeleton />;
   if (!hasTeam) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-16 text-center">

@@ -4,16 +4,20 @@ import { useState } from "react";
 import Link from "next/link";
 import { Plus, Users, MapPin, Pencil, Trash2, Loader2, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNotes, addNote, updateNote, deleteNote, type Note } from "@/lib/notes";
+import { useNotes, useLoaded, addNote, updateNote, deleteNote, type Note } from "@/lib/notes";
 import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
 import { memberName, type WsContext } from "@/app/espace/types";
+import { TabSkeleton } from "@/components/skeleton";
 
 const fmtWhen = (ms: number) =>
   new Date(ms).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 
 export function EspaceNotes({ ctx }: { ctx: WsContext }) {
   const notes = useNotes();
+  const loaded = useLoaded();
   const [showForm, setShowForm] = useState(false);
+
+  if (!loaded) return <TabSkeleton rows={4} />;
 
   return (
     <div className="flex flex-col gap-5">

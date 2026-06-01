@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { Star, Building2, Map as MapIcon, Vote, Landmark, UserRound, Users, ArrowRight } from "lucide-react";
-import { usePins, PIN_TYPE_LABELS, type Pin, type PinType } from "@/lib/pins";
+import { usePins, useLoaded, PIN_TYPE_LABELS, type Pin, type PinType } from "@/lib/pins";
 import { PinButton } from "@/components/pin-button";
+import { TabSkeleton } from "@/components/skeleton";
 
 const TYPE_ORDER: PinType[] = ["commune", "circo", "bureau", "elu", "candidat"];
 const TYPE_ICON: Record<PinType, typeof Building2> = {
@@ -16,9 +17,12 @@ const TYPE_ICON: Record<PinType, typeof Building2> = {
 
 export function EspacePins() {
   const pins = usePins();
+  const loaded = useLoaded();
   const grouped = TYPE_ORDER.map((type) => ({ type, items: pins.filter((p) => p.type === type) })).filter(
     (g) => g.items.length > 0,
   );
+
+  if (!loaded) return <TabSkeleton rows={4} controls={false} />;
 
   if (pins.length === 0) {
     return (

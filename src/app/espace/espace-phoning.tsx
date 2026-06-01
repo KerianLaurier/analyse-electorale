@@ -8,12 +8,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  usePhoneLists, usePhoneContacts, createList, deleteList, addNumbers, logCall, deleteContact,
+  usePhoneLists, usePhoneContacts, useLoaded as usePhoningLoaded, createList, deleteList, addNumbers, logCall, deleteContact,
   summarizePhoning, isHandled, CALL_STATUS_LABELS, CALL_OPINION_LABELS,
   type PhoneList, type PhoneContact, type CallStatus, type CallOpinion,
 } from "@/lib/phoning";
-import { useHasTeam } from "@/lib/campaign";
+import { useHasTeam, useLoaded as useCampaignLoaded } from "@/lib/campaign";
 import { fmtInt, fmtPct, KPI, Legend, Progress } from "@/app/espace/espace-canvass";
+import { PanelsSkeleton } from "@/components/skeleton";
 
 const STATUS_ORDER: CallStatus[] = ["joint", "repondeur", "occupe", "faux", "refus", "rappeler"];
 const STATUS_TONE: Record<CallStatus, string> = {
@@ -32,7 +33,10 @@ const OPINION_TONE: Record<CallOpinion, string> = {
 };
 
 export function EspacePhoning() {
+  const phoningLoaded = usePhoningLoaded();
+  const campaignLoaded = useCampaignLoaded();
   const hasTeam = useHasTeam();
+  if (!phoningLoaded || !campaignLoaded) return <PanelsSkeleton />;
   if (!hasTeam) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-16 text-center">
