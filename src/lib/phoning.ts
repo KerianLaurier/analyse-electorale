@@ -73,6 +73,7 @@ let myUserId: string | null = null;
 let lists: PhoneList[] = [];
 let contacts: PhoneContact[] = [];
 let loadStarted = false;
+let loaded = false;
 const listeners = new Set<() => void>();
 const EMPTY_LISTS: PhoneList[] = [];
 const EMPTY_CONTACTS: PhoneContact[] = [];
@@ -121,7 +122,7 @@ async function load() {
 function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
-  void load();
+  void load().finally(() => { loaded = true; emit(); });
   onIdentityChange(() => void load());
 }
 
@@ -285,4 +286,9 @@ export function summarizePhoning(contacts: PhoneContact[]): PhoningSummary {
     progress: total > 0 ? handled / total : 0,
     reachRate: handled > 0 ? reached / handled : 0,
   };
+}
+
+/** True une fois le premier chargement terminé (pour les squelettes). */
+export function useLoaded(): boolean {
+  return useSyncExternalStore(subscribe, () => loaded, () => false);
 }

@@ -11,6 +11,7 @@ import { candidatSlug } from "@/lib/personnes";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 import { ExportButton } from "@/components/export-button";
 import { PinButton } from "@/components/pin-button";
+import { ErrorState } from "@/components/error-state";
 import { downloadCsv, type CsvRow } from "@/lib/export";
 
 const candidatHref = (scrutin: Scrutin, code: string, label: string) =>
@@ -128,7 +129,13 @@ export function CircoFiche({ code }: { code: string }) {
         </div>
       </header>
 
-      {history.isLoading ? (
+      {history.isError ? (
+        <ErrorState
+          className="mt-10"
+          message="Impossible de charger les résultats de cette circonscription."
+          onRetry={() => void history.refetch()}
+        />
+      ) : history.isLoading ? (
         <Loading />
       ) : ordered.length === 0 ? (
         <Empty code={code} />

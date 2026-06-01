@@ -61,6 +61,7 @@ let myUserId: string | null = null;
 let myTeamId: string | null = null;
 let shifts: Shift[] = [];
 let loadStarted = false;
+let loaded = false;
 const listeners = new Set<() => void>();
 const EMPTY: Shift[] = [];
 
@@ -117,7 +118,7 @@ async function load() {
 function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
-  void load();
+  void load().finally(() => { loaded = true; emit(); });
   onIdentityChange(() => void load());
 }
 
@@ -234,4 +235,9 @@ function subscribe(l: () => void): () => void {
 
 export function useShifts(): Shift[] {
   return useSyncExternalStore(subscribe, () => shifts, () => EMPTY);
+}
+
+/** True une fois le premier chargement terminé (pour les squelettes). */
+export function useLoaded(): boolean {
+  return useSyncExternalStore(subscribe, () => loaded, () => false);
 }

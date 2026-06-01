@@ -20,6 +20,7 @@ import {
   type SocioUnit,
 } from "@/lib/analysis";
 import { CircoSocioProfile } from "@/components/circo-socio-profile";
+import { ErrorState } from "@/components/error-state";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -125,6 +126,12 @@ export function SociologieView() {
   );
 
   const isLoading = socio.isFetching || features.isFetching || matrix.isFetching;
+  const hasError = socio.isError || features.isError || matrix.isError;
+  const retryAll = () => {
+    void socio.refetch();
+    void features.refetch();
+    void matrix.refetch();
+  };
 
   return (
     <div className="flex h-full w-full min-h-0 flex-col gap-3 overflow-auto bg-canvas p-3">
@@ -173,6 +180,13 @@ export function SociologieView() {
           </select>
         </Field>
       </div>
+
+      {hasError && (
+        <ErrorState
+          message="Impossible de charger les données INSEE / électorales."
+          onRetry={retryAll}
+        />
+      )}
 
       {/* KPIs nationaux */}
       <div className="grid grid-cols-4 gap-2">

@@ -4,16 +4,17 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock, Users2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTasks, TASK_KIND_LABELS, type Task } from "@/lib/tasks";
-import { useNotes } from "@/lib/notes";
-import { usePins } from "@/lib/pins";
-import { useShifts, SHIFT_KIND_LABELS, type Shift } from "@/lib/shifts";
-import { useContacts } from "@/lib/contacts";
-import { useReports, summarize } from "@/lib/canvass";
-import { usePhoneContacts, summarizePhoning } from "@/lib/phoning";
-import { useCampaign, useSectors, voteGoal } from "@/lib/campaign";
+import { useTasks, TASK_KIND_LABELS, useLoaded as useTasksLoaded, type Task } from "@/lib/tasks";
+import { useNotes, useLoaded as useNotesLoaded } from "@/lib/notes";
+import { usePins, useLoaded as usePinsLoaded } from "@/lib/pins";
+import { useShifts, SHIFT_KIND_LABELS, useLoaded as useShiftsLoaded, type Shift } from "@/lib/shifts";
+import { useContacts, useLoaded as useContactsLoaded } from "@/lib/contacts";
+import { useReports, summarize, useLoaded as useReportsLoaded } from "@/lib/canvass";
+import { usePhoneContacts, summarizePhoning, useLoaded as usePhoningLoaded } from "@/lib/phoning";
+import { useCampaign, useSectors, voteGoal, useLoaded as useCampaignLoaded } from "@/lib/campaign";
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
 import { RoleChips } from "@/components/role-chip";
+import { Skeleton } from "@/components/skeleton";
 import type { Tab } from "@/app/espace/espace-view";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
@@ -31,6 +32,20 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
   const reports = useReports();
   const campaign = useCampaign();
   const sectors = useSectors();
+
+  // Disponibilité des données (évite le flash d'état vide au chargement).
+  // Tous les hooks sont appelés inconditionnellement (pas de court-circuit).
+  const loadedFlags = [
+    useTasksLoaded(),
+    useNotesLoaded(),
+    usePinsLoaded(),
+    useShiftsLoaded(),
+    useContactsLoaded(),
+    useReportsLoaded(),
+    usePhoningLoaded(),
+    useCampaignLoaded(),
+  ];
+  const ready = loadedFlags.every(Boolean);
 
   const goal = voteGoal(campaign);
   const identified = sectors.reduce((s, x) => s + x.favorable, 0);
@@ -66,6 +81,8 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
     };
   }, [summary, phoneContacts]);
   const benevoles = contacts.filter((c) => c.kind === "benevole").length;
+
+  if (!ready) return <OverviewSkeleton />;
 
   return (
     <div className="flex flex-col gap-6">
@@ -212,6 +229,24 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
           {benevoles} bénévole{benevoles > 1 ? "s" : ""} dans le carnet de contacts · {sectors.length} secteurs au plan de terrain
         </p>
       )}
+    </div>
+  );
+}
+
+function OverviewSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <Skeleton className="h-[68px] w-full rounded-lg" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-[104px] rounded-lg" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Skeleton className="h-40 rounded-lg" />
+        <Skeleton className="h-40 rounded-lg" />
+      </div>
+      <Skeleton className="h-40 rounded-lg" />
     </div>
   );
 }
