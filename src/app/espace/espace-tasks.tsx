@@ -308,7 +308,7 @@ function TaskRow({ task, ctx }: { task: Task; ctx: WsContext }) {
           {task.mine && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => void deleteTask(task.id)} className="text-red-600 focus:text-red-600">
+              <DropdownMenuItem onClick={() => void deleteTask(task.id)} className="text-red-600 focus:text-red-600">
                 <Trash2 className="h-4 w-4" /> Supprimer
               </DropdownMenuItem>
             </>

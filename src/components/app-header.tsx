@@ -169,34 +169,34 @@ export function AppHeader() {
                 {fullName && email && <span className="truncate text-[11px] font-normal text-muted-foreground">{email}</span>}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => router.push("/auth/team")}>
+              <DropdownMenuItem onClick={() => router.push("/auth/team")}>
                 <UserRound className="h-4 w-4" />
                 Mon compte
               </DropdownMenuItem>
               {isSuperAdmin && (
-                <DropdownMenuItem onSelect={() => router.push("/admin")}>
+                <DropdownMenuItem onClick={() => router.push("/admin")}>
                   <ShieldCheck className="h-4 w-4" />
                   Back-office
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onSelect={() => router.push("/espace")}>
+              <DropdownMenuItem onClick={() => router.push("/espace")}>
                 <Megaphone className="h-4 w-4" />
                 Mon QG
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => router.push("/espace?tab=pins")}>
+              <DropdownMenuItem onClick={() => router.push("/espace?tab=pins")}>
                 <Star className="h-4 w-4" />
                 Mes épingles
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => router.push("/auth/team")}>
+              <DropdownMenuItem onClick={() => router.push("/auth/team")}>
                 <Users className="h-4 w-4" />
                 Équipe & abonnement
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => router.push("/auth/reset")}>
+              <DropdownMenuItem onClick={() => router.push("/auth/reset")}>
                 <KeyRound className="h-4 w-4" />
                 Changer le mot de passe
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={signOut}>
+              <DropdownMenuItem onClick={signOut}>
                 <LogOut className="h-4 w-4" />
                 Se déconnecter
               </DropdownMenuItem>
