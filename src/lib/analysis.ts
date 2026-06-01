@@ -57,6 +57,18 @@ export function blocById(id: BlocId) {
   return BLOCS.find((b) => b.id === id) ?? BLOCS[0];
 }
 
+/**
+ * Diagnostic de marginalité d'un siège à partir de l'écart 1er/2e (en part des
+ * exprimés, 0..1). Partagé par la fiche circo et l'onglet « Mon territoire ».
+ */
+export function marginDiagnostic(margin: number | null): { label: string; tone: string } {
+  if (margin == null) return { label: "Données partielles", tone: "text-muted-foreground" };
+  if (margin < 0.05) return { label: "Ultra-marginale", tone: "text-red-600" };
+  if (margin < 0.1) return { label: "Disputée", tone: "text-amber-600" };
+  if (margin < 0.2) return { label: "Orientée", tone: "text-sky-600" };
+  return { label: "Acquise", tone: "text-emerald-600" };
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TerritoryValue = { code: string; libelle: string | null; value: number };

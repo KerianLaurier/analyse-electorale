@@ -22,7 +22,7 @@ import {
   type CircoTimelinePoint,
   type LngLatBounds,
 } from "@/lib/queries";
-import { BLOCS, blocById, type BlocId } from "@/lib/analysis";
+import { BLOCS, blocById, marginDiagnostic, type BlocId } from "@/lib/analysis";
 import { useHasTeam, addSectorsBulk } from "@/lib/campaign";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 import { nuanceLabel } from "@/lib/nuances";
@@ -121,16 +121,7 @@ export function CircoStrategie({
   const margin = winner && runnerUp ? winner.pct - runnerUp.pct : null;
 
   // Diagnostic de marginalité.
-  const diag =
-    margin == null
-      ? { label: "Données partielles", tone: "text-muted-foreground" }
-      : margin < 0.05
-      ? { label: "Ultra-marginale", tone: "text-red-600" }
-      : margin < 0.1
-      ? { label: "Disputée", tone: "text-amber-600" }
-      : margin < 0.2
-      ? { label: "Orientée", tone: "text-sky-600" }
-      : { label: "Acquise", tone: "text-emerald-600" };
+  const diag = marginDiagnostic(margin);
 
   // ── Bureaux prioritaires ────────────────────────────────────────────────
   const [bloc, setBloc] = useState<BlocId | "">(() => {
