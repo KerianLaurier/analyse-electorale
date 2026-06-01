@@ -10,6 +10,7 @@ import { usePins } from "@/lib/pins";
 import { useShifts, SHIFT_KIND_LABELS, type Shift } from "@/lib/shifts";
 import { useContacts } from "@/lib/contacts";
 import { useReports, summarize } from "@/lib/canvass";
+import { usePhoneContacts, summarizePhoning } from "@/lib/phoning";
 import { useCampaign, useSectors, voteGoal } from "@/lib/campaign";
 import { memberName, type WsContext } from "@/app/espace/types";
 import type { Tab } from "@/app/espace/espace-view";
@@ -43,7 +44,26 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
     [active],
   );
   const upcomingShifts = useMemo(() => shifts.filter((s) => s.date >= today).slice(0, 5), [shifts, today]);
+  const phoneContacts = usePhoneContacts();
   const summary = useMemo(() => summarize(reports), [reports]);
+  // Sondage terrain global = porte-à-porte + phoning fusionnés.
+  const field = useMemo(() => {
+    const ph = summarizePhoning(phoneContacts);
+    const favorable = summary.favorable + ph.favorable;
+    const neutral = summary.neutral + ph.neutre;
+    const unfavorable = summary.unfavorable + ph.defavorable;
+    const opinions = favorable + neutral + unfavorable;
+    return {
+      contacted: summary.met + ph.reached,
+      favorable,
+      neutral,
+      unfavorable,
+      opinions,
+      favPct: opinions ? favorable / opinions : 0,
+      neuPct: opinions ? neutral / opinions : 0,
+      unfPct: opinions ? unfavorable / opinions : 0,
+    };
+  }, [summary, phoneContacts]);
   const benevoles = contacts.filter((c) => c.kind === "benevole").length;
 
   return (
@@ -75,14 +95,14 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat icon={ListTodo} label="Actions en cours" value={active.length} onClick={() => setTab("tasks")} accent />
         <Stat icon={CalendarClock} label="Permanences à venir" value={upcomingShifts.length} onClick={() => setTab("shifts")} />
-        <Stat icon={DoorOpen} label="Personnes contactées" value={summary.met} onClick={() => setTab("canvass")} />
+        <Stat icon={DoorOpen} label="Personnes contactées" value={field.contacted} onClick={() => setTab("canvass")} />
         <Stat icon={Contact} label="Contacts" value={contacts.length} onClick={() => setTab("contacts")} />
         <Stat icon={StickyNote} label="Notes" value={notes.length} onClick={() => setTab("notes")} />
         <Stat icon={Star} label="Épingles" value={pins.length} onClick={() => setTab("pins")} />
       </div>
 
-      {/* Sondage terrain (porte-à-porte) */}
-      {summary.opinions > 0 && (
+      {/* Sondage terrain (porte-à-porte + phoning) */}
+      {field.opinions > 0 && (
         <button
           type="button"
           onClick={() => setTab("canvass")}
@@ -93,14 +113,14 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
               <DoorOpen className="h-3.5 w-3.5" /> Sondage terrain
             </span>
             <span className="text-[12px]">
-              <span className="font-semibold text-emerald-600">{fmtPct(summary.favPct)}</span>
-              <span className="text-muted-foreground"> favorables · {fmtInt(summary.opinions)} rencontrées</span>
+              <span className="font-semibold text-emerald-600">{fmtPct(field.favPct)}</span>
+              <span className="text-muted-foreground"> favorables · {fmtInt(field.opinions)} contacts</span>
             </span>
           </div>
           <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-pill">
-            <span className="bg-emerald-500" style={{ width: `${summary.favPct * 100}%` }} />
-            <span className="bg-slate-400" style={{ width: `${summary.neuPct * 100}%` }} />
-            <span className="bg-red-500" style={{ width: `${summary.unfPct * 100}%` }} />
+            <span className="bg-emerald-500" style={{ width: `${field.favPct * 100}%` }} />
+            <span className="bg-slate-400" style={{ width: `${field.neuPct * 100}%` }} />
+            <span className="bg-red-500" style={{ width: `${field.unfPct * 100}%` }} />
           </div>
         </button>
       )}

@@ -2,25 +2,34 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Phone, Plus, Users, Trash2, Loader2, Info, ClipboardList, Target, TrendingUp, LayoutGrid, Search, MapPin } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useReports, addReport, deleteReport, summarize, bySector, weeklyTrend, type CanvassReport, type SectorAgg } from "@/lib/canvass";
-import { useSectors, useHasTeam, updateSector, type Sector } from "@/lib/campaign";
 import {
-  fmtInt,
-  fmtPct,
-  todayISO,
-  fmtDate,
-  field,
-  Chip,
-  Num,
-  WeekRow,
-  SectorSentimentRow,
-  KPI,
-  Legend,
-} from "@/app/espace/espace-canvass";
+  Phone, Plus, Users, Trash2, Loader2, Info, ArrowLeft, ListChecks, Target,
+  PhoneCall, ChevronRight, Upload, Check,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  usePhoneLists, usePhoneContacts, createList, deleteList, addNumbers, logCall, deleteContact,
+  summarizePhoning, isHandled, CALL_STATUS_LABELS, CALL_OPINION_LABELS,
+  type PhoneList, type PhoneContact, type CallStatus, type CallOpinion,
+} from "@/lib/phoning";
+import { useHasTeam } from "@/lib/campaign";
+import { fmtInt, fmtPct, KPI, Legend, Progress } from "@/app/espace/espace-canvass";
 
-const STATUS_DOT: Record<string, string> = { todo: "bg-slate-300", doing: "bg-amber-500", done: "bg-emerald-500" };
+const STATUS_ORDER: CallStatus[] = ["joint", "repondeur", "occupe", "faux", "refus", "rappeler"];
+const STATUS_TONE: Record<CallStatus, string> = {
+  todo: "bg-surface-soft text-muted-foreground",
+  joint: "bg-emerald-100 text-emerald-700",
+  repondeur: "bg-amber-100 text-amber-700",
+  occupe: "bg-amber-100 text-amber-700",
+  faux: "bg-surface-soft text-muted-foreground",
+  refus: "bg-red-100 text-red-700",
+  rappeler: "bg-sky-100 text-sky-700",
+};
+const OPINION_TONE: Record<CallOpinion, string> = {
+  favorable: "bg-emerald-500",
+  neutre: "bg-slate-400",
+  defavorable: "bg-red-500",
+};
 
 export function EspacePhoning() {
   const hasTeam = useHasTeam();
@@ -32,7 +41,8 @@ export function EspacePhoning() {
         </span>
         <p className="text-[15px] font-semibold tracking-tight">Le phoning se pilote en équipe</p>
         <p className="max-w-md text-[13px] text-muted-foreground">
-          Créez ou rejoignez une équipe pour organiser vos sessions d’appels et suivre le sondage terrain.
+          Créez ou rejoignez une équipe pour bâtir des listes d’appels, les confier aux bénévoles et
+          consigner le résultat de chaque appel.
         </p>
         <Link href="/auth/team" className="mt-1 inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground hover:opacity-90">
           <Users className="h-4 w-4" /> Gérer mon équipe
@@ -44,362 +54,419 @@ export function EspacePhoning() {
 }
 
 function PhoningContent() {
-  const reports = useReports().filter((r) => r.channel === "phone");
-  const sectors = useSectors();
-  const summary = useMemo(() => summarize(reports), [reports]);
-  const agg = useMemo(() => bySector(reports), [reports]);
-  const trend = useMemo(() => weeklyTrend(reports), [reports]);
-  const [showForm, setShowForm] = useState(false);
-  const [presetSector, setPresetSector] = useState<string | null>(null);
-  const [planFilter, setPlanFilter] = useState<"all" | "todo" | "doing" | "done">("all");
-  const [planQuery, setPlanQuery] = useState("");
-  const [planExpanded, setPlanExpanded] = useState(false);
+  const lists = usePhoneLists();
+  const contacts = usePhoneContacts();
+  const [openListId, setOpenListId] = useState<string | null>(null);
+  const openList = lists.find((l) => l.id === openListId) ?? null;
 
-  const sortedSectors = useMemo(
-    () => [...sectors].sort((a, b) => (b.priority ?? -1) - (a.priority ?? -1)),
-    [sectors],
-  );
-  const coveredSectors = sectors.filter((s) => s.status === "done").length;
-
-  const PLAN_LIMIT = 12;
-  const statusCounts = {
-    todo: sectors.filter((s) => s.status === "todo").length,
-    doing: sectors.filter((s) => s.status === "doing").length,
-    done: coveredSectors,
-  };
-  const planQ = planQuery.trim().toLowerCase();
-  const filteredPlan = useMemo(
-    () =>
-      sortedSectors.filter((s) => {
-        if (planFilter !== "all" && s.status !== planFilter) return false;
-        if (planQ && !`${s.name} ${s.address ?? ""}`.toLowerCase().includes(planQ)) return false;
-        return true;
-      }),
-    [sortedSectors, planFilter, planQ],
-  );
-  const visiblePlan = planExpanded ? filteredPlan : filteredPlan.slice(0, PLAN_LIMIT);
-
-  const sectorSentiment = useMemo(
-    () =>
-      [...agg.entries()]
-        .map(([id, a]) => ({ sector: sectors.find((s) => s.id === id), agg: a }))
-        .filter((x) => x.sector)
-        .sort((a, b) => b.agg.met - a.agg.met) as { sector: Sector; agg: SectorAgg }[],
-    [agg, sectors],
-  );
-
-  function openForm(sectorId: string | null) {
-    setPresetSector(sectorId);
-    setShowForm(true);
+  if (openList) {
+    return (
+      <ListWorkspace
+        list={openList}
+        contacts={contacts.filter((c) => c.listId === openList.id)}
+        onBack={() => setOpenListId(null)}
+      />
+    );
   }
+  return <ListsOverview lists={lists} contacts={contacts} onOpen={setOpenListId} />;
+}
+
+// ── Vue d'ensemble : sondage + listes ───────────────────────────────────────
+
+function ListsOverview({
+  lists,
+  contacts,
+  onOpen,
+}: {
+  lists: PhoneList[];
+  contacts: PhoneContact[];
+  onOpen: (id: string) => void;
+}) {
+  const summary = useMemo(() => summarizePhoning(contacts), [contacts]);
+  const [creating, setCreating] = useState(false);
 
   return (
     <div className="flex flex-col gap-5">
-      {/* ── Sondage terrain (phoning) ────────────────────────────────── */}
+      {/* Sondage terrain phoning */}
       <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Target className="h-3.5 w-3.5" /> Sondage terrain · phoning
         </h2>
         {summary.opinions === 0 ? (
           <p className="mt-2 text-[13px] text-muted-foreground">
-            Saisissez vos premières sessions d’appels pour faire émerger le sentiment de terrain.
+            Créez une liste, importez des numéros et lancez les appels pour faire émerger le sentiment.
           </p>
         ) : (
           <>
             <p className="mt-2 text-[14px]">
               <span className="text-[26px] font-semibold tracking-tight text-emerald-600">{fmtPct(summary.favPct)}</span>{" "}
-              de favorables sur <span className="font-semibold">{fmtInt(summary.opinions)}</span> personnes jointes
-              <span className="text-muted-foreground"> ({summary.sessions} session{summary.sessions > 1 ? "s" : ""})</span>.
+              de favorables sur <span className="font-semibold">{fmtInt(summary.opinions)}</span> personnes jointes.
             </p>
             <div className="mt-3 flex h-3 w-full overflow-hidden rounded-pill">
-              <span className="bg-emerald-500" style={{ width: `${summary.favPct * 100}%` }} title={`Favorables ${fmtPct(summary.favPct)}`} />
-              <span className="bg-slate-400" style={{ width: `${summary.neuPct * 100}%` }} title={`Neutres ${fmtPct(summary.neuPct)}`} />
-              <span className="bg-red-500" style={{ width: `${summary.unfPct * 100}%` }} title={`Défavorables ${fmtPct(summary.unfPct)}`} />
+              <span className="bg-emerald-500" style={{ width: `${summary.favPct * 100}%` }} />
+              <span className="bg-slate-400" style={{ width: `${summary.neuPct * 100}%` }} />
+              <span className="bg-red-500" style={{ width: `${summary.defPct * 100}%` }} />
             </div>
             <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-muted-foreground">
               <Legend color="bg-emerald-500" label="Favorables" value={`${fmtInt(summary.favorable)} · ${fmtPct(summary.favPct)}`} />
-              <Legend color="bg-slate-400" label="Neutres" value={`${fmtInt(summary.neutral)} · ${fmtPct(summary.neuPct)}`} />
-              <Legend color="bg-red-500" label="Défavorables" value={`${fmtInt(summary.unfavorable)} · ${fmtPct(summary.unfPct)}`} />
+              <Legend color="bg-slate-400" label="Neutres" value={`${fmtInt(summary.neutre)} · ${fmtPct(summary.neuPct)}`} />
+              <Legend color="bg-red-500" label="Défavorables" value={`${fmtInt(summary.defavorable)} · ${fmtPct(summary.defPct)}`} />
             </div>
             <p className="mt-2 inline-flex items-start gap-1.5 text-[10.5px] text-muted-foreground/80">
-              <Info className="mt-0.5 h-3 w-3 shrink-0" /> Donnée déclarative issue du phoning — indicative, non représentative d’un sondage scientifique. Fusionnée au sondage terrain global (vue d’ensemble).
+              <Info className="mt-0.5 h-3 w-3 shrink-0" /> Donnée déclarative issue du phoning — indicative, fusionnée au sondage terrain global (vue d’ensemble).
             </p>
           </>
         )}
-
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KPI label="Sessions" value={fmtInt(summary.sessions)} />
-          <KPI label="Appels passés" value={fmtInt(summary.doors)} />
-          <KPI label="Joints" value={fmtInt(summary.met)} />
-          <KPI label="Taux de réponse" value={summary.doors ? fmtPct(summary.contactRate) : "—"} />
+          <KPI label="Numéros" value={fmtInt(summary.total)} />
+          <KPI label="Appelés" value={fmtInt(summary.handled)} />
+          <KPI label="Joints" value={fmtInt(summary.reached)} />
+          <KPI label="Taux de réponse" value={summary.handled ? fmtPct(summary.reachRate) : "—"} />
         </div>
       </section>
 
-      {/* ── Évolution hebdomadaire ────────────────────────────────────── */}
-      {trend.length > 0 && (
-        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
-          <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            <TrendingUp className="h-3.5 w-3.5" /> Évolution du sentiment · par semaine
-          </h2>
-          <div className="mt-3 flex flex-col gap-2">
-            {trend.map((w) => (
-              <WeekRow key={w.week} w={w} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── File d'appels (plan d'action) ─────────────────────────────── */}
+      {/* Listes d'appels */}
       <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5" /> File d’appels · secteurs
+            <ListChecks className="h-3.5 w-3.5" /> Listes d’appels · {lists.length}
           </h2>
-          <span className="text-[11.5px] text-muted-foreground">{sortedSectors.length} secteurs · {coveredSectors} couverts</span>
-        </div>
-        {sortedSectors.length === 0 ? (
-          <p className="mt-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
-            Aucun secteur. Construisez votre plan de terrain dans l’onglet <span className="font-medium">Campagne</span> ou
-            poussez les bureaux prioritaires depuis le <Link href="/analyser/ciblage" className="font-medium text-warm hover:underline">ciblage</Link>.
-          </p>
-        ) : (
-          <>
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <Chip active={planFilter === "all"} onClick={() => { setPlanFilter("all"); setPlanExpanded(false); }}>Tous · {sortedSectors.length}</Chip>
-              <Chip active={planFilter === "todo"} onClick={() => { setPlanFilter("todo"); setPlanExpanded(false); }}>À traiter · {statusCounts.todo}</Chip>
-              <Chip active={planFilter === "doing"} onClick={() => { setPlanFilter("doing"); setPlanExpanded(false); }}>En cours · {statusCounts.doing}</Chip>
-              <Chip active={planFilter === "done"} onClick={() => { setPlanFilter("done"); setPlanExpanded(false); }}>Couvert · {statusCounts.done}</Chip>
-              <div className="relative ml-auto">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={planQuery}
-                  onChange={(e) => { setPlanQuery(e.target.value); setPlanExpanded(false); }}
-                  placeholder="Rechercher un secteur…"
-                  className="w-52 rounded-md border border-border bg-surface py-1.5 pl-8 pr-3 text-[12.5px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-                />
-              </div>
-            </div>
-
-            {filteredPlan.length === 0 ? (
-              <p className="mt-3 px-1 py-6 text-center text-[12.5px] text-muted-foreground">Aucun secteur pour ce filtre.</p>
-            ) : (
-              <>
-                <div className="mt-2 flex flex-col divide-y divide-border/50">
-                  {visiblePlan.map((s) => (
-                    <PhoneRow key={s.id} sector={s} stat={agg.get(s.id)} onLog={() => openForm(s.id)} />
-                  ))}
-                </div>
-                {filteredPlan.length > PLAN_LIMIT && (
-                  <button
-                    type="button"
-                    onClick={() => setPlanExpanded((v) => !v)}
-                    className="mt-2 text-[12px] font-medium text-warm hover:underline"
-                  >
-                    {planExpanded ? "Réduire la liste" : `Afficher les ${filteredPlan.length - PLAN_LIMIT} autres secteurs`}
-                  </button>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </section>
-
-      {/* ── Sentiment par secteur ────────────────────────────────────── */}
-      {sectorSentiment.length > 0 && (
-        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
-          <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            <LayoutGrid className="h-3.5 w-3.5" /> Sentiment par secteur
-          </h2>
-          <p className="mt-1 text-[11px] text-muted-foreground">Où le téléphone remonte le plus de soutiens.</p>
-          <div className="mt-3 flex flex-col gap-2.5">
-            {sectorSentiment.map(({ sector, agg: a }) => (
-              <SectorSentimentRow key={sector.id} name={sector.name} agg={a} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── Comptes-rendus ───────────────────────────────────────────── */}
-      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            <ClipboardList className="h-3.5 w-3.5" /> Sessions d’appels · {reports.length}
-          </h2>
-          <button type="button" onClick={() => openForm(null)} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90">
-            <Plus className="h-3.5 w-3.5" /> Nouvelle session
+          <button type="button" onClick={() => setCreating((v) => !v)} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90">
+            <Plus className="h-3.5 w-3.5" /> Nouvelle liste
           </button>
         </div>
 
-        {showForm && (
-          <PhoneForm sectors={sortedSectors} presetSector={presetSector} onDone={() => setShowForm(false)} />
-        )}
+        {creating && <NewListForm onDone={() => setCreating(false)} />}
 
-        {reports.length === 0 && !showForm ? (
+        {lists.length === 0 && !creating ? (
           <p className="mt-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
-            Aucune session d’appels. Après chaque session de phoning, saisissez les chiffres pour
-            alimenter le sondage terrain.
+            Aucune liste. Créez une liste d’appels (ex. « Adhérents 2024 ») puis importez les numéros à contacter.
           </p>
         ) : (
-          <ul className="mt-3 flex flex-col gap-2">
-            {reports.map((r) => (
-              <PhoneReportRow key={r.id} report={r} sectorName={sectors.find((s) => s.id === r.sectorId)?.name ?? null} />
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {lists.map((l) => (
+              <ListCard key={l.id} list={l} contacts={contacts.filter((c) => c.listId === l.id)} onOpen={() => onOpen(l.id)} />
             ))}
-          </ul>
+          </div>
         )}
       </section>
     </div>
   );
 }
 
-function PhoneRow({ sector, stat, onLog }: { sector: Sector; stat?: { met: number; favorable: number }; onLog: () => void }) {
+function ListCard({ list, contacts, onOpen }: { list: PhoneList; contacts: PhoneContact[]; onOpen: () => void }) {
+  const s = summarizePhoning(contacts);
   return (
-    <div className="flex flex-wrap items-center gap-2 py-2">
-      <span className={cn("h-2 w-2 shrink-0 rounded-full", STATUS_DOT[sector.status] ?? "bg-slate-300")} title={sector.status} />
-      <p className="flex min-w-[150px] shrink-0 items-center gap-1.5 text-[12.5px] font-medium">
-        {sector.name}
-        {sector.priority != null && (
-          <span className={cn("rounded-pill px-1.5 py-0.5 text-[10px] font-semibold", sector.priority >= 66 ? "bg-red-100 text-red-700" : sector.priority >= 40 ? "bg-amber-100 text-amber-700" : "bg-surface-soft text-muted-foreground")}>
-            P{sector.priority}
-          </span>
-        )}
-      </p>
-      <input
-        key={`addr-${sector.id}-${sector.address ?? ""}`}
-        defaultValue={sector.address ?? ""}
-        onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (v !== (sector.address ?? "")) updateSector(sector.id, { address: v || null });
-        }}
-        placeholder="Notes / liste d’appels…"
-        className="min-w-[120px] flex-1 rounded border border-transparent bg-canvas/40 px-2 py-1 text-[11.5px] outline-none focus:border-warm focus:bg-surface"
-      />
-      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-        {stat ? (
-          <><span className="font-medium text-foreground">{fmtInt(stat.met)}</span> joints · {fmtInt(stat.favorable)} fav.</>
-        ) : (
-          "—"
-        )}
-      </span>
-      <button type="button" onClick={onLog} title="Saisir une session d’appels" className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-black/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-foreground hover:bg-black/[0.08]">
-        <Phone className="h-3.5 w-3.5" /> Appeler
+    <button type="button" onClick={onOpen} className="group flex flex-col gap-2 rounded-lg border border-black/5 bg-canvas/40 p-4 text-left transition-colors hover:border-warm/40">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-medium">{list.name}</p>
+          {list.description && <p className="truncate text-[11.5px] text-muted-foreground">{list.description}</p>}
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </div>
+      <Progress label="Avancement" value={s.progress} detail={`${fmtInt(s.handled)} / ${fmtInt(s.total)} appelés`} />
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+        <span>{fmtInt(s.reached)} joints</span>
+        {s.opinions > 0 && <span className="text-emerald-600">{fmtPct(s.favPct)} favorables</span>}
+      </div>
+    </button>
+  );
+}
+
+function NewListForm({ onDone }: { onDone: () => void }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || !name.trim()) return;
+    setBusy(true);
+    await createList(name.trim(), description.trim() || null);
+    setBusy(false);
+    onDone();
+  }
+  return (
+    <form onSubmit={submit} className="mt-3 flex flex-col gap-2 rounded-lg border border-border/60 bg-surface p-4 shadow-card sm:flex-row sm:items-end">
+      <label className="flex flex-1 flex-col gap-1">
+        <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Nom de la liste</span>
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="ex. Adhérents 2024" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20" />
+      </label>
+      <label className="flex flex-1 flex-col gap-1">
+        <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Description (optionnel)</span>
+        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ex. Sympathisants à mobiliser" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20" />
+      </label>
+      <button type="submit" disabled={busy || !name.trim()} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
+        {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Créer
       </button>
+    </form>
+  );
+}
+
+// ── Espace d'une liste : import + file d'appels ─────────────────────────────
+
+function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: PhoneContact[]; onBack: () => void }) {
+  const s = summarizePhoning(contacts);
+  const [importing, setImporting] = useState(false);
+
+  const todo = contacts.filter((c) => !isHandled(c.status));
+  const handled = contacts.filter((c) => isHandled(c.status));
+  const callback = contacts.filter((c) => c.status === "rappeler");
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-3.5 w-3.5" /> Toutes les listes
+        </button>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[20px] font-semibold tracking-tight">{list.name}</h2>
+            {list.description && <p className="text-[12.5px] text-muted-foreground">{list.description}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={() => { if (confirm(`Supprimer la liste « ${list.name} » et tous ses numéros ?`)) void deleteList(list.id); }}
+            className="inline-flex items-center gap-1.5 rounded-pill bg-black/[0.04] px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Supprimer la liste
+          </button>
+        </div>
+      </div>
+
+      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KPI label="Numéros" value={fmtInt(s.total)} />
+          <KPI label="Appelés" value={fmtInt(s.handled)} />
+          <KPI label="Joints" value={fmtInt(s.reached)} />
+          <KPI label="Favorables" value={s.opinions ? fmtPct(s.favPct) : "—"} />
+        </div>
+        <div className="mt-4">
+          <Progress label="Avancement de la liste" value={s.progress} detail={`${fmtInt(s.handled)} / ${fmtInt(s.total)}`} accent />
+        </div>
+      </section>
+
+      {/* Import de numéros */}
+      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <Upload className="h-3.5 w-3.5" /> Importer des numéros
+          </h3>
+          <button type="button" onClick={() => setImporting((v) => !v)} className="text-[11.5px] font-medium text-warm hover:underline">
+            {importing ? "Masquer" : "Ajouter des numéros"}
+          </button>
+        </div>
+        {importing && <ImportForm listId={list.id} onDone={() => setImporting(false)} />}
+      </section>
+
+      {/* À rappeler */}
+      {callback.length > 0 && (
+        <section className="rounded-lg border border-sky-200 bg-sky-50/50 p-5">
+          <h3 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-700">
+            <PhoneCall className="h-3.5 w-3.5" /> À rappeler · {callback.length}
+          </h3>
+          <div className="mt-3 flex flex-col divide-y divide-border/50">
+            {callback.map((c) => <ContactRow key={c.id} contact={c} />)}
+          </div>
+        </section>
+      )}
+
+      {/* File à appeler */}
+      <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+        <h3 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <Phone className="h-3.5 w-3.5" /> À appeler · {todo.length}
+        </h3>
+        {todo.length === 0 ? (
+          <p className="mt-3 px-1 py-6 text-center text-[12.5px] text-muted-foreground">
+            {s.total === 0 ? "Importez des numéros pour démarrer les appels." : "Tous les numéros ont été appelés 🎉"}
+          </p>
+        ) : (
+          <div className="mt-3 flex flex-col divide-y divide-border/50">
+            {todo.map((c) => <ContactRow key={c.id} contact={c} defaultOpen={false} />)}
+          </div>
+        )}
+      </section>
+
+      {/* Traités */}
+      {handled.length > 0 && (
+        <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+          <h3 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <Check className="h-3.5 w-3.5" /> Traités · {handled.length}
+          </h3>
+          <div className="mt-3 flex flex-col divide-y divide-border/50">
+            {handled.map((c) => <ContactRow key={c.id} contact={c} />)}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
 
-function PhoneForm({ sectors, presetSector, onDone }: { sectors: Sector[]; presetSector: string | null; onDone: () => void }) {
-  const hasTeam = useHasTeam();
-  const [sectorId, setSectorId] = useState<string>(presetSector ?? "");
-  const [zone, setZone] = useState("");
-  const [date, setDate] = useState(todayISO());
-  const [volunteers, setVolunteers] = useState("1");
-  const [calls, setCalls] = useState("");
-  const [favorable, setFavorable] = useState("");
-  const [neutral, setNeutral] = useState("");
-  const [unfavorable, setUnfavorable] = useState("");
-  const [notes, setNotes] = useState("");
+function ImportForm({ listId, onDone }: { listId: string; onDone: () => void }) {
+  const [raw, setRaw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const parsed = useMemo(() => parseNumbers(raw), [raw]);
+
+  async function submit() {
+    if (busy || parsed.length === 0) return;
+    setBusy(true);
+    const n = await addNumbers(listId, parsed);
+    setBusy(false);
+    setNotice(`${n} numéro${n > 1 ? "s" : ""} importé${n > 1 ? "s" : ""}.`);
+    setRaw("");
+    if (n > 0) onDone();
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <textarea
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        rows={5}
+        placeholder={"Un numéro par ligne. Nom optionnel après une virgule :\n06 12 34 56 78, Marie Dupont\n0698765432\n+33611223344, Paul"}
+        className="rounded-md border border-border bg-surface px-2.5 py-2 text-[12.5px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-[11.5px] text-muted-foreground">
+          {parsed.length > 0 ? <><span className="font-medium text-foreground">{parsed.length}</span> numéro{parsed.length > 1 ? "s" : ""} détecté{parsed.length > 1 ? "s" : ""}</> : "Collez vos numéros ci-dessus."}
+        </span>
+        {notice && <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700"><Check className="h-3.5 w-3.5" /> {notice}</span>}
+        <button type="button" onClick={submit} disabled={busy || parsed.length === 0} className="ml-auto inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
+          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Importer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ContactRow({ contact, defaultOpen }: { contact: PhoneContact; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  const handled = isHandled(contact.status);
+  return (
+    <div className="py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setOpen((v) => !v)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-medium tabular-nums">{contact.phone}</span>
+            {contact.name && <span className="block truncate text-[11px] text-muted-foreground">{contact.name}</span>}
+          </span>
+        </button>
+        {contact.opinion && <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", OPINION_TONE[contact.opinion])} title={CALL_OPINION_LABELS[contact.opinion]} />}
+        <span className={cn("shrink-0 rounded-pill px-2 py-0.5 text-[10.5px] font-medium", STATUS_TONE[contact.status])}>
+          {CALL_STATUS_LABELS[contact.status]}
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-black/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-foreground hover:bg-black/[0.08]"
+        >
+          {handled ? "Modifier" : <><PhoneCall className="h-3.5 w-3.5" /> Appeler</>}
+        </button>
+      </div>
+      {open && <CallForm contact={contact} onDone={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => void }) {
+  const [status, setStatus] = useState<CallStatus>(contact.status === "todo" ? "joint" : contact.status);
+  const [opinion, setOpinion] = useState<CallOpinion | null>(contact.opinion);
+  const [notes, setNotes] = useState(contact.notes ?? "");
   const [busy, setBusy] = useState(false);
 
-  const num = (s: string) => Math.max(0, Math.round(Number(s) || 0));
-  const met = num(favorable) + num(neutral) + num(unfavorable);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function save() {
     if (busy) return;
     setBusy(true);
-    await addReport({
-      channel: "phone",
-      sectorId: sectorId || null,
-      zone: zone.trim() || null,
-      date,
-      volunteers: num(volunteers) || 1,
-      doors: num(calls),
-      met,
-      favorable: num(favorable),
-      neutral: num(neutral),
-      unfavorable: num(unfavorable),
+    await logCall(contact.id, {
+      status,
+      opinion: status === "joint" ? opinion : null,
       notes: notes.trim() || null,
-      shared: hasTeam,
     });
     setBusy(false);
     onDone();
   }
 
   return (
-    <form onSubmit={submit} className="mt-3 flex flex-col gap-3 rounded-lg border border-border/60 bg-surface p-4 shadow-card">
-      <div className="grid gap-2 sm:grid-cols-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Secteur</span>
-          <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className={field}>
-            <option value="">— Zone libre —</option>
-            {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Liste / cible</span>
-          <input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="ex. Adhérents 2024" className={field} />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Date</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
-        </label>
+    <div className="mt-2 flex flex-col gap-3 rounded-lg border border-border/60 bg-canvas/40 p-3">
+      <div>
+        <p className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Résultat de l’appel</p>
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_ORDER.map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setStatus(st)}
+              className={cn("rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors", status === st ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]")}
+            >
+              {CALL_STATUS_LABELS[st]}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-5">
-        <Num label="Appelants" value={volunteers} onChange={setVolunteers} />
-        <Num label="Appels passés" value={calls} onChange={setCalls} />
-        <Num label="Favorables" value={favorable} onChange={setFavorable} accent="emerald" />
-        <Num label="Neutres" value={neutral} onChange={setNeutral} />
-        <Num label="Défavorables" value={unfavorable} onChange={setUnfavorable} accent="red" />
-      </div>
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (objections, sujets remontés…)" rows={2} className={cn(field, "resize-y")} />
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-[11.5px] text-muted-foreground">
-          <span className="font-medium text-foreground">{fmtInt(met)}</span> personnes jointes avec avis (= favorables + neutres + défavorables)
-        </span>
+
+      {status === "joint" && (
+        <div>
+          <p className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Opinion</p>
+          <div className="flex flex-wrap gap-1.5">
+            {(["favorable", "neutre", "defavorable"] as CallOpinion[]).map((op) => (
+              <button
+                key={op}
+                type="button"
+                onClick={() => setOpinion((v) => (v === op ? null : op))}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+                  opinion === op ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+                )}
+              >
+                <span className={cn("h-2 w-2 rounded-full", OPINION_TONE[op])} /> {CALL_OPINION_LABELS[op]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows={2}
+        placeholder="Notes (objections, sujets, heure de rappel…)"
+        className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12.5px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
+      />
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => { if (confirm("Supprimer ce numéro ?")) void deleteContact(contact.id); }}
+          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-600"
+          aria-label="Supprimer le numéro"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" onClick={onDone} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
-          <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
+          <button type="button" onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enregistrer
           </button>
         </div>
       </div>
-    </form>
+    </div>
   );
 }
 
-function PhoneReportRow({ report, sectorName }: { report: CanvassReport; sectorName: string | null }) {
-  const op = report.favorable + report.neutral + report.unfavorable || 1;
-  const label = sectorName ?? report.zone ?? "Zone libre";
-  return (
-    <li className="flex flex-wrap items-center gap-3 rounded-lg border border-black/5 bg-canvas/40 p-3">
-      <div className="min-w-[140px] flex-1">
-        <p className="text-[13px] font-medium">{label}</p>
-        <p className="text-[11px] text-muted-foreground">
-          {fmtDate(report.date)} · {report.volunteers} appelant{report.volunteers > 1 ? "s" : ""} · {fmtInt(report.doors)} appels
-          {report.shared && " · équipe"}
-        </p>
-        {report.notes && <p className="mt-1 line-clamp-2 text-[11.5px] text-foreground/70">{report.notes}</p>}
-      </div>
-      <div className="w-40">
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>{fmtInt(report.met)} joints</span>
-        </div>
-        <div className="mt-1 flex h-2 w-full overflow-hidden rounded-pill">
-          <span className="bg-emerald-500" style={{ width: `${(report.favorable / op) * 100}%` }} />
-          <span className="bg-slate-400" style={{ width: `${(report.neutral / op) * 100}%` }} />
-          <span className="bg-red-500" style={{ width: `${(report.unfavorable / op) * 100}%` }} />
-        </div>
-        <div className="mt-0.5 flex justify-between text-[10px] text-muted-foreground tabular-nums">
-          <span className="text-emerald-600">{report.favorable}</span>
-          <span>{report.neutral}</span>
-          <span className="text-red-600">{report.unfavorable}</span>
-        </div>
-      </div>
-      {report.mine && (
-        <button type="button" onClick={() => void deleteReport(report.id)} aria-label="Supprimer" className="grid h-7 w-7 place-items-center rounded text-muted-foreground hover:bg-red-50 hover:text-red-600">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </li>
-  );
+/** Parse un collage : une entrée par ligne, « numéro[, nom] ». */
+function parseNumbers(raw: string): { phone: string; name?: string | null }[] {
+  const out: { phone: string; name?: string | null }[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t) continue;
+    const parts = t.split(/[,;\t]/).map((x) => x.trim());
+    const phone = parts[0];
+    if (!phone) continue;
+    const name = parts.slice(1).join(" ").trim() || null;
+    out.push({ phone, name });
+  }
+  return out;
 }
