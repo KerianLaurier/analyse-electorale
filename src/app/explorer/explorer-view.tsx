@@ -244,6 +244,17 @@ function colorationHelp(coloration: Coloration): string | null {
   return null;
 }
 
+// Libellé court pour les pills : le titre de groupe porte déjà le contexte
+// (période / thème), donc on retire le suffixe redondant. La légende, elle,
+// garde le libellé complet (COLORATION_LABELS).
+const COLORATION_PILL_LABEL: Partial<Record<Coloration, string>> = {
+  "evo-abstention": "Abstention", "dynamique-rn": "RN / ext. droite", "dynamique-gauche": "Gauche / NFP",
+  "legis-abstention": "Abstention", "legis-rn": "RN / ext. droite", "legis-gauche": "Gauche / NFP",
+  "pot-rn": "RN / ext. droite", "pot-gauche": "Gauche / NFP", "pot-ecolo": "Écologistes",
+  "pot-centre": "Centre", "pot-droite": "Droite (LR)",
+};
+const pillLabel = (c: Coloration) => COLORATION_PILL_LABEL[c] ?? COLORATION_LABELS[c];
+
 function continuousChoropleth(
   stateKey: string,
   stops: Array<[number, string]>,
@@ -674,7 +685,7 @@ function ControlsPanel({
               <div className="flex flex-wrap gap-1.5">
                 {g.items.map((c) => (
                   <Pill key={c} active={coloration === c} onClick={() => update({ coloration: c })}>
-                    {COLORATION_LABELS[c]}
+                    {pillLabel(c)}
                   </Pill>
                 ))}
               </div>
@@ -727,7 +738,9 @@ function ScrutinPicker({
   const familyButton = (f: ScrutinFamily) => (
     <button
       key={f}
+      type="button"
       onClick={() => pickFamily(f)}
+      aria-pressed={family === f}
       className={cn(
         "rounded-lg px-2.5 py-1.5 text-center text-[12px] font-medium transition-colors",
         family === f
@@ -761,7 +774,9 @@ function ScrutinPicker({
               {tours.map((t) => (
                 <button
                   key={t}
+                  type="button"
                   onClick={() => pickTour(t)}
+                  aria-pressed={tour === t}
                   className={cn(
                     "rounded-md px-3 py-1 text-[11px] font-medium transition-colors",
                     tour === t
@@ -799,7 +814,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         "rounded-full px-3 py-1 text-[11px] font-medium transition-colors",
         active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.08]",
@@ -859,8 +876,8 @@ function MapBottomLegend({
   winnerRows?: WinningNuanceRow[];
 }) {
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[280px] rounded-xl bg-surface/90 p-3 shadow-sm backdrop-blur">
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[300px] rounded-xl bg-surface/90 p-3 shadow-card backdrop-blur">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase leading-snug tracking-[0.07em] text-muted-foreground">
         {COLORATION_LABELS[coloration]}
       </p>
       {coloration === "vainqueur" ? (
