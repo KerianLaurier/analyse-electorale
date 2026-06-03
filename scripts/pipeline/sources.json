@@ -109,6 +109,15 @@
       "license": "Licence Ouverte 2.0 — INSEE",
       "description": "Comparateur de territoires (RP 2022) — base communale toutes communes. Indicateurs logement extraits par build-logement.py : P22_RP, P22_RP_PROP, P22_RSECOCC, P22_LOGVAC, P22_LOG.",
       "extract_dir": "comparateur.d"
+    },
+    "couples_familles_2022": {
+      "url": "https://www.insee.fr/fr/statistiques/fichier/8647008/base-ic-couples-familles-menages-2022_csv.zip",
+      "format": "zip-csv-semicolon",
+      "level": "iris→commune",
+      "approx_size_mb": 20,
+      "license": "Licence Ouverte 2.0 — INSEE (RP 2022)",
+      "description": "Couples-Familles-Ménages 2022 (base IRIS). Agrégée commune par build-famille.py : C22_MEN, C22_MENPSEUL, C22_FAM, C22_FAMMONO.",
+      "extract_dir": "famille.d"
     }
   },
   "electoral": {
