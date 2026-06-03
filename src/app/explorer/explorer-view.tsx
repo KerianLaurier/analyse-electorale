@@ -595,7 +595,7 @@ function ExplorerView() {
           }}
         />
         {hover && (
-          <div className="pointer-events-none absolute z-30 max-w-[210px]" style={{ left: hover.x, top: hover.y }}>
+          <div className="anim-pop-in pointer-events-none absolute z-30 max-w-[210px]" style={{ left: hover.x, top: hover.y }}>
             <div className="ml-3 mt-3 rounded-lg bg-surface/95 px-2.5 py-1.5 shadow-floating ring-1 ring-foreground/10 backdrop-blur">
               <p className="text-[11.5px] font-semibold leading-tight">{hover.name}</p>
               <p className="mt-0.5 text-[10.5px] text-muted-foreground">
