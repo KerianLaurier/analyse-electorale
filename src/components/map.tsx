@@ -132,6 +132,9 @@ type MapProps = {
   className?: string;
   maille?: Maille;
   onFeatureClick?: (info: { maille: Maille; properties: Record<string, unknown> }) => void;
+  onFeatureHover?: (
+    info: { maille: Maille; properties: Record<string, unknown>; point: { x: number; y: number } } | null,
+  ) => void;
   choropleth?: Choropleth | null;
   selectedCode?: string | null;
   /** Cadrer la carte sur des bornes [ouest, sud, est, nord]. */
@@ -142,6 +145,7 @@ export function Map({
   className,
   maille = "regions",
   onFeatureClick,
+  onFeatureHover,
   choropleth,
   selectedCode,
   bounds,
@@ -157,6 +161,7 @@ export function Map({
   const choroplethRef = useRef<Choropleth | null>(null);
   const choroplethMailleRef = useRef<Maille | null>(null);
   const onFeatureClickRef = useRef(onFeatureClick);
+  const onFeatureHoverRef = useRef(onFeatureHover);
   const selectedRef = useRef<{ maille: Maille; code: string | number } | null>(null);
   // Application incrémentale des feature-states (perf : maille bureaux ~70k).
   const fsRafRef = useRef<number | null>(null);
@@ -166,6 +171,9 @@ export function Map({
   useEffect(() => {
     onFeatureClickRef.current = onFeatureClick;
   }, [onFeatureClick]);
+  useEffect(() => {
+    onFeatureHoverRef.current = onFeatureHover;
+  }, [onFeatureHover]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -213,6 +221,11 @@ export function Map({
           };
           map.setFeatureState(hoveredFeatureRef.current, { hover: true });
         }
+        onFeatureHoverRef.current?.({
+          maille: m,
+          properties: feature.properties ?? {},
+          point: { x: e.point.x, y: e.point.y },
+        });
       });
 
       map.on("mouseleave", layerId, () => {
@@ -225,6 +238,7 @@ export function Map({
           );
         }
         hoveredFeatureRef.current = null;
+        onFeatureHoverRef.current?.(null);
       });
 
       map.on("click", layerId, (e) => {

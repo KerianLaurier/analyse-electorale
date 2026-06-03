@@ -19,7 +19,9 @@ export type Scrutin =
   | "legis-2024-t2"
   | "municipales-2026-t1"
   | "municipales-2026-t2"
-  | "sociologie";
+  | "sociologie"
+  | "tendances"
+  | "potentiel";
 
 export type Coloration =
   | "vainqueur"
@@ -33,13 +35,29 @@ export type Coloration =
   | "age65"
   | "chomage"
   | "cadres"
-  | "diplome";
+  | "diplome"
+  | "proprietaires"
+  | "ressecondaires"
+  | "logvacants"
+  | "evo-abstention"
+  | "dynamique-rn"
+  | "dynamique-gauche"
+  | "legis-abstention"
+  | "legis-rn"
+  | "legis-gauche"
+  | "pot-rn"
+  | "pot-gauche"
+  | "pot-ecolo"
+  | "pot-centre"
+  | "pot-droite";
 
 export type ScrutinFamily =
   | "presidentielle"
   | "legislative"
   | "municipale"
-  | "sociologie";
+  | "sociologie"
+  | "tendances"
+  | "potentiel";
 
 type ScrutinMeta = {
   short: string;
@@ -65,6 +83,8 @@ export const SCRUTIN_META: Record<Scrutin, ScrutinMeta> = {
   "municipales-2026-t1": { short: "Municip. 2026 · T1", long: "MUNICIPALES 2026 · 1ER TOUR", family: "municipale", mailles: NO_CIRCO },
   "municipales-2026-t2": { short: "Municip. 2026 · T2", long: "MUNICIPALES 2026 · 2ND TOUR", family: "municipale", mailles: NO_CIRCO },
   "sociologie": { short: "Sociologie", long: "INSEE FILOSOFI 2021", family: "sociologie", mailles: ["communes"] },
+  "tendances": { short: "Tendances", long: "DYNAMIQUES PRÉSIDENTIELLES 2017 → 2022", family: "tendances", mailles: ["regions", "departements", "circonscriptions", "communes"] },
+  "potentiel": { short: "Potentiel", long: "POTENTIEL PAR BLOC (AFFINITÉ SOCIO − RÉEL)", family: "potentiel", mailles: ["communes"] },
 };
 
 /** Conservé pour compatibilité : { short, long } par scrutin. */
@@ -86,10 +106,24 @@ export const COLORATION_LABELS: Record<Coloration, string> = {
   chomage: "Taux de chômage",
   cadres: "Part de cadres",
   diplome: "Diplômés du supérieur",
+  proprietaires: "Part de propriétaires",
+  ressecondaires: "Résidences secondaires",
+  logvacants: "Logements vacants",
+  "evo-abstention": "Abstention · présid. 17→22",
+  "dynamique-rn": "RN / ext. droite · présid. 17→22",
+  "dynamique-gauche": "Gauche / NFP · présid. 17→22",
+  "legis-abstention": "Abstention · légis. 22→24",
+  "legis-rn": "RN / ext. droite · légis. 22→24",
+  "legis-gauche": "Gauche / NFP · légis. 22→24",
+  "pot-rn": "Potentiel RN / ext. droite",
+  "pot-gauche": "Potentiel gauche / NFP",
+  "pot-ecolo": "Potentiel écologistes",
+  "pot-centre": "Potentiel centre",
+  "pot-droite": "Potentiel droite (LR)",
 };
 
 export function isElection(scrutin: Scrutin): boolean {
-  return scrutin !== "sociologie";
+  return scrutin !== "sociologie" && scrutin !== "tendances" && scrutin !== "potentiel";
 }
 
 // ─── Catalogue des scrutins (sélection à deux niveaux : type → année → tour) ──
@@ -99,6 +133,8 @@ export const FAMILY_ORDER: ScrutinFamily[] = [
   "legislative",
   "municipale",
   "sociologie",
+  "tendances",
+  "potentiel",
 ];
 
 export const FAMILY_LABELS: Record<ScrutinFamily, string> = {
@@ -106,6 +142,8 @@ export const FAMILY_LABELS: Record<ScrutinFamily, string> = {
   legislative: "Législatives",
   municipale: "Municipales",
   sociologie: "Sociologie",
+  tendances: "Tendances",
+  potentiel: "Potentiel",
 };
 
 const ALL_SCRUTINS = Object.keys(SCRUTIN_META) as Scrutin[];
@@ -156,18 +194,28 @@ export function scrutinFor(family: ScrutinFamily, year: number, tour: 1 | 2): Sc
 /** Scrutin par défaut d'une famille : année la plus récente, 1er tour. */
 export function defaultScrutinFor(family: ScrutinFamily): Scrutin {
   if (family === "sociologie") return "sociologie";
+  if (family === "tendances") return "tendances";
+  if (family === "potentiel") return "potentiel";
   const year = yearsFor(family)[0];
   return scrutinFor(family, year, 1) ?? scrutinFor(family, year, 2) ?? "presid-2022-t1";
 }
 
 /** Colorations proposées pour un scrutin donné. */
 export function colorationsFor(scrutin: Scrutin): Coloration[] {
-  return scrutin === "sociologie"
-    ? [
-        "revenu", "pauvrete", "inegalites", "prestations", "pensions",
-        "age65", "chomage", "cadres", "diplome",
-      ]
-    : ["vainqueur", "participation", "abstention"];
+  if (scrutin === "sociologie")
+    return [
+      "revenu", "pauvrete", "inegalites", "prestations", "pensions",
+      "age65", "chomage", "cadres", "diplome",
+      "proprietaires", "ressecondaires", "logvacants",
+    ];
+  if (scrutin === "tendances")
+    return [
+      "evo-abstention", "dynamique-rn", "dynamique-gauche",
+      "legis-abstention", "legis-rn", "legis-gauche",
+    ];
+  if (scrutin === "potentiel")
+    return ["pot-rn", "pot-gauche", "pot-ecolo", "pot-centre", "pot-droite"];
+  return ["vainqueur", "participation", "abstention"];
 }
 
 /** Mailles couvertes par les données d'un scrutin. */
@@ -189,6 +237,20 @@ const COLORATIONS = new Set<Coloration>([
   "chomage",
   "cadres",
   "diplome",
+  "proprietaires",
+  "ressecondaires",
+  "logvacants",
+  "evo-abstention",
+  "dynamique-rn",
+  "dynamique-gauche",
+  "legis-abstention",
+  "legis-rn",
+  "legis-gauche",
+  "pot-rn",
+  "pot-gauche",
+  "pot-ecolo",
+  "pot-centre",
+  "pot-droite",
 ]);
 const MAILLE_SET: ReadonlySet<Maille> = new Set<Maille>(MAILLE_ORDER);
 

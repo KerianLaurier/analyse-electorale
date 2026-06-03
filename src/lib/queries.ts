@@ -790,6 +790,143 @@ export function useSociologieCommune(code: string | null) {
   });
 }
 
+// ─── Dynamiques électorales (Palier 5 — métriques dérivées 2017→2022) ─────────
+// Source : electoral/trends/presid_2017_2022.parquet (build-trends.py). Deltas
+// signés en taux 0..1 par (maille, code).
+
+export type TrendFile = "presid_2017_2022" | "legis_2022_2024";
+const TREND_COLUMNS = [
+  "d_abstention", "d_rn", "d_gauche",
+  "abst_then", "abst_now", "rn_then", "rn_now", "gauche_then", "gauche_now",
+] as const;
+export type TrendColumn = (typeof TREND_COLUMNS)[number];
+
+/** Choroplèthe d'une métrique de tendance (fichier × colonne) pour une maille. */
+export function useTrendColumn(file: TrendFile, column: TrendColumn, maille: string, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "trend", file, column, maille],
+    queryFn: async (): Promise<CommuneNumericRow[]> => {
+      const url = parquetUrl(`trends/${file}.parquet`);
+      const col: TrendColumn = TREND_COLUMNS.includes(column) ? column : "d_abstention";
+      const rows = await query<{ code: string; value: number }>(
+        `SELECT code, ${col} AS value FROM read_parquet('${url}') WHERE maille = ? AND ${col} IS NOT NULL`,
+        [maille],
+      );
+      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+/** Tendances d'un territoire (fiche) : deltas + niveau récent, pour une comparaison. */
+export type TerritoireTrends = {
+  dAbstention: number | null;
+  dRn: number | null;
+  dGauche: number | null;
+  abstNow: number | null;
+  rnNow: number | null;
+  gaucheNow: number | null;
+};
+export function useTrendsTerritoire(file: TrendFile, maille: string | null, code: string | null) {
+  return useQuery({
+    enabled: !!maille && !!code,
+    queryKey: ["trends-territoire", file, maille, code],
+    queryFn: async (): Promise<TerritoireTrends | null> => {
+      if (!maille || !code) return null;
+      const url = parquetUrl(`trends/${file}.parquet`);
+      const rows = await query<{
+        d_abstention: number | null; d_rn: number | null; d_gauche: number | null;
+        abst_now: number | null; rn_now: number | null; gauche_now: number | null;
+      }>(
+        `SELECT d_abstention, d_rn, d_gauche, abst_now, rn_now, gauche_now
+         FROM read_parquet('${url}') WHERE maille = ? AND code = ?`,
+        [maille, code],
+      );
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      return {
+        dAbstention: numOrNull(r.d_abstention),
+        dRn: numOrNull(r.d_rn),
+        dGauche: numOrNull(r.d_gauche),
+        abstNow: numOrNull(r.abst_now),
+        rnNow: numOrNull(r.rn_now),
+        gaucheNow: numOrNull(r.gauche_now),
+      };
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+// ─── Sociologie au niveau BUREAU DE VOTE (Palier 1 — croisement socio × BV) ───
+// Source : bureaux_socio.parquet (généré par build-bureaux-socio.py). La socio
+// est portée par la commune du bureau (1ers caractères du code = INSEE) →
+// granularité commune, exposée via `grain` pour rester transparent.
+
+const BUREAUX_SOCIO_PARQUET = "bureaux_socio.parquet";
+
+export type BureauSociologie = {
+  code: string;
+  insee: string;
+  grain: string;
+  revenuMedian: number | null;
+  tauxPauvrete: number | null;
+  interdecile: number | null;
+  partPensions: number | null;
+  partPrestations: number | null;
+  part65plus: number | null;
+  tauxChomage: number | null;
+  partCadres: number | null;
+  partOuvriers: number | null;
+  partDiplomeSup: number | null;
+};
+
+/** Profil socio-démo d'un bureau de vote (porté par sa commune). */
+export function useSociologieBureau(code: string | null) {
+  return useQuery({
+    enabled: !!code,
+    queryKey: ["sociologie-bureau", code],
+    queryFn: async (): Promise<BureauSociologie | null> => {
+      if (!code) return null;
+      const url = inseeUrl(BUREAUX_SOCIO_PARQUET);
+      const rows = await query<{
+        code: string; insee: string; socio_grain: string;
+        MED_SL: number | null; PR_MD60: number | null; IR_D9_D1_SL: number | null;
+        S_RET_PEN_DI: number | null; S_SOC_BEN_DI: number | null;
+        part65plus: number | null; tauxChomage: number | null;
+        partCadres: number | null; partOuvriers: number | null; partDiplomeSup: number | null;
+      }>(
+        `
+        SELECT code, insee, socio_grain,
+               MED_SL, PR_MD60, IR_D9_D1_SL, S_RET_PEN_DI, S_SOC_BEN_DI,
+               part65plus, tauxChomage, partCadres, partOuvriers, partDiplomeSup
+        FROM read_parquet('${url}')
+        WHERE code = ?
+      `,
+        [code],
+      );
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      return {
+        code: String(r.code),
+        insee: String(r.insee),
+        grain: String(r.socio_grain),
+        revenuMedian: numOrNull(r.MED_SL),
+        tauxPauvrete: numOrNull(r.PR_MD60),
+        interdecile: numOrNull(r.IR_D9_D1_SL),
+        partPensions: numOrNull(r.S_RET_PEN_DI),
+        partPrestations: numOrNull(r.S_SOC_BEN_DI),
+        part65plus: numOrNull(r.part65plus),
+        tauxChomage: numOrNull(r.tauxChomage),
+        partCadres: numOrNull(r.partCadres),
+        partOuvriers: numOrNull(r.partOuvriers),
+        partDiplomeSup: numOrNull(r.partDiplomeSup),
+      };
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 // ─── Démographie INSEE (Recensement RP 2022, niveau commune) ──────────────────
 
 export type DemographieCommune = {
@@ -818,6 +955,95 @@ export function useRpColumnCommune(column: RpColumn, enabled = true) {
     queryFn: async (): Promise<CommuneNumericRow[]> => {
       const url = inseeUrl(RP_PARQUET);
       const col: RpColumn = RP_COLUMNS.includes(column) ? column : "part65plus";
+      const rows = await query<{ code: string; value: number }>(`
+        SELECT code, ${col} AS value
+        FROM read_parquet('${url}')
+        WHERE ${col} IS NOT NULL
+      `);
+      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+// ─── Indice de potentiel par bloc (affinité socio + écart au réel) ────────────
+export type PotentielBloc = "rn" | "gauche" | "ecolo" | "centre" | "droite";
+
+/** Choroplèthe du potentiel (affinité − réel) d'un bloc, par commune. */
+export function usePotentielColumn(bloc: PotentielBloc, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "potentiel", bloc],
+    queryFn: async (): Promise<CommuneNumericRow[]> => {
+      const url = parquetUrl("potentiel_commune.parquet");
+      const col = `pot_${bloc}`;
+      const rows = await query<{ code: string; value: number }>(
+        `SELECT code, ${col} AS value FROM read_parquet('${url}') WHERE ${col} IS NOT NULL`,
+      );
+      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+export type PotentielRow = { bloc: PotentielBloc; affinite: number | null; reel: number | null; potentiel: number | null };
+/** Potentiel des 5 blocs pour une commune (fiche). */
+export function usePotentielTerritoire(code: string | null) {
+  return useQuery({
+    enabled: !!code,
+    queryKey: ["potentiel-territoire", code],
+    queryFn: async (): Promise<PotentielRow[] | null> => {
+      if (!code) return null;
+      const url = parquetUrl("potentiel_commune.parquet");
+      const blocs: PotentielBloc[] = ["rn", "gauche", "ecolo", "centre", "droite"];
+      const cols = blocs.flatMap((b) => [`aff_${b}`, `reel_${b}`, `pot_${b}`]).join(", ");
+      const rows = await query<Record<string, number | null>>(
+        `SELECT ${cols} FROM read_parquet('${url}') WHERE code = ?`,
+        [code],
+      );
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      return blocs.map((b) => ({
+        bloc: b,
+        affinite: numOrNull(r[`aff_${b}`]),
+        reel: numOrNull(r[`reel_${b}`]),
+        potentiel: numOrNull(r[`pot_${b}`]),
+      }));
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+export type PotentielMeta = Record<string, { r2: number; moyenne: number }>;
+/** Qualité du modèle (R²) par bloc — pour la transparence. */
+export function usePotentielMeta() {
+  return useQuery({
+    queryKey: ["potentiel-meta"],
+    queryFn: async (): Promise<PotentielMeta> => {
+      const res = await fetch("/electoral/potentiel_meta.json");
+      if (!res.ok) throw new Error("meta potentiel introuvable");
+      const j = (await res.json()) as { blocs: PotentielMeta };
+      return j.blocs;
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+// ─── Logement par commune (Palier 3 — base Comparateur de territoires) ────────
+const LOGEMENT_PARQUET = "logement_2022_commune.parquet";
+const LOGEMENT_COLUMNS = [
+  "partProprietaires", "partLocataires", "partResSecondaires", "partLogVacants",
+] as const;
+export type LogementColumn = (typeof LOGEMENT_COLUMNS)[number];
+
+/** Choroplèthe d'un indicateur logement par commune (statut d'occupation…). */
+export function useLogementColumnCommune(column: LogementColumn, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "logement", column],
+    queryFn: async (): Promise<CommuneNumericRow[]> => {
+      const url = inseeUrl(LOGEMENT_PARQUET);
+      const col: LogementColumn = LOGEMENT_COLUMNS.includes(column) ? column : "partProprietaires";
       const rows = await query<{ code: string; value: number }>(`
         SELECT code, ${col} AS value
         FROM read_parquet('${url}')
