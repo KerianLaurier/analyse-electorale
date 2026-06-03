@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Loader2, X, Search, BadgeCheck, ArrowUpRight } from "lucide-react";
+import { Loader2, X, Search, BadgeCheck, ArrowUpRight, Info, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
 import {
@@ -216,6 +216,34 @@ const TREND_DEF: Partial<Record<Coloration, { file: TrendFile; column: TrendColu
   "legis-gauche": { file: "legis_2022_2024", column: "d_gauche", stops: GAUCHE_STOPS },
 };
 
+// Regroupement des indicateurs par thème (désencombre les longues listes).
+type ColorationGroup = { title?: string; items: Coloration[] };
+function colorationGroups(scrutin: Scrutin): ColorationGroup[] {
+  if (scrutin === "sociologie")
+    return [
+      { title: "Revenus", items: ["revenu", "pauvrete", "inegalites", "prestations", "pensions"] },
+      { title: "Démographie", items: ["age65", "chomage", "cadres", "diplome"] },
+      { title: "Logement", items: ["proprietaires", "ressecondaires", "logvacants"] },
+    ];
+  if (scrutin === "tendances")
+    return [
+      { title: "Présidentielle 2017 → 2022", items: ["evo-abstention", "dynamique-rn", "dynamique-gauche"] },
+      { title: "Législatives 2022 → 2024", items: ["legis-abstention", "legis-rn", "legis-gauche"] },
+    ];
+  if (scrutin === "potentiel")
+    return [{ items: ["pot-rn", "pot-gauche", "pot-ecolo", "pot-centre", "pot-droite"] }];
+  return [{ items: ["vainqueur", "participation", "abstention"] }];
+}
+
+// Aide contextuelle : explique l'indicateur courant au point de décision.
+function colorationHelp(coloration: Coloration): string | null {
+  if (coloration === "vainqueur") return "Couleur = nuance politique arrivée en tête.";
+  if (POT_DEF[coloration])
+    return "Score attendu (profil socio) − réel. Chaud = terrain favorable sous-exploité ; froid = bastion qui sur-performe.";
+  if (TREND_DEF[coloration]) return "Évolution en points entre les deux scrutins. Rouge = hausse, vert = recul.";
+  return null;
+}
+
 function continuousChoropleth(
   stateKey: string,
   stops: Array<[number, string]>,
@@ -274,6 +302,16 @@ const fmtPct = (n: number, d = 1) =>
 const fmtEuro = (n: number) => `${fmtInt(n)} €`;
 const fmtSignedPts = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`;
 const fmtSignedInt = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}`;
+
+/** Formatage de la valeur d'un indicateur (survol, cohérent avec la légende). */
+function colorationValueFmt(coloration: Coloration): (v: number) => string {
+  if (coloration === "participation" || coloration === "abstention") return (v) => fmtPct(v, 0);
+  if (coloration === "revenu") return fmtEuro;
+  if (coloration === "inegalites") return (v) => v.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+  if (TREND_DEF[coloration]) return (v) => `${fmtSignedPts(v)} pts`;
+  if (POT_DEF[coloration]) return (v) => `${fmtSignedInt(v)} pts`;
+  return (v) => `${v.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
+}
 
 // ─── Composant principal ────────────────────────────────────────────────────
 
@@ -433,38 +471,117 @@ function ExplorerView() {
     trend.isFetching ||
     potentiel.isFetching;
 
+  // Aperçu au survol (sans clic) — throttlé en rAF pour rester fluide même à la
+  // maille bureaux (~70k entités).
+  const choroByCode = useMemo(() => {
+    const m = new Map<string, number | string>();
+    if (choropleth) for (const d of choropleth.data) m.set(String(d.code), d.value);
+    return m;
+  }, [choropleth]);
+  const [hover, setHover] = useState<{ name: string; value: number | string | undefined; x: number; y: number } | null>(null);
+  const hoverRaf = useRef<number | null>(null);
+  const onFeatureHover = useCallback(
+    (info: { properties: Record<string, unknown>; point: { x: number; y: number } } | null) => {
+      if (hoverRaf.current) cancelAnimationFrame(hoverRaf.current);
+      if (!info) {
+        setHover(null);
+        return;
+      }
+      const c = pickCode(info.properties);
+      const name = pickName(info.properties);
+      const { x, y } = info.point;
+      hoverRaf.current = requestAnimationFrame(() =>
+        setHover({ name, value: c ? choroByCode.get(c) : undefined, x, y }),
+      );
+    },
+    [choroByCode],
+  );
+
+  // Panneaux en tiroir sur mobile (< lg) ; statiques sur desktop.
+  const [mobilePane, setMobilePane] = useState<null | "filters" | "fiche">(null);
+
   return (
     <div className="relative flex h-[calc(100dvh-3.5rem)] w-full overflow-hidden bg-canvas">
+      {mobilePane && (
+        <div
+          className="absolute inset-0 z-20 bg-foreground/30 lg:hidden"
+          onClick={() => setMobilePane(null)}
+          aria-hidden
+        />
+      )}
+
       <ControlsPanel
         maille={maille}
         scrutin={scrutin}
         coloration={coloration}
         update={update}
         isLoading={isLoading}
+        mobileOpen={mobilePane === "filters"}
+        onCloseMobile={() => setMobilePane(null)}
       />
 
       <div className="relative flex-1">
-        <MapTopBar scrutin={scrutin} onOpenSearch={openSearchPalette} />
+        <MapTopBar
+          scrutin={scrutin}
+          onOpenSearch={openSearchPalette}
+          onOpenFilters={() => setMobilePane("filters")}
+        />
+        {isLoading && (
+          <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Mise à jour de la carte…
+            </span>
+          </div>
+        )}
         <MapView
           className="h-full w-full"
           maille={maille}
           choropleth={choropleth}
           selectedCode={code}
+          onFeatureHover={onFeatureHover}
           onFeatureClick={({ maille: m, properties }) => {
             const c = pickCode(properties);
             if (!c) return;
             setLastClicked({ code: c, name: pickName(properties), maille: m });
             update({ code: c, maille: m });
+            setMobilePane("fiche"); // ouvre la fiche en tiroir sur mobile (inerte sur desktop)
           }}
         />
+        {hover && (
+          <div className="pointer-events-none absolute z-30 max-w-[210px]" style={{ left: hover.x, top: hover.y }}>
+            <div className="ml-3 mt-3 rounded-lg bg-surface/95 px-2.5 py-1.5 shadow-floating ring-1 ring-foreground/10 backdrop-blur">
+              <p className="text-[11.5px] font-semibold leading-tight">{hover.name}</p>
+              <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+                {hover.value == null
+                  ? "Donnée indisponible"
+                  : coloration === "vainqueur"
+                    ? nuanceLabel(String(hover.value))
+                    : `${COLORATION_LABELS[coloration]} : ${colorationValueFmt(coloration)(Number(hover.value))}`}
+              </p>
+            </div>
+          </div>
+        )}
         <MapBottomLegend
-          scrutin={scrutin}
           coloration={coloration}
           winnerRows={coloration === "vainqueur" ? winner.data : undefined}
         />
       </div>
 
-      <aside className="z-10 flex w-[340px] shrink-0 flex-col border-l border-foreground/5 bg-surface/70 backdrop-blur">
+      <aside
+        className={cn(
+          "z-10 flex w-[340px] shrink-0 flex-col border-l border-foreground/5 bg-surface/95 backdrop-blur lg:bg-surface/70",
+          "max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[88%] max-lg:max-w-[360px] max-lg:shadow-floating max-lg:transition-transform max-lg:duration-300",
+          mobilePane === "fiche" ? "max-lg:translate-x-0" : "max-lg:translate-x-full lg:translate-x-0",
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => setMobilePane(null)}
+          aria-label="Fermer la fiche"
+          className="absolute right-2 top-2 z-10 grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground lg:hidden"
+        >
+          <X className="h-4 w-4" />
+        </button>
         <FicheTerritoire
           code={code}
           maille={maille}
@@ -487,28 +604,47 @@ function ControlsPanel({
   coloration,
   update,
   isLoading,
+  mobileOpen,
+  onCloseMobile,
 }: {
   maille: Maille;
   scrutin: Scrutin;
   coloration: Coloration;
   update: (p: { maille?: Maille; scrutin?: Scrutin; coloration?: Coloration; code?: string | null }) => void;
   isLoading: boolean;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }) {
   const mailles = maillesFor(scrutin);
-  const colorations = colorationsFor(scrutin);
 
   return (
-    <div className="z-10 flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-foreground/5 bg-surface/70 p-4 backdrop-blur">
+    <div
+      className={cn(
+        "z-10 flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-foreground/5 bg-surface/95 p-4 backdrop-blur lg:bg-surface/70",
+        "max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:w-[86%] max-lg:max-w-[330px] max-lg:shadow-floating max-lg:transition-transform max-lg:duration-300",
+        mobileOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full lg:translate-x-0",
+      )}
+    >
       <div className="flex items-center justify-between">
         <h2 className="text-[13px] font-semibold tracking-tight">Explorer</h2>
-        {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        <div className="flex items-center gap-2">
+          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Fermer les filtres"
+            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground lg:hidden"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <ScrutinPicker scrutin={scrutin} update={update} />
 
       <div className="h-px bg-foreground/5" />
 
-      <Section title="Maille">
+      <Section title="Échelle géographique">
         <div className="flex flex-col gap-1">
           {mailles.map((m) => (
             <button
@@ -528,14 +664,29 @@ function ControlsPanel({
         </div>
       </Section>
 
-      <Section title="Coloration">
-        <div className="flex flex-wrap gap-1.5">
-          {colorations.map((c) => (
-            <Pill key={c} active={coloration === c} onClick={() => update({ coloration: c })}>
-              {COLORATION_LABELS[c]}
-            </Pill>
+      <Section title="Colorer par">
+        <div className="flex flex-col gap-3">
+          {colorationGroups(scrutin).map((g, i) => (
+            <div key={g.title ?? i} className="flex flex-col gap-1.5">
+              {g.title && (
+                <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground/70">{g.title}</p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {g.items.map((c) => (
+                  <Pill key={c} active={coloration === c} onClick={() => update({ coloration: c })}>
+                    {COLORATION_LABELS[c]}
+                  </Pill>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
+        {colorationHelp(coloration) && (
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-foreground/[0.03] px-2.5 py-2 text-[11px] leading-snug text-muted-foreground">
+            <Info className="mt-px h-3 w-3 shrink-0" />
+            {colorationHelp(coloration)}
+          </p>
+        )}
       </Section>
     </div>
   );
@@ -628,6 +779,9 @@ function ScrutinPicker({
 
       <Section title="Analyses">
         <div className="grid grid-cols-3 gap-1.5">{analysisFamilies.map(familyButton)}</div>
+        <p className="text-[10.5px] leading-snug text-muted-foreground/80">
+          Couches dérivées des données : profil socio-démographique, évolutions entre scrutins, potentiel par bloc.
+        </p>
       </Section>
     </div>
   );
@@ -658,19 +812,38 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
 
 // ─── Barre supérieure carte ────────────────────────────────────────────────────
 
-function MapTopBar({ scrutin, onOpenSearch }: { scrutin: Scrutin; onOpenSearch: () => void }) {
+function MapTopBar({
+  scrutin,
+  onOpenSearch,
+  onOpenFilters,
+}: {
+  scrutin: Scrutin;
+  onOpenSearch: () => void;
+  onOpenFilters: () => void;
+}) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between p-3">
-      <div className="pointer-events-auto rounded-full bg-surface/90 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground shadow-sm backdrop-blur">
-        {SCRUTIN_META[scrutin].long}
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 p-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          onClick={onOpenFilters}
+          aria-label="Ouvrir les filtres"
+          className="pointer-events-auto grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface/90 text-foreground shadow-sm backdrop-blur lg:hidden"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+        </button>
+        <div className="pointer-events-auto truncate rounded-full bg-surface/90 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground shadow-sm backdrop-blur">
+          <span className="lg:hidden">{SCRUTIN_META[scrutin].short}</span>
+          <span className="hidden lg:inline">{SCRUTIN_META[scrutin].long}</span>
+        </div>
       </div>
       <button
         onClick={onOpenSearch}
-        className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-[12px] text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground"
+        aria-label="Rechercher un territoire"
+        className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-full bg-surface/90 px-2.5 py-1.5 text-[12px] text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground sm:px-3"
       >
         <Search className="h-3.5 w-3.5" />
-        Rechercher un territoire
-        <kbd className="rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+        <span className="hidden sm:inline">Rechercher un territoire</span>
+        <kbd className="hidden rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[10px] sm:inline">⌘K</kbd>
       </button>
     </div>
   );
@@ -679,11 +852,9 @@ function MapTopBar({ scrutin, onOpenSearch }: { scrutin: Scrutin; onOpenSearch: 
 // ─── Légende ───────────────────────────────────────────────────────────────────
 
 function MapBottomLegend({
-  scrutin,
   coloration,
   winnerRows,
 }: {
-  scrutin: Scrutin;
   coloration: Coloration;
   winnerRows?: WinningNuanceRow[];
 }) {
@@ -739,7 +910,7 @@ function NuanceMiniLegend({ rows }: { rows: WinningNuanceRow[] }) {
   }, [rows]);
 
   if (present.length === 0) {
-    return <p className="text-[11px] text-muted-foreground">Sélectionne une coloration disponible.</p>;
+    return <p className="text-[11px] text-muted-foreground">Sélectionnez un indicateur disponible.</p>;
   }
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -808,8 +979,7 @@ function FicheTerritoire({
 
   useEffect(() => {
     setTab(election ? "resultats" : isTrends ? "tendances" : isPot ? "potentiel" : hasSocio ? "socio" : "france");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, scrutin]);
+  }, [code, scrutin, election, isTrends, isPot, hasSocio]);
 
   if (!code) return <FicheEmpty />;
 
@@ -1183,7 +1353,7 @@ function FicheEmpty() {
       <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
         Aucune sélection
       </p>
-      <p className="text-[13px] text-muted-foreground">Clique sur un territoire pour ouvrir sa fiche.</p>
+      <p className="text-[13px] text-muted-foreground">Cliquez sur un territoire pour ouvrir sa fiche.</p>
     </div>
   );
 }
