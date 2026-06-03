@@ -102,9 +102,9 @@ export function AnalyserView() {
       </div>
 
       <div className="flex flex-wrap gap-2 px-2">
-        <ToolLink href="/analyser/comparateur" icon={Layers} title="Comparateur" desc="Un territoire, tous les scrutins" />
+        <ToolLink href="/analyser/comparateur" icon={Layers} title="Comparateur" desc="Un territoire, tous les scrutins" desktopOnly />
         <ToolLink href="/analyser/marginalite" icon={Crosshair} title="Sièges marginaux" desc="Circonscriptions les plus disputées" />
-        <ToolLink href="/analyser/simulateur" icon={SlidersHorizontal} title="Simulateur" desc="Projection de sièges par bloc" />
+        <ToolLink href="/analyser/simulateur" icon={SlidersHorizontal} title="Simulateur" desc="Projection de sièges par bloc" desktopOnly />
         <ToolLink href="/analyser/potentiel" icon={Gauge} title="Potentiel" desc="Sur / sous-performance vs sociologie" />
         <ToolLink href="/analyser/sociologie" icon={PieChart} title="Sociologie" desc="Indicateurs INSEE × vote" />
         <ToolLink href="/analyser/ciblage" icon={Target} title="Ciblage terrain" desc="Bureaux prioritaires d'une circo" />
@@ -120,16 +120,23 @@ function ToolLink({
   icon: Icon,
   title,
   desc,
+  desktopOnly,
 }: {
   href: string;
   icon: typeof Layers;
   title: string;
   desc: string;
+  // Outils peu exploitables au doigt (tableaux/réglages larges) : masqués du
+  // menu sur mobile, accessibles sur desktop (et toujours par URL directe).
+  desktopOnly?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className="group inline-flex items-center gap-2.5 rounded-lg bg-surface px-3 py-2 shadow-card transition-colors hover:bg-surface-soft"
+      className={cn(
+        "group inline-flex items-center gap-2.5 rounded-lg bg-surface px-3 py-2 shadow-card transition-colors hover:bg-surface-soft",
+        desktopOnly && "hidden md:inline-flex",
+      )}
     >
       <span className="grid h-7 w-7 place-items-center rounded-md bg-warm/15 text-warm">
         <Icon className="h-3.5 w-3.5" />
