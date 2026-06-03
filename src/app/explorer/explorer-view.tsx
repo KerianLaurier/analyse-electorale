@@ -551,8 +551,13 @@ function ScrutinPicker({
   update: (p: { scrutin?: Scrutin; code?: string | null }) => void;
 }) {
   const { family, year, tour } = parseScrutin(scrutin);
-  const years = family === "sociologie" ? [] : yearsFor(family);
+  const electionScrutin = isElection(scrutin);
+  const years = electionScrutin ? yearsFor(family) : [];
   const tours = year != null ? toursFor(family, year) : [];
+
+  // Sépare les familles « élection » des couches d'analyse (dérivées).
+  const electionFamilies = FAMILY_ORDER.filter((f) => isElection(defaultScrutinFor(f)));
+  const analysisFamilies = FAMILY_ORDER.filter((f) => !isElection(defaultScrutinFor(f)));
 
   function pickFamily(f: ScrutinFamily) {
     if (f === family) return;
@@ -568,28 +573,28 @@ function ScrutinPicker({
     if (next) update({ scrutin: next, code: null });
   }
 
+  const familyButton = (f: ScrutinFamily) => (
+    <button
+      key={f}
+      onClick={() => pickFamily(f)}
+      className={cn(
+        "rounded-lg px-2.5 py-1.5 text-center text-[12px] font-medium transition-colors",
+        family === f
+          ? "bg-warm/15 text-foreground ring-1 ring-warm/40"
+          : "bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.08]",
+      )}
+    >
+      {FAMILY_LABELS[f]}
+    </button>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <Section title="Type de scrutin">
-        <div className="grid grid-cols-2 gap-1.5">
-          {FAMILY_ORDER.map((f) => (
-            <button
-              key={f}
-              onClick={() => pickFamily(f)}
-              className={cn(
-                "rounded-lg px-2.5 py-1.5 text-center text-[12px] font-medium transition-colors",
-                family === f
-                  ? "bg-warm/15 text-foreground ring-1 ring-warm/40"
-                  : "bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.08]",
-              )}
-            >
-              {FAMILY_LABELS[f]}
-            </button>
-          ))}
-        </div>
+        <div className="grid grid-cols-2 gap-1.5">{electionFamilies.map(familyButton)}</div>
       </Section>
 
-      {family !== "sociologie" && (
+      {electionScrutin && (
         <div className="grid grid-cols-[1fr_auto] gap-3">
           <Section title="Année">
             <div className="flex flex-wrap gap-1.5">
@@ -620,6 +625,10 @@ function ScrutinPicker({
           </Section>
         </div>
       )}
+
+      <Section title="Analyses">
+        <div className="grid grid-cols-3 gap-1.5">{analysisFamilies.map(familyButton)}</div>
+      </Section>
     </div>
   );
 }
