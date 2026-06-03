@@ -84,7 +84,7 @@ export function SuivreView({ initialCategory = "actualite" }: { initialCategory?
   const [category, setCategory] = useState<Category>(initialCategory);
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] w-full min-w-0 flex-col gap-3 overflow-hidden bg-canvas p-3 lg:flex-row">
+    <div className="flex w-full min-w-0 flex-col gap-3 bg-canvas p-3 lg:h-[calc(100dvh-3.5rem-var(--bottom-nav))] lg:flex-row lg:overflow-hidden">
       {/* Rail catégories : barre horizontale scrollable sur mobile, colonne sur desktop. */}
       <nav className="flex shrink-0 gap-1 overflow-x-auto rounded-lg bg-surface p-2 shadow-card [-ms-overflow-style:none] [scrollbar-width:none] lg:w-[180px] lg:flex-col lg:overflow-visible lg:p-3 [&::-webkit-scrollbar]:hidden">
         <p className="hidden px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground lg:block">
@@ -1069,7 +1069,8 @@ function AgendaDetail({ event }: { event: AgendaEvent }) {
 
 function FilterSidebar({ children }: { children: React.ReactNode }) {
   return (
-    <aside className="flex w-[248px] shrink-0 flex-col gap-5 overflow-y-auto rounded-lg bg-surface p-4 text-[13px] shadow-card">
+    // Filtres : masqués sur mobile (secondaires), colonne dédiée en desktop.
+    <aside className="hidden flex-col gap-5 overflow-y-auto rounded-lg bg-surface p-4 text-[13px] shadow-card lg:flex lg:w-[248px] lg:shrink-0">
       {children}
     </aside>
   );
@@ -1130,7 +1131,7 @@ function ListColumn({
   pager?: { page: number; pageCount: number; total: number; onPage: (p: number) => void };
 }) {
   return (
-    <section className="flex w-[400px] shrink-0 flex-col overflow-hidden rounded-lg bg-surface shadow-card">
+    <section className="flex max-h-[70vh] w-full flex-col overflow-hidden rounded-lg bg-surface shadow-card lg:max-h-none lg:w-[400px] lg:shrink-0">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/60 px-4">
         <div className="flex flex-col leading-tight">
           <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{eyebrow}</p>

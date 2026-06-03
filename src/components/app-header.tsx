@@ -82,12 +82,32 @@ export function AppHeader() {
     window.dispatchEvent(event);
   }
 
+  const navPill = (item: (typeof PRIMARY_NAV)[number]) => {
+    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200 ease-out",
+          active
+            ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(10,10,12,0.18)]"
+            : "text-foreground/70 hover:text-foreground hover:bg-surface/60",
+        )}
+      >
+        {item.label}
+      </Link>
+    );
+  };
+
   return (
+    <>
     <header className="sticky top-0 z-40 bg-canvas/95 supports-[backdrop-filter]:bg-canvas/70 backdrop-blur">
-      {/* Desktop : grille 3 colonnes (nav centrée). Mobile : flex, nav scrollable
-         au centre — même barre que desktop, pas de barre basse séparée. */}
-      <div className="flex h-14 items-center gap-2 px-3 sm:px-4 lg:grid lg:grid-cols-[1fr_auto_1fr]">
-        {/* Marque (texte masqué en très petit) */}
+      {/* Desktop : grille 3 colonnes (nav centrée en haut). Mobile : logo +
+         utilitaires seulement — la navigation est en bas (ergonomie pouce). */}
+      <div className="flex h-14 items-center justify-between gap-2 px-3 sm:px-4 lg:grid lg:grid-cols-[1fr_auto_1fr]">
+        {/* Marque */}
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80 lg:justify-self-start"
@@ -98,36 +118,15 @@ export function AppHeader() {
           >
             <span className="block h-3 w-3 rounded-sm bg-primary-foreground" />
           </span>
-          <span className="hidden text-[13px] font-semibold tracking-tight sm:inline">
-            MOUVANCIA
-          </span>
+          <span className="text-[13px] font-semibold tracking-tight">MOUVANCIA</span>
         </Link>
 
-        {/* Nav pill — identique desktop ; sur mobile prend l'espace central et
-           défile horizontalement si nécessaire (sans barre de défilement). */}
+        {/* Nav pill (desktop, en haut au centre) */}
         <nav
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] [-ms-overflow-style:none] [scrollbar-width:none] lg:flex-none lg:justify-self-center lg:overflow-visible [&::-webkit-scrollbar]:hidden"
+          className="hidden items-center gap-1 rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] lg:inline-flex lg:justify-self-center"
           aria-label="Sections principales"
         >
-          {PRIMARY_NAV.map((item) => {
-            const active =
-              pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "shrink-0 whitespace-nowrap rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200 ease-out",
-                  active
-                    ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(10,10,12,0.18)]"
-                    : "text-foreground/70 hover:text-foreground hover:bg-surface/60",
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+          {PRIMARY_NAV.map(navPill)}
         </nav>
 
         {/* Utilities — sur mobile : recherche + notifications + compte (les
@@ -216,6 +215,21 @@ export function AppHeader() {
         </div>
       </div>
     </header>
+
+      {/* Navigation pill EN BAS sur mobile (même design que desktop, ergonomie
+         pouce). Flottante au-dessus de la zone sûre. */}
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pt-2 lg:hidden"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" }}
+      >
+        <nav
+          className="pointer-events-auto inline-flex items-center gap-1 rounded-pill bg-surface/95 p-1 text-[13px] shadow-floating ring-1 ring-foreground/10 backdrop-blur"
+          aria-label="Sections principales"
+        >
+          {PRIMARY_NAV.map(navPill)}
+        </nav>
+      </div>
+    </>
   );
 }
 

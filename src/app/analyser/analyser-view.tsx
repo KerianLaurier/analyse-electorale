@@ -315,7 +315,7 @@ function ComparaisonMode() {
       </div>
 
       {/* KPIs */}
-      <div className="anim-stagger grid grid-cols-4 gap-2">
+      <div className="anim-stagger grid grid-cols-2 gap-2 sm:grid-cols-4">
         {numeric ? (
           <>
             <KPICard label={`${MAILLE_LABELS[maille]}s analysés`} value={numericKpis ? fmtInt(numericKpis.n) : "—"} />
@@ -341,8 +341,8 @@ function ComparaisonMode() {
         )}
       </div>
 
-      {/* Classement + carte */}
-      <div className="grid min-h-[420px] grid-cols-[1fr_420px] gap-2">
+      {/* Classement + carte — empilés sur mobile, côte à côte en desktop */}
+      <div className="grid grid-cols-1 gap-2 lg:min-h-[420px] lg:grid-cols-[1fr_420px]">
         <div className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-card">
           <div className="flex items-center justify-between">
             <div>
@@ -371,7 +371,7 @@ function ComparaisonMode() {
           )}
         </div>
 
-        <div className="flex flex-col overflow-hidden rounded-lg bg-surface shadow-card">
+        <div className="flex h-[320px] flex-col overflow-hidden rounded-lg bg-surface shadow-card lg:h-auto">
           <div className="border-b border-border/60 px-4 py-3">
             <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Carte</p>
             <p className="mt-0.5 text-[13px] font-medium">
@@ -403,7 +403,7 @@ function NumericList({
         const pos = r.delta >= 0;
         const widthPct = Math.min(50, (Math.abs(r.delta) / maxAbs) * 50);
         return (
-          <li key={r.code} className="grid grid-cols-[150px_1fr_72px] items-center gap-3 text-[12px]">
+          <li key={r.code} className="grid grid-cols-[100px_1fr_60px] items-center gap-2 text-[12px] sm:grid-cols-[150px_1fr_72px] sm:gap-3">
             <span className="truncate text-foreground/80" title={r.libelle}>{r.libelle}</span>
             <div className="relative h-2 rounded-pill bg-surface-soft/60">
               <span className="absolute left-1/2 top-0 h-full w-px bg-border" />
@@ -432,7 +432,7 @@ function FlipList({ rows }: { rows: { code: string; libelle: string; from: strin
     <ul className="anim-stagger flex flex-col gap-1">
       {rows.map((r) => (
         <li key={r.code} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] hover:bg-surface-soft/50">
-          <span className="w-[150px] truncate text-foreground/80" title={r.libelle}>{r.libelle}</span>
+          <span className="w-[88px] shrink-0 truncate text-foreground/80 sm:w-[150px]" title={r.libelle}>{r.libelle}</span>
           <NuanceChip code={r.from} />
           <ArrowRight className="h-3 w-3 text-muted-foreground" />
           <NuanceChip code={r.to} />
@@ -519,7 +519,7 @@ function CorrelationMode() {
         {isLoading && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
-      <div className="anim-stagger grid grid-cols-4 gap-2">
+      <div className="anim-stagger grid grid-cols-2 gap-2 sm:grid-cols-4">
         <KPICard label={`${mailleLabel} croisées`} value={fmtInt(n)} />
         <KPICard
           label="Corrélation (Pearson r)"
@@ -534,7 +534,7 @@ function CorrelationMode() {
         <KPICard label="Intensité" value={n ? strength(r) : "—"} hint={r >= 0 ? "relation positive" : "relation négative"} />
       </div>
 
-      <div className="grid min-h-[420px] grid-cols-[1fr_320px] gap-2">
+      <div className="grid grid-cols-1 gap-2 lg:min-h-[420px] lg:grid-cols-[1fr_320px]">
         <div className="flex flex-col gap-2 rounded-lg bg-surface p-4 shadow-card">
           <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Nuage de points · {meta.label} × part {bloc.label}

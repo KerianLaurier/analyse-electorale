@@ -64,7 +64,8 @@ export default function RootLayout({
               <RouteProgress />
             </Suspense>
             <AppHeader />
-            <main className="flex-1 flex flex-col">{children}</main>
+            {/* pb réservé à la nav basse mobile (--bottom-nav = 0 en desktop). */}
+            <main className="flex-1 flex flex-col pb-[var(--bottom-nav)]">{children}</main>
             <CommandPalette />
           </QueryProvider>
         </ThemeProvider>

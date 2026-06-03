@@ -138,6 +138,17 @@
   /* Courbes d'animation (décélération naturelle, sans rebond) */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Hauteur réservée à la navigation : 0 en desktop (nav en haut), barre basse
+     en mobile (cf. media query). Les vues plein-écran s'en servent pour ne pas
+     passer sous la nav. */
+  --bottom-nav: 0px;
+}
+
+@media (max-width: 1023.98px) {
+  :root {
+    --bottom-nav: calc(4rem + env(safe-area-inset-bottom));
+  }
 }
 
 .dark {
