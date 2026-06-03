@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound, Map as MapIcon, BarChart3, Activity } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
@@ -20,10 +20,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const PRIMARY_NAV = [
-  { href: "/explorer", label: "Explorer", icon: MapIcon },
-  { href: "/analyser", label: "Analyser", icon: BarChart3 },
-  { href: "/suivre", label: "Suivre", icon: Activity },
-  { href: "/espace", label: "Mon QG", icon: Megaphone },
+  { href: "/explorer", label: "Explorer" },
+  { href: "/analyser", label: "Analyser" },
+  { href: "/suivre", label: "Suivre" },
+  { href: "/espace", label: "Mon QG" },
 ] as const;
 
 // Pages sans chrome applicatif : écrans d'auth + landing publique (`/`),
@@ -83,15 +83,14 @@ export function AppHeader() {
   }
 
   return (
-    <>
     <header className="sticky top-0 z-40 bg-canvas/95 supports-[backdrop-filter]:bg-canvas/70 backdrop-blur">
-      {/* Grid 3 colonnes : nav centrée géométriquement (justify-self-center)
-         indépendamment des largeurs de gauche/droite. */}
-      <div className="grid h-14 grid-cols-[1fr_auto_1fr] items-center px-4">
-        {/* Marque */}
+      {/* Desktop : grille 3 colonnes (nav centrée). Mobile : flex, nav scrollable
+         au centre — même barre que desktop, pas de barre basse séparée. */}
+      <div className="flex h-14 items-center gap-2 px-3 sm:px-4 lg:grid lg:grid-cols-[1fr_auto_1fr]">
+        {/* Marque (texte masqué en très petit) */}
         <Link
           href="/"
-          className="flex items-center gap-2.5 justify-self-start transition-opacity hover:opacity-80"
+          className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80 lg:justify-self-start"
         >
           <span
             aria-hidden
@@ -99,14 +98,15 @@ export function AppHeader() {
           >
             <span className="block h-3 w-3 rounded-sm bg-primary-foreground" />
           </span>
-          <span className="text-[13px] font-semibold tracking-tight">
+          <span className="hidden text-[13px] font-semibold tracking-tight sm:inline">
             MOUVANCIA
           </span>
         </Link>
 
-        {/* Nav pill centrée géométriquement (masquée sur mobile → barre basse) */}
+        {/* Nav pill — identique desktop ; sur mobile prend l'espace central et
+           défile horizontalement si nécessaire (sans barre de défilement). */}
         <nav
-          className="hidden items-center gap-1 justify-self-center rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] lg:inline-flex"
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] [-ms-overflow-style:none] [scrollbar-width:none] lg:flex-none lg:justify-self-center lg:overflow-visible [&::-webkit-scrollbar]:hidden"
           aria-label="Sections principales"
         >
           {PRIMARY_NAV.map((item) => {
@@ -116,8 +116,9 @@ export function AppHeader() {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200 ease-out",
+                  "shrink-0 whitespace-nowrap rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200 ease-out",
                   active
                     ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(10,10,12,0.18)]"
                     : "text-foreground/70 hover:text-foreground hover:bg-surface/60",
@@ -129,8 +130,9 @@ export function AppHeader() {
           })}
         </nav>
 
-        {/* Utilities — collés à droite */}
-        <div className="flex items-center gap-1.5 justify-self-end">
+        {/* Utilities — sur mobile : recherche + notifications + compte (les
+           raccourcis épingles/réglages restent dans le menu compte). */}
+        <div className="flex shrink-0 items-center gap-1.5 lg:justify-self-end">
           <button
             type="button"
             onClick={openPalette}
@@ -144,7 +146,7 @@ export function AppHeader() {
             href="/espace?tab=pins"
             aria-label="Mes épingles"
             title="Mes épingles"
-            className="grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
+            className="hidden h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95 sm:grid"
           >
             <Star className="h-4 w-4" />
           </Link>
@@ -156,7 +158,7 @@ export function AppHeader() {
             href="/auth/team"
             aria-label="Paramètres de l'équipe"
             title="Équipe & abonnement"
-            className="grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
+            className="hidden h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95 sm:grid"
           >
             <Settings2 className="h-4 w-4" />
           </Link>
@@ -214,33 +216,6 @@ export function AppHeader() {
         </div>
       </div>
     </header>
-
-      {/* Navigation basse (mobile) — sections principales, ergonomie pouce */}
-      <nav
-        aria-label="Sections principales"
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-canvas/95 backdrop-blur supports-[backdrop-filter]:bg-canvas/80 lg:hidden"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        {PRIMARY_NAV.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10.5px] font-medium transition-colors",
-                active ? "text-warm" : "text-foreground/60 hover:text-foreground",
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-    </>
   );
 }
 

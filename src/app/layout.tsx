@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -28,6 +28,15 @@ export const metadata: Metadata = {
   title: "Analyse électorale",
   description:
     "Outil professionnel d'analyse politique et électorale — présidentielle et législatives 2027.",
+  applicationName: "MOUVANCIA",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "MOUVANCIA" },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f4f3ef",
+  // Confort mobile : occupe la zone sûre (encoches), zoom utilisateur permis.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -55,8 +64,7 @@ export default function RootLayout({
               <RouteProgress />
             </Suspense>
             <AppHeader />
-            {/* pb-16 : dégagement pour la barre de navigation basse (mobile). */}
-            <main className="flex-1 flex flex-col pb-16 lg:pb-0">{children}</main>
+            <main className="flex-1 flex flex-col">{children}</main>
             <CommandPalette />
           </QueryProvider>
         </ThemeProvider>
