@@ -69,7 +69,6 @@ type ScrutinMeta = {
   mailles: Maille[];
 };
 
-const ALL_MAILLES: Maille[] = ["regions", "departements", "circonscriptions", "communes"];
 // Scrutins disposant de résultats par bureau de vote (agrégats `*_bureaux_*`).
 const WITH_BUREAUX: Maille[] = ["regions", "departements", "circonscriptions", "communes", "bureaux"];
 const NO_CIRCO: Maille[] = ["regions", "departements", "communes"];
