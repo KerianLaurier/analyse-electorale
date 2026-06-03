@@ -36,7 +36,11 @@ export type Coloration =
   | "cadres"
   | "diplome"
   | "evo-abstention"
-  | "dynamique-rn";
+  | "dynamique-rn"
+  | "dynamique-gauche"
+  | "legis-abstention"
+  | "legis-rn"
+  | "legis-gauche";
 
 export type ScrutinFamily =
   | "presidentielle"
@@ -91,8 +95,12 @@ export const COLORATION_LABELS: Record<Coloration, string> = {
   chomage: "Taux de chômage",
   cadres: "Part de cadres",
   diplome: "Diplômés du supérieur",
-  "evo-abstention": "Évolution abstention (2017→22)",
-  "dynamique-rn": "Dynamique RN / ext. droite (2017→22)",
+  "evo-abstention": "Abstention · présid. 17→22",
+  "dynamique-rn": "RN / ext. droite · présid. 17→22",
+  "dynamique-gauche": "Gauche / NFP · présid. 17→22",
+  "legis-abstention": "Abstention · légis. 22→24",
+  "legis-rn": "RN / ext. droite · légis. 22→24",
+  "legis-gauche": "Gauche / NFP · légis. 22→24",
 };
 
 export function isElection(scrutin: Scrutin): boolean {
@@ -174,7 +182,11 @@ export function defaultScrutinFor(family: ScrutinFamily): Scrutin {
 export function colorationsFor(scrutin: Scrutin): Coloration[] {
   if (scrutin === "sociologie")
     return ["revenu", "pauvrete", "inegalites", "prestations", "pensions", "age65", "chomage", "cadres", "diplome"];
-  if (scrutin === "tendances") return ["evo-abstention", "dynamique-rn"];
+  if (scrutin === "tendances")
+    return [
+      "evo-abstention", "dynamique-rn", "dynamique-gauche",
+      "legis-abstention", "legis-rn", "legis-gauche",
+    ];
   return ["vainqueur", "participation", "abstention"];
 }
 
@@ -199,6 +211,10 @@ const COLORATIONS = new Set<Coloration>([
   "diplome",
   "evo-abstention",
   "dynamique-rn",
+  "dynamique-gauche",
+  "legis-abstention",
+  "legis-rn",
+  "legis-gauche",
 ]);
 const MAILLE_SET: ReadonlySet<Maille> = new Set<Maille>(MAILLE_ORDER);
 

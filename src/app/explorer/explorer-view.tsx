@@ -25,6 +25,8 @@ import {
   type CommuneSociologie,
   type BureauSociologie,
   type TerritoireTrends,
+  type TrendFile,
+  type TrendColumn,
 } from "@/lib/queries";
 import type { Choropleth } from "@/components/map";
 import { buildNuanceMatchExpression, nuanceColor, nuanceLabel } from "@/lib/nuances";
@@ -143,22 +145,33 @@ const DIPLOME_STOPS: Array<[number, string]> = [
 ];
 
 // Paliers DIVERGENTS pour les deltas (taux 0..1, signés). Négatif → positif.
-const EVO_ABST_STOPS: Array<[number, string]> = [
-  [-0.04, "#15803d"],
-  [-0.01, "#86efac"],
-  [0, "#f1f5f9"],
-  [0.04, "#fb923c"],
-  [0.08, "#dc2626"],
-  [0.12, "#7f1d1d"],
+// Abstention présidentielle (faibles variations) vs législatives (chute ~20 pts
+// en 2024) → deux échelles distinctes. Hausse abstention = défavorable (rouge).
+const ABST_PRESID_STOPS: Array<[number, string]> = [
+  [-0.04, "#15803d"], [-0.01, "#86efac"], [0, "#f1f5f9"], [0.04, "#fb923c"], [0.08, "#dc2626"], [0.12, "#7f1d1d"],
 ];
-const DYN_RN_STOPS: Array<[number, string]> = [
-  [-0.04, "#2563eb"],
-  [-0.01, "#bfdbfe"],
-  [0, "#f1f5f9"],
-  [0.05, "#fca5a5"],
-  [0.1, "#dc2626"],
-  [0.18, "#7f1d1d"],
+const ABST_LEGIS_STOPS: Array<[number, string]> = [
+  [-0.3, "#14532d"], [-0.18, "#22c55e"], [-0.08, "#86efac"], [0, "#f1f5f9"], [0.05, "#fb923c"], [0.1, "#dc2626"],
 ];
+// RN / extrême droite : recul (bleu) → hausse (rouge sombre). Couvre présid + légis.
+const RN_STOPS: Array<[number, string]> = [
+  [-0.04, "#2563eb"], [-0.01, "#bfdbfe"], [0, "#f1f5f9"], [0.06, "#fca5a5"], [0.14, "#dc2626"], [0.25, "#7f1d1d"],
+];
+// Gauche / NFP : recul (bleu) → hausse (magenta), hue distincte du RN.
+const GAUCHE_STOPS: Array<[number, string]> = [
+  [-0.08, "#1d4ed8"], [-0.02, "#bfdbfe"], [0, "#f1f5f9"], [0.02, "#fbcfe8"], [0.08, "#be185d"], [0.16, "#831843"],
+];
+
+// Mapping coloration « Tendances » → (fichier, colonne, paliers). Une seule
+// requête active à la fois selon la coloration choisie.
+const TREND_DEF: Partial<Record<Coloration, { file: TrendFile; column: TrendColumn; stops: Array<[number, string]> }>> = {
+  "evo-abstention": { file: "presid_2017_2022", column: "d_abstention", stops: ABST_PRESID_STOPS },
+  "dynamique-rn": { file: "presid_2017_2022", column: "d_rn", stops: RN_STOPS },
+  "dynamique-gauche": { file: "presid_2017_2022", column: "d_gauche", stops: GAUCHE_STOPS },
+  "legis-abstention": { file: "legis_2022_2024", column: "d_abstention", stops: ABST_LEGIS_STOPS },
+  "legis-rn": { file: "legis_2022_2024", column: "d_rn", stops: RN_STOPS },
+  "legis-gauche": { file: "legis_2022_2024", column: "d_gauche", stops: GAUCHE_STOPS },
+};
 
 function continuousChoropleth(
   stateKey: string,
@@ -268,10 +281,18 @@ function ExplorerView() {
   const chomage = useRpColumnCommune("tauxChomage", scrutin === "sociologie" && coloration === "chomage");
   const cadres = useRpColumnCommune("partCadres", scrutin === "sociologie" && coloration === "cadres");
   const diplome = useRpColumnCommune("partDiplomeSup", scrutin === "sociologie" && coloration === "diplome");
-  const evoAbst = useTrendColumn("d_abstention", maille, scrutin === "tendances" && coloration === "evo-abstention");
-  const dynRn = useTrendColumn("d_rn", maille, scrutin === "tendances" && coloration === "dynamique-rn");
+  const trendDef = scrutin === "tendances" ? TREND_DEF[coloration] : undefined;
+  const trend = useTrendColumn(
+    trendDef?.file ?? "presid_2017_2022",
+    trendDef?.column ?? "d_abstention",
+    maille,
+    !!trendDef,
+  );
 
   const choropleth = useMemo<Choropleth | undefined>(() => {
+    if (trendDef) {
+      return trend.data ? continuousChoropleth(coloration, trendDef.stops, trend.data) : undefined;
+    }
     switch (coloration) {
       case "vainqueur":
         return winner.data ? nuanceChoropleth(winner.data) : undefined;
@@ -309,15 +330,13 @@ function ExplorerView() {
         return cadres.data ? continuousChoropleth("cadres", CADRES_STOPS, cadres.data) : undefined;
       case "diplome":
         return diplome.data ? continuousChoropleth("diplome", DIPLOME_STOPS, diplome.data) : undefined;
-      case "evo-abstention":
-        return evoAbst.data ? continuousChoropleth("evo-abstention", EVO_ABST_STOPS, evoAbst.data) : undefined;
-      case "dynamique-rn":
-        return dynRn.data ? continuousChoropleth("dynamique-rn", DYN_RN_STOPS, dynRn.data) : undefined;
       default:
         return undefined;
     }
   }, [
     coloration,
+    trendDef,
+    trend.data,
     winner.data,
     participation.data,
     abstention.data,
@@ -330,8 +349,6 @@ function ExplorerView() {
     chomage.data,
     cadres.data,
     diplome.data,
-    evoAbst.data,
-    dynRn.data,
   ]);
 
   const isLoading =
@@ -347,8 +364,7 @@ function ExplorerView() {
     chomage.isFetching ||
     cadres.isFetching ||
     diplome.isFetching ||
-    evoAbst.isFetching ||
-    dynRn.isFetching;
+    trend.isFetching;
 
   return (
     <div className="relative flex h-[calc(100dvh-3.5rem)] w-full overflow-hidden bg-canvas">
@@ -624,11 +640,9 @@ function MapBottomLegend({
         <ContinuousMiniLegend stops={CADRES_STOPS} fmt={(v) => `${v}%`} />
       ) : coloration === "diplome" ? (
         <ContinuousMiniLegend stops={DIPLOME_STOPS} fmt={(v) => `${v}%`} />
-      ) : coloration === "evo-abstention" ? (
-        <ContinuousMiniLegend stops={EVO_ABST_STOPS} fmt={fmtSignedPts} />
-      ) : (
-        <ContinuousMiniLegend stops={DYN_RN_STOPS} fmt={fmtSignedPts} />
-      )}
+      ) : TREND_DEF[coloration] ? (
+        <ContinuousMiniLegend stops={TREND_DEF[coloration]!.stops} fmt={fmtSignedPts} />
+      ) : null}
     </div>
   );
 }
@@ -701,7 +715,8 @@ function FicheTerritoire({
   const detail = useScrutinDetail(election ? scrutin : null, maille, code);
   const socio = useSociologieCommune(isCommune ? code : null);
   const bureauSocio = useSociologieBureau(isBureau ? code : null);
-  const trends = useTrendsTerritoire(isTrends ? maille : null, isTrends ? code : null);
+  const trendsPresid = useTrendsTerritoire("presid_2017_2022", isTrends ? maille : null, isTrends ? code : null);
+  const trendsLegis = useTrendsTerritoire("legis_2022_2024", isTrends ? maille : null, isTrends ? code : null);
   const nationalPart = useScrutinNationalParticipation(election ? scrutin : null);
 
   useEffect(() => {
@@ -727,7 +742,7 @@ function FicheTerritoire({
     (election && detail.isFetching && !detail.data) ||
     (isCommune && socio.isFetching && !socio.data) ||
     (isBureau && bureauSocio.isFetching && !bureauSocio.data) ||
-    (isTrends && trends.isFetching && !trends.data);
+    (isTrends && trendsPresid.isFetching && !trendsPresid.data);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -783,7 +798,7 @@ function FicheTerritoire({
         ) : tabId === "resultats" ? (
           detail.data ? <ResultsBlock detail={detail.data} /> : <FicheUnavailable />
         ) : tabId === "tendances" ? (
-          <TrendsBlock trends={trends.data ?? null} />
+          <TrendsBlock presid={trendsPresid.data ?? null} legis={trendsLegis.data ?? null} />
         ) : tabId === "socio" ? (
           isBureau ? (
             <BureauSocioBlock socio={bureauSocio.data ?? null} />
@@ -919,43 +934,49 @@ function BureauSocioBlock({ socio }: { socio: BureauSociologie | null }) {
   );
 }
 
-function TrendsBlock({ trends }: { trends: TerritoireTrends | null }) {
-  if (!trends || (trends.dAbstention == null && trends.dRn == null)) {
-    return <p className="text-[12px] text-muted-foreground">Dynamique indisponible pour ce territoire.</p>;
-  }
-  const rows: { label: string; delta: number | null; level: number | null; hint: string; invert?: boolean }[] = [
-    { label: "Dynamique RN / extrême droite", delta: trends.dRn, level: trends.rn2022, hint: "part des exprimés", invert: true },
-    { label: "Évolution de l’abstention", delta: trends.dAbstention, level: trends.abst2022, hint: "des inscrits", invert: true },
+function TrendComparison({ title, period, trends }: { title: string; period: string; trends: TerritoireTrends | null }) {
+  if (!trends || (trends.dAbstention == null && trends.dRn == null && trends.dGauche == null)) return null;
+  const rows: { label: string; delta: number | null; level: number | null }[] = [
+    { label: "RN / extrême droite", delta: trends.dRn, level: trends.rnNow },
+    { label: "Gauche / NFP", delta: trends.dGauche, level: trends.gaucheNow },
+    { label: "Abstention", delta: trends.dAbstention, level: trends.abstNow },
   ];
   return (
-    <div className="flex flex-col gap-2.5">
-      <p className="text-[10.5px] leading-snug text-muted-foreground">
-        Évolution entre les <strong className="font-medium text-foreground/80">présidentielles 2017 et 2022</strong> (1ᵉ tour).
-      </p>
-      {rows.map((r) => {
-        if (r.delta == null) return null;
-        const up = r.delta >= 0;
-        // Hausse RN/abstention = défavorable → rouge ; baisse = vert.
-        const tone = (r.invert ? up : !up) ? "text-rose-600" : "text-emerald-600";
-        return (
-          <div key={r.label} className="rounded-xl border border-foreground/5 bg-surface/60 p-3">
-            <p className="text-[11px] text-muted-foreground">{r.label}</p>
-            <div className="mt-0.5 flex items-baseline justify-between gap-2">
-              <span className="text-[18px] font-semibold tabular-nums">
-                {fmtSignedPts(r.delta)} pts
-              </span>
-              {r.level != null && (
-                <span className="text-[11px] text-muted-foreground tabular-nums">
-                  {fmtPct(r.level, 1)} en 2022
+    <div>
+      <p className="text-[11px] font-semibold">{title}</p>
+      <p className="mb-1.5 text-[10px] text-muted-foreground">{period}</p>
+      <div className="flex flex-col gap-1.5">
+        {rows.map((r) => {
+          if (r.delta == null) return null;
+          const up = r.delta >= 0;
+          return (
+            <div key={r.label} className="flex items-baseline justify-between gap-2 rounded-lg border border-foreground/5 bg-surface/60 px-2.5 py-1.5">
+              <span className="text-[11.5px]">{r.label}</span>
+              <span className="flex items-baseline gap-2">
+                {r.level != null && <span className="text-[10px] text-muted-foreground tabular-nums">{fmtPct(r.level, 0)}</span>}
+                <span className={cn("text-[12.5px] font-semibold tabular-nums", up ? "text-rose-600" : "text-emerald-600")}>
+                  {fmtSignedPts(r.delta)} pts
                 </span>
-              )}
+              </span>
             </div>
-            <p className={cn("text-[10px] font-medium", tone)}>
-              {up ? "En hausse" : "En recul"} · {r.hint}
-            </p>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TrendsBlock({ presid, legis }: { presid: TerritoireTrends | null; legis: TerritoireTrends | null }) {
+  if (!presid && !legis) {
+    return <p className="text-[12px] text-muted-foreground">Dynamique indisponible pour ce territoire.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[10.5px] leading-snug text-muted-foreground">
+        Évolution des blocs (part des exprimés) et de l’abstention (part des inscrits). Hausse en rouge, recul en vert.
+      </p>
+      <TrendComparison title="Présidentielle" period="2017 → 2022 · 1ᵉ tour" trends={presid} />
+      <TrendComparison title="Législatives" period="2022 → 2024 · 1ᵉ tour" trends={legis} />
     </div>
   );
 }

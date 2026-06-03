@@ -794,19 +794,20 @@ export function useSociologieCommune(code: string | null) {
 // Source : electoral/trends/presid_2017_2022.parquet (build-trends.py). Deltas
 // signés en taux 0..1 par (maille, code).
 
-const TRENDS_PARQUET = "trends/presid_2017_2022.parquet";
+export type TrendFile = "presid_2017_2022" | "legis_2022_2024";
 const TREND_COLUMNS = [
-  "d_abstention", "d_rn", "abst_2017", "abst_2022", "rn_2017", "rn_2022",
+  "d_abstention", "d_rn", "d_gauche",
+  "abst_then", "abst_now", "rn_then", "rn_now", "gauche_then", "gauche_now",
 ] as const;
 export type TrendColumn = (typeof TREND_COLUMNS)[number];
 
-/** Choroplèthe d'une métrique de tendance pour une maille donnée. */
-export function useTrendColumn(column: TrendColumn, maille: string, enabled = true) {
+/** Choroplèthe d'une métrique de tendance (fichier × colonne) pour une maille. */
+export function useTrendColumn(file: TrendFile, column: TrendColumn, maille: string, enabled = true) {
   return useQuery({
     enabled,
-    queryKey: ["choropleth", "trend", column, maille],
+    queryKey: ["choropleth", "trend", file, column, maille],
     queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = parquetUrl(TRENDS_PARQUET);
+      const url = parquetUrl(`trends/${file}.parquet`);
       const col: TrendColumn = TREND_COLUMNS.includes(column) ? column : "d_abstention";
       const rows = await query<{ code: string; value: number }>(
         `SELECT code, ${col} AS value FROM read_parquet('${url}') WHERE maille = ? AND ${col} IS NOT NULL`,
@@ -818,25 +819,28 @@ export function useTrendColumn(column: TrendColumn, maille: string, enabled = tr
   });
 }
 
-/** Tendances d'un territoire (pour la fiche) : deltas 2017→2022. */
+/** Tendances d'un territoire (fiche) : deltas + niveau récent, pour une comparaison. */
 export type TerritoireTrends = {
   dAbstention: number | null;
   dRn: number | null;
-  abst2022: number | null;
-  rn2022: number | null;
+  dGauche: number | null;
+  abstNow: number | null;
+  rnNow: number | null;
+  gaucheNow: number | null;
 };
-export function useTrendsTerritoire(maille: string | null, code: string | null) {
+export function useTrendsTerritoire(file: TrendFile, maille: string | null, code: string | null) {
   return useQuery({
     enabled: !!maille && !!code,
-    queryKey: ["trends-territoire", maille, code],
+    queryKey: ["trends-territoire", file, maille, code],
     queryFn: async (): Promise<TerritoireTrends | null> => {
       if (!maille || !code) return null;
-      const url = parquetUrl(TRENDS_PARQUET);
+      const url = parquetUrl(`trends/${file}.parquet`);
       const rows = await query<{
-        d_abstention: number | null; d_rn: number | null;
-        abst_2022: number | null; rn_2022: number | null;
+        d_abstention: number | null; d_rn: number | null; d_gauche: number | null;
+        abst_now: number | null; rn_now: number | null; gauche_now: number | null;
       }>(
-        `SELECT d_abstention, d_rn, abst_2022, rn_2022 FROM read_parquet('${url}') WHERE maille = ? AND code = ?`,
+        `SELECT d_abstention, d_rn, d_gauche, abst_now, rn_now, gauche_now
+         FROM read_parquet('${url}') WHERE maille = ? AND code = ?`,
         [maille, code],
       );
       if (rows.length === 0) return null;
@@ -844,8 +848,10 @@ export function useTrendsTerritoire(maille: string | null, code: string | null) 
       return {
         dAbstention: numOrNull(r.d_abstention),
         dRn: numOrNull(r.d_rn),
-        abst2022: numOrNull(r.abst_2022),
-        rn2022: numOrNull(r.rn_2022),
+        dGauche: numOrNull(r.d_gauche),
+        abstNow: numOrNull(r.abst_now),
+        rnNow: numOrNull(r.rn_now),
+        gaucheNow: numOrNull(r.gauche_now),
       };
     },
     staleTime: 60 * 60 * 1000,
