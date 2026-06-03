@@ -17,11 +17,14 @@ import {
   useRpColumnCommune,
   useSociologieCommune,
   useSociologieBureau,
+  useTrendColumn,
+  useTrendsTerritoire,
   type WinningNuanceRow,
   type NumericRow,
   type ScrutinDetail,
   type CommuneSociologie,
   type BureauSociologie,
+  type TerritoireTrends,
 } from "@/lib/queries";
 import type { Choropleth } from "@/components/map";
 import { buildNuanceMatchExpression, nuanceColor, nuanceLabel } from "@/lib/nuances";
@@ -139,6 +142,24 @@ const DIPLOME_STOPS: Array<[number, string]> = [
   [60, "#0f766e"],
 ];
 
+// Paliers DIVERGENTS pour les deltas (taux 0..1, signés). Négatif → positif.
+const EVO_ABST_STOPS: Array<[number, string]> = [
+  [-0.04, "#15803d"],
+  [-0.01, "#86efac"],
+  [0, "#f1f5f9"],
+  [0.04, "#fb923c"],
+  [0.08, "#dc2626"],
+  [0.12, "#7f1d1d"],
+];
+const DYN_RN_STOPS: Array<[number, string]> = [
+  [-0.04, "#2563eb"],
+  [-0.01, "#bfdbfe"],
+  [0, "#f1f5f9"],
+  [0.05, "#fca5a5"],
+  [0.1, "#dc2626"],
+  [0.18, "#7f1d1d"],
+];
+
 function continuousChoropleth(
   stateKey: string,
   stops: Array<[number, string]>,
@@ -195,6 +216,7 @@ const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n
 const fmtPct = (n: number, d = 1) =>
   `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
 const fmtEuro = (n: number) => `${fmtInt(n)} €`;
+const fmtSignedPts = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`;
 
 // ─── Composant principal ────────────────────────────────────────────────────
 
@@ -246,6 +268,8 @@ function ExplorerView() {
   const chomage = useRpColumnCommune("tauxChomage", scrutin === "sociologie" && coloration === "chomage");
   const cadres = useRpColumnCommune("partCadres", scrutin === "sociologie" && coloration === "cadres");
   const diplome = useRpColumnCommune("partDiplomeSup", scrutin === "sociologie" && coloration === "diplome");
+  const evoAbst = useTrendColumn("d_abstention", maille, scrutin === "tendances" && coloration === "evo-abstention");
+  const dynRn = useTrendColumn("d_rn", maille, scrutin === "tendances" && coloration === "dynamique-rn");
 
   const choropleth = useMemo<Choropleth | undefined>(() => {
     switch (coloration) {
@@ -285,6 +309,10 @@ function ExplorerView() {
         return cadres.data ? continuousChoropleth("cadres", CADRES_STOPS, cadres.data) : undefined;
       case "diplome":
         return diplome.data ? continuousChoropleth("diplome", DIPLOME_STOPS, diplome.data) : undefined;
+      case "evo-abstention":
+        return evoAbst.data ? continuousChoropleth("evo-abstention", EVO_ABST_STOPS, evoAbst.data) : undefined;
+      case "dynamique-rn":
+        return dynRn.data ? continuousChoropleth("dynamique-rn", DYN_RN_STOPS, dynRn.data) : undefined;
       default:
         return undefined;
     }
@@ -302,6 +330,8 @@ function ExplorerView() {
     chomage.data,
     cadres.data,
     diplome.data,
+    evoAbst.data,
+    dynRn.data,
   ]);
 
   const isLoading =
@@ -316,7 +346,9 @@ function ExplorerView() {
     age65.isFetching ||
     chomage.isFetching ||
     cadres.isFetching ||
-    diplome.isFetching;
+    diplome.isFetching ||
+    evoAbst.isFetching ||
+    dynRn.isFetching;
 
   return (
     <div className="relative flex h-[calc(100dvh-3.5rem)] w-full overflow-hidden bg-canvas">
@@ -590,8 +622,12 @@ function MapBottomLegend({
         <ContinuousMiniLegend stops={CHOMAGE_STOPS} fmt={(v) => `${v}%`} />
       ) : coloration === "cadres" ? (
         <ContinuousMiniLegend stops={CADRES_STOPS} fmt={(v) => `${v}%`} />
-      ) : (
+      ) : coloration === "diplome" ? (
         <ContinuousMiniLegend stops={DIPLOME_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "evo-abstention" ? (
+        <ContinuousMiniLegend stops={EVO_ABST_STOPS} fmt={fmtSignedPts} />
+      ) : (
+        <ContinuousMiniLegend stops={DYN_RN_STOPS} fmt={fmtSignedPts} />
       )}
     </div>
   );
@@ -640,7 +676,7 @@ function ContinuousMiniLegend({
 
 // ─── Fiche territoire (droite) ──────────────────────────────────────────────────
 
-type FicheTab = "resultats" | "socio" | "france";
+type FicheTab = "resultats" | "socio" | "france" | "tendances";
 
 function FicheTerritoire({
   code,
@@ -658,16 +694,18 @@ function FicheTerritoire({
   const election = isElection(scrutin);
   const isCommune = maille === "communes";
   const isBureau = maille === "bureaux";
+  const isTrends = scrutin === "tendances";
   const hasSocio = isCommune || isBureau;
   const [tab, setTab] = useState<FicheTab>(election ? "resultats" : "socio");
 
   const detail = useScrutinDetail(election ? scrutin : null, maille, code);
   const socio = useSociologieCommune(isCommune ? code : null);
   const bureauSocio = useSociologieBureau(isBureau ? code : null);
+  const trends = useTrendsTerritoire(isTrends ? maille : null, isTrends ? code : null);
   const nationalPart = useScrutinNationalParticipation(election ? scrutin : null);
 
   useEffect(() => {
-    setTab(election ? "resultats" : hasSocio ? "socio" : "france");
+    setTab(election ? "resultats" : isTrends ? "tendances" : hasSocio ? "socio" : "france");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, scrutin]);
 
@@ -678,6 +716,7 @@ function FicheTerritoire({
 
   const tabs: { id: FicheTab; label: string; enabled: boolean }[] = [
     { id: "resultats", label: "Résultats", enabled: election },
+    { id: "tendances", label: "Dynamiques", enabled: isTrends },
     { id: "socio", label: "Socio-démo", enabled: hasSocio },
     { id: "france", label: "vs France", enabled: election || hasSocio },
   ];
@@ -687,7 +726,8 @@ function FicheTerritoire({
   const loading =
     (election && detail.isFetching && !detail.data) ||
     (isCommune && socio.isFetching && !socio.data) ||
-    (isBureau && bureauSocio.isFetching && !bureauSocio.data);
+    (isBureau && bureauSocio.isFetching && !bureauSocio.data) ||
+    (isTrends && trends.isFetching && !trends.data);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -742,6 +782,8 @@ function FicheTerritoire({
           <FicheLoading />
         ) : tabId === "resultats" ? (
           detail.data ? <ResultsBlock detail={detail.data} /> : <FicheUnavailable />
+        ) : tabId === "tendances" ? (
+          <TrendsBlock trends={trends.data ?? null} />
         ) : tabId === "socio" ? (
           isBureau ? (
             <BureauSocioBlock socio={bureauSocio.data ?? null} />
@@ -873,6 +915,47 @@ function BureauSocioBlock({ socio }: { socio: BureauSociologie | null }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function TrendsBlock({ trends }: { trends: TerritoireTrends | null }) {
+  if (!trends || (trends.dAbstention == null && trends.dRn == null)) {
+    return <p className="text-[12px] text-muted-foreground">Dynamique indisponible pour ce territoire.</p>;
+  }
+  const rows: { label: string; delta: number | null; level: number | null; hint: string; invert?: boolean }[] = [
+    { label: "Dynamique RN / extrême droite", delta: trends.dRn, level: trends.rn2022, hint: "part des exprimés", invert: true },
+    { label: "Évolution de l’abstention", delta: trends.dAbstention, level: trends.abst2022, hint: "des inscrits", invert: true },
+  ];
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-[10.5px] leading-snug text-muted-foreground">
+        Évolution entre les <strong className="font-medium text-foreground/80">présidentielles 2017 et 2022</strong> (1ᵉ tour).
+      </p>
+      {rows.map((r) => {
+        if (r.delta == null) return null;
+        const up = r.delta >= 0;
+        // Hausse RN/abstention = défavorable → rouge ; baisse = vert.
+        const tone = (r.invert ? up : !up) ? "text-rose-600" : "text-emerald-600";
+        return (
+          <div key={r.label} className="rounded-xl border border-foreground/5 bg-surface/60 p-3">
+            <p className="text-[11px] text-muted-foreground">{r.label}</p>
+            <div className="mt-0.5 flex items-baseline justify-between gap-2">
+              <span className="text-[18px] font-semibold tabular-nums">
+                {fmtSignedPts(r.delta)} pts
+              </span>
+              {r.level != null && (
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {fmtPct(r.level, 1)} en 2022
+                </span>
+              )}
+            </div>
+            <p className={cn("text-[10px] font-medium", tone)}>
+              {up ? "En hausse" : "En recul"} · {r.hint}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -790,6 +790,68 @@ export function useSociologieCommune(code: string | null) {
   });
 }
 
+// ─── Dynamiques électorales (Palier 5 — métriques dérivées 2017→2022) ─────────
+// Source : electoral/trends/presid_2017_2022.parquet (build-trends.py). Deltas
+// signés en taux 0..1 par (maille, code).
+
+const TRENDS_PARQUET = "trends/presid_2017_2022.parquet";
+const TREND_COLUMNS = [
+  "d_abstention", "d_rn", "abst_2017", "abst_2022", "rn_2017", "rn_2022",
+] as const;
+export type TrendColumn = (typeof TREND_COLUMNS)[number];
+
+/** Choroplèthe d'une métrique de tendance pour une maille donnée. */
+export function useTrendColumn(column: TrendColumn, maille: string, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "trend", column, maille],
+    queryFn: async (): Promise<CommuneNumericRow[]> => {
+      const url = parquetUrl(TRENDS_PARQUET);
+      const col: TrendColumn = TREND_COLUMNS.includes(column) ? column : "d_abstention";
+      const rows = await query<{ code: string; value: number }>(
+        `SELECT code, ${col} AS value FROM read_parquet('${url}') WHERE maille = ? AND ${col} IS NOT NULL`,
+        [maille],
+      );
+      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+/** Tendances d'un territoire (pour la fiche) : deltas 2017→2022. */
+export type TerritoireTrends = {
+  dAbstention: number | null;
+  dRn: number | null;
+  abst2022: number | null;
+  rn2022: number | null;
+};
+export function useTrendsTerritoire(maille: string | null, code: string | null) {
+  return useQuery({
+    enabled: !!maille && !!code,
+    queryKey: ["trends-territoire", maille, code],
+    queryFn: async (): Promise<TerritoireTrends | null> => {
+      if (!maille || !code) return null;
+      const url = parquetUrl(TRENDS_PARQUET);
+      const rows = await query<{
+        d_abstention: number | null; d_rn: number | null;
+        abst_2022: number | null; rn_2022: number | null;
+      }>(
+        `SELECT d_abstention, d_rn, abst_2022, rn_2022 FROM read_parquet('${url}') WHERE maille = ? AND code = ?`,
+        [maille, code],
+      );
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      return {
+        dAbstention: numOrNull(r.d_abstention),
+        dRn: numOrNull(r.d_rn),
+        abst2022: numOrNull(r.abst_2022),
+        rn2022: numOrNull(r.rn_2022),
+      };
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 // ─── Sociologie au niveau BUREAU DE VOTE (Palier 1 — croisement socio × BV) ───
 // Source : bureaux_socio.parquet (généré par build-bureaux-socio.py). La socio
 // est portée par la commune du bureau (1ers caractères du code = INSEE) →
