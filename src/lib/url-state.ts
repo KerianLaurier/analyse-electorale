@@ -39,6 +39,8 @@ export type Coloration =
   | "proprietaires"
   | "ressecondaires"
   | "logvacants"
+  | "monoparentales"
+  | "personnes-seules"
   | "evo-abstention"
   | "dynamique-rn"
   | "dynamique-gauche"
@@ -109,6 +111,8 @@ export const COLORATION_LABELS: Record<Coloration, string> = {
   proprietaires: "Part de propriétaires",
   ressecondaires: "Résidences secondaires",
   logvacants: "Logements vacants",
+  monoparentales: "Familles monoparentales",
+  "personnes-seules": "Personnes seules",
   "evo-abstention": "Abstention · présid. 17→22",
   "dynamique-rn": "RN / ext. droite · présid. 17→22",
   "dynamique-gauche": "Gauche / NFP · présid. 17→22",
@@ -207,6 +211,7 @@ export function colorationsFor(scrutin: Scrutin): Coloration[] {
       "revenu", "pauvrete", "inegalites", "prestations", "pensions",
       "age65", "chomage", "cadres", "diplome",
       "proprietaires", "ressecondaires", "logvacants",
+      "monoparentales", "personnes-seules",
     ];
   if (scrutin === "tendances")
     return [
@@ -240,6 +245,8 @@ const COLORATIONS = new Set<Coloration>([
   "proprietaires",
   "ressecondaires",
   "logvacants",
+  "monoparentales",
+  "personnes-seules",
   "evo-abstention",
   "dynamique-rn",
   "dynamique-gauche",

@@ -1055,6 +1055,30 @@ export function useLogementColumnCommune(column: LogementColumn, enabled = true)
   });
 }
 
+// ─── Familles & ménages par commune (Palier 3 — base Couples-Familles) ────────
+const FAMILLE_PARQUET = "famille_2022_commune.parquet";
+const FAMILLE_COLUMNS = ["partFamMono", "partPersonnesSeules"] as const;
+export type FamilleColumn = (typeof FAMILLE_COLUMNS)[number];
+
+/** Choroplèthe d'un indicateur familial par commune (monoparentales, isolés). */
+export function useFamilleColumnCommune(column: FamilleColumn, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "famille", column],
+    queryFn: async (): Promise<CommuneNumericRow[]> => {
+      const url = inseeUrl(FAMILLE_PARQUET);
+      const col: FamilleColumn = FAMILLE_COLUMNS.includes(column) ? column : "partFamMono";
+      const rows = await query<{ code: string; value: number }>(`
+        SELECT code, ${col} AS value
+        FROM read_parquet('${url}')
+        WHERE ${col} IS NOT NULL
+      `);
+      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
 /** Indicateurs démographiques RP pour une commune (pour la fiche). */
 export function useDemographieCommune(code: string | null) {
   return useQuery({
