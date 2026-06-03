@@ -1,0 +1,79 @@
+{
+ "ref": "presid-2022-t1",
+ "feats": [
+  "partCadres",
+  "partOuvriers",
+  "part65plus",
+  "tauxChomage",
+  "partDiplomeSup",
+  "partProprietaires",
+  "partResSecondaires"
+ ],
+ "blocs": {
+  "rn": {
+   "r2": 0.343,
+   "moyenne": 38.6,
+   "poids": {
+    "partCadres": 0.37,
+    "partOuvriers": 0.18,
+    "part65plus": -2.56,
+    "tauxChomage": 0.4,
+    "partDiplomeSup": -5.2,
+    "partProprietaires": 1.48,
+    "partResSecondaires": -0.9
+   }
+  },
+  "gauche": {
+   "r2": 0.149,
+   "moyenne": 22.2,
+   "poids": {
+    "partCadres": -0.76,
+    "partOuvriers": -0.45,
+    "part65plus": 0.3,
+    "tauxChomage": 1.04,
+    "partDiplomeSup": 1.88,
+    "partProprietaires": -1.63,
+    "partResSecondaires": 0.78
+   }
+  },
+  "ecolo": {
+   "r2": 0.303,
+   "moyenne": 3.8,
+   "poids": {
+    "partCadres": 0.0,
+    "partOuvriers": 0.04,
+    "part65plus": -0.01,
+    "tauxChomage": -0.07,
+    "partDiplomeSup": 1.13,
+    "partProprietaires": -0.1,
+    "partResSecondaires": 0.12
+   }
+  },
+  "centre": {
+   "r2": 0.166,
+   "moyenne": 25.6,
+   "poids": {
+    "partCadres": 0.5,
+    "partOuvriers": 0.48,
+    "part65plus": 1.28,
+    "tauxChomage": -0.88,
+    "partDiplomeSup": 2.2,
+    "partProprietaires": -0.22,
+    "partResSecondaires": -1.16
+   }
+  },
+  "droite": {
+   "r2": 0.061,
+   "moyenne": 5.0,
+   "poids": {
+    "partCadres": 0.26,
+    "partOuvriers": 0.08,
+    "part65plus": 0.31,
+    "tauxChomage": -0.31,
+    "partDiplomeSup": 0.08,
+    "partProprietaires": 0.11,
+    "partResSecondaires": 0.3
+   }
+  }
+ }
+}

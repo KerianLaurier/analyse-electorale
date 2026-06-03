@@ -20,6 +20,9 @@ import {
   useSociologieBureau,
   useTrendColumn,
   useTrendsTerritoire,
+  usePotentielColumn,
+  usePotentielTerritoire,
+  usePotentielMeta,
   type WinningNuanceRow,
   type NumericRow,
   type ScrutinDetail,
@@ -28,6 +31,9 @@ import {
   type TerritoireTrends,
   type TrendFile,
   type TrendColumn,
+  type PotentielBloc,
+  type PotentielRow,
+  type PotentielMeta,
 } from "@/lib/queries";
 import type { Choropleth } from "@/components/map";
 import { buildNuanceMatchExpression, nuanceColor, nuanceLabel } from "@/lib/nuances";
@@ -181,6 +187,24 @@ const GAUCHE_STOPS: Array<[number, string]> = [
   [-0.08, "#1d4ed8"], [-0.02, "#bfdbfe"], [0, "#f1f5f9"], [0.02, "#fbcfe8"], [0.08, "#be185d"], [0.16, "#831843"],
 ];
 
+// Potentiel = affinité − réel. Positif = terrain favorable sous-exploité
+// (« à conquérir », chaud) ; négatif = sur-performe son profil (bastion, froid).
+const POTENTIEL_STOPS: Array<[number, string]> = [
+  [-15, "#0f766e"],
+  [-5, "#5eead4"],
+  [0, "#f1f5f9"],
+  [5, "#fbbf24"],
+  [12, "#f97316"],
+  [20, "#9a3412"],
+];
+const POT_DEF: Partial<Record<Coloration, PotentielBloc>> = {
+  "pot-rn": "rn",
+  "pot-gauche": "gauche",
+  "pot-ecolo": "ecolo",
+  "pot-centre": "centre",
+  "pot-droite": "droite",
+};
+
 // Mapping coloration « Tendances » → (fichier, colonne, paliers). Une seule
 // requête active à la fois selon la coloration choisie.
 const TREND_DEF: Partial<Record<Coloration, { file: TrendFile; column: TrendColumn; stops: Array<[number, string]> }>> = {
@@ -249,6 +273,7 @@ const fmtPct = (n: number, d = 1) =>
   `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
 const fmtEuro = (n: number) => `${fmtInt(n)} €`;
 const fmtSignedPts = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`;
+const fmtSignedInt = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}`;
 
 // ─── Composant principal ────────────────────────────────────────────────────
 
@@ -310,8 +335,13 @@ function ExplorerView() {
     maille,
     !!trendDef,
   );
+  const potBloc = scrutin === "potentiel" ? POT_DEF[coloration] : undefined;
+  const potentiel = usePotentielColumn(potBloc ?? "rn", !!potBloc);
 
   const choropleth = useMemo<Choropleth | undefined>(() => {
+    if (potBloc) {
+      return potentiel.data ? continuousChoropleth(coloration, POTENTIEL_STOPS, potentiel.data) : undefined;
+    }
     if (trendDef) {
       return trend.data ? continuousChoropleth(coloration, trendDef.stops, trend.data) : undefined;
     }
@@ -365,6 +395,8 @@ function ExplorerView() {
     coloration,
     trendDef,
     trend.data,
+    potBloc,
+    potentiel.data,
     proprietaires.data,
     ressecondaires.data,
     logvacants.data,
@@ -398,7 +430,8 @@ function ExplorerView() {
     proprietaires.isFetching ||
     ressecondaires.isFetching ||
     logvacants.isFetching ||
-    trend.isFetching;
+    trend.isFetching ||
+    potentiel.isFetching;
 
   return (
     <div className="relative flex h-[calc(100dvh-3.5rem)] w-full overflow-hidden bg-canvas">
@@ -682,6 +715,8 @@ function MapBottomLegend({
         <ContinuousMiniLegend stops={LOGVAC_STOPS} fmt={(v) => `${v}%`} />
       ) : TREND_DEF[coloration] ? (
         <ContinuousMiniLegend stops={TREND_DEF[coloration]!.stops} fmt={fmtSignedPts} />
+      ) : POT_DEF[coloration] ? (
+        <ContinuousMiniLegend stops={POTENTIEL_STOPS} fmt={fmtSignedInt} />
       ) : null}
     </div>
   );
@@ -730,7 +765,7 @@ function ContinuousMiniLegend({
 
 // ─── Fiche territoire (droite) ──────────────────────────────────────────────────
 
-type FicheTab = "resultats" | "socio" | "france" | "tendances";
+type FicheTab = "resultats" | "socio" | "france" | "tendances" | "potentiel";
 
 function FicheTerritoire({
   code,
@@ -749,6 +784,7 @@ function FicheTerritoire({
   const isCommune = maille === "communes";
   const isBureau = maille === "bureaux";
   const isTrends = scrutin === "tendances";
+  const isPot = scrutin === "potentiel";
   const hasSocio = isCommune || isBureau;
   const [tab, setTab] = useState<FicheTab>(election ? "resultats" : "socio");
 
@@ -757,10 +793,12 @@ function FicheTerritoire({
   const bureauSocio = useSociologieBureau(isBureau ? code : null);
   const trendsPresid = useTrendsTerritoire("presid_2017_2022", isTrends ? maille : null, isTrends ? code : null);
   const trendsLegis = useTrendsTerritoire("legis_2022_2024", isTrends ? maille : null, isTrends ? code : null);
+  const potentielTerr = usePotentielTerritoire(isPot ? code : null);
+  const potMeta = usePotentielMeta();
   const nationalPart = useScrutinNationalParticipation(election ? scrutin : null);
 
   useEffect(() => {
-    setTab(election ? "resultats" : isTrends ? "tendances" : hasSocio ? "socio" : "france");
+    setTab(election ? "resultats" : isTrends ? "tendances" : isPot ? "potentiel" : hasSocio ? "socio" : "france");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, scrutin]);
 
@@ -772,6 +810,7 @@ function FicheTerritoire({
   const tabs: { id: FicheTab; label: string; enabled: boolean }[] = [
     { id: "resultats", label: "Résultats", enabled: election },
     { id: "tendances", label: "Dynamiques", enabled: isTrends },
+    { id: "potentiel", label: "Potentiel", enabled: isPot },
     { id: "socio", label: "Socio-démo", enabled: hasSocio },
     { id: "france", label: "vs France", enabled: election || hasSocio },
   ];
@@ -782,7 +821,8 @@ function FicheTerritoire({
     (election && detail.isFetching && !detail.data) ||
     (isCommune && socio.isFetching && !socio.data) ||
     (isBureau && bureauSocio.isFetching && !bureauSocio.data) ||
-    (isTrends && trendsPresid.isFetching && !trendsPresid.data);
+    (isTrends && trendsPresid.isFetching && !trendsPresid.data) ||
+    (isPot && potentielTerr.isFetching && !potentielTerr.data);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -839,6 +879,8 @@ function FicheTerritoire({
           detail.data ? <ResultsBlock detail={detail.data} /> : <FicheUnavailable />
         ) : tabId === "tendances" ? (
           <TrendsBlock presid={trendsPresid.data ?? null} legis={trendsLegis.data ?? null} />
+        ) : tabId === "potentiel" ? (
+          <PotentielBlock rows={potentielTerr.data ?? null} meta={potMeta.data ?? null} />
         ) : tabId === "socio" ? (
           isBureau ? (
             <BureauSocioBlock socio={bureauSocio.data ?? null} />
@@ -1017,6 +1059,51 @@ function TrendsBlock({ presid, legis }: { presid: TerritoireTrends | null; legis
       </p>
       <TrendComparison title="Présidentielle" period="2017 → 2022 · 1ᵉ tour" trends={presid} />
       <TrendComparison title="Législatives" period="2022 → 2024 · 1ᵉ tour" trends={legis} />
+    </div>
+  );
+}
+
+const POT_BLOC_LABEL: Record<PotentielBloc, string> = {
+  rn: "RN / extrême droite",
+  gauche: "Gauche / NFP",
+  ecolo: "Écologistes",
+  centre: "Centre",
+  droite: "Droite (LR)",
+};
+
+function PotentielBlock({ rows, meta }: { rows: PotentielRow[] | null; meta: PotentielMeta | null }) {
+  if (!rows || rows.every((r) => r.potentiel == null)) {
+    return <p className="text-[12px] text-muted-foreground">Indice de potentiel indisponible (commune sans données socio).</p>;
+  }
+  const sorted = [...rows].filter((r) => r.potentiel != null).sort((a, b) => (b.potentiel ?? 0) - (a.potentiel ?? 0));
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-[10.5px] leading-snug text-muted-foreground">
+        <strong className="font-medium text-foreground/80">Affinité</strong> = score attendu vu le profil socio (présid. 2022).
+        <strong className="font-medium text-foreground/80"> Potentiel</strong> = attendu − réel : positif = terrain favorable sous-exploité, négatif = bastion qui sur-performe.
+      </p>
+      {sorted.map((r) => {
+        const pos = (r.potentiel ?? 0) >= 0;
+        const r2 = meta?.[r.bloc]?.r2;
+        return (
+          <div key={r.bloc} className="rounded-xl border border-foreground/5 bg-surface/60 p-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[12.5px] font-medium">{POT_BLOC_LABEL[r.bloc]}</span>
+              <span className={cn("text-[15px] font-semibold tabular-nums", pos ? "text-orange-600" : "text-teal-600")}>
+                {fmtSignedInt(r.potentiel ?? 0)} pts
+              </span>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground">
+              <span className="tabular-nums">attendu {r.affinite?.toLocaleString("fr-FR", { maximumFractionDigits: 0 })}% · réel {r.reel?.toLocaleString("fr-FR", { maximumFractionDigits: 0 })}%</span>
+              {r2 != null && (
+                <span title="Qualité du modèle socio (part de variance expliquée)">
+                  fiabilité {r2 >= 0.3 ? "bonne" : r2 >= 0.15 ? "moyenne" : "faible"}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

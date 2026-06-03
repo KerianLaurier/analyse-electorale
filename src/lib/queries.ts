@@ -966,6 +966,69 @@ export function useRpColumnCommune(column: RpColumn, enabled = true) {
   });
 }
 
+// ─── Indice de potentiel par bloc (affinité socio + écart au réel) ────────────
+export type PotentielBloc = "rn" | "gauche" | "ecolo" | "centre" | "droite";
+
+/** Choroplèthe du potentiel (affinité − réel) d'un bloc, par commune. */
+export function usePotentielColumn(bloc: PotentielBloc, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "potentiel", bloc],
+    queryFn: async (): Promise<CommuneNumericRow[]> => {
+      const url = parquetUrl("potentiel_commune.parquet");
+      const col = `pot_${bloc}`;
+      const rows = await query<{ code: string; value: number }>(
+        `SELECT code, ${col} AS value FROM read_parquet('${url}') WHERE ${col} IS NOT NULL`,
+      );
+      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+export type PotentielRow = { bloc: PotentielBloc; affinite: number | null; reel: number | null; potentiel: number | null };
+/** Potentiel des 5 blocs pour une commune (fiche). */
+export function usePotentielTerritoire(code: string | null) {
+  return useQuery({
+    enabled: !!code,
+    queryKey: ["potentiel-territoire", code],
+    queryFn: async (): Promise<PotentielRow[] | null> => {
+      if (!code) return null;
+      const url = parquetUrl("potentiel_commune.parquet");
+      const blocs: PotentielBloc[] = ["rn", "gauche", "ecolo", "centre", "droite"];
+      const cols = blocs.flatMap((b) => [`aff_${b}`, `reel_${b}`, `pot_${b}`]).join(", ");
+      const rows = await query<Record<string, number | null>>(
+        `SELECT ${cols} FROM read_parquet('${url}') WHERE code = ?`,
+        [code],
+      );
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      return blocs.map((b) => ({
+        bloc: b,
+        affinite: numOrNull(r[`aff_${b}`]),
+        reel: numOrNull(r[`reel_${b}`]),
+        potentiel: numOrNull(r[`pot_${b}`]),
+      }));
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+export type PotentielMeta = Record<string, { r2: number; moyenne: number }>;
+/** Qualité du modèle (R²) par bloc — pour la transparence. */
+export function usePotentielMeta() {
+  return useQuery({
+    queryKey: ["potentiel-meta"],
+    queryFn: async (): Promise<PotentielMeta> => {
+      const res = await fetch("/electoral/potentiel_meta.json");
+      if (!res.ok) throw new Error("meta potentiel introuvable");
+      const j = (await res.json()) as { blocs: PotentielMeta };
+      return j.blocs;
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
 // ─── Logement par commune (Palier 3 — base Comparateur de territoires) ────────
 const LOGEMENT_PARQUET = "logement_2022_commune.parquet";
 const LOGEMENT_COLUMNS = [
