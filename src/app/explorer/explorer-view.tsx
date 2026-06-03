@@ -548,7 +548,7 @@ function ExplorerView() {
   const [mobilePane, setMobilePane] = useState<null | "filters" | "fiche">(null);
 
   return (
-    <div className="relative flex h-[calc(100dvh-3.5rem)] w-full overflow-hidden bg-canvas">
+    <div className="relative flex h-[calc(100dvh-3.5rem-var(--bottom-nav))] w-full overflow-hidden bg-canvas">
       {mobilePane && (
         <div
           className="absolute inset-0 z-20 bg-foreground/30 lg:hidden"
