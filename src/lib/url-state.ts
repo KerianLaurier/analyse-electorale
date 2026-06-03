@@ -35,6 +35,9 @@ export type Coloration =
   | "chomage"
   | "cadres"
   | "diplome"
+  | "proprietaires"
+  | "ressecondaires"
+  | "logvacants"
   | "evo-abstention"
   | "dynamique-rn"
   | "dynamique-gauche"
@@ -95,6 +98,9 @@ export const COLORATION_LABELS: Record<Coloration, string> = {
   chomage: "Taux de chômage",
   cadres: "Part de cadres",
   diplome: "Diplômés du supérieur",
+  proprietaires: "Part de propriétaires",
+  ressecondaires: "Résidences secondaires",
+  logvacants: "Logements vacants",
   "evo-abstention": "Abstention · présid. 17→22",
   "dynamique-rn": "RN / ext. droite · présid. 17→22",
   "dynamique-gauche": "Gauche / NFP · présid. 17→22",
@@ -181,7 +187,11 @@ export function defaultScrutinFor(family: ScrutinFamily): Scrutin {
 /** Colorations proposées pour un scrutin donné. */
 export function colorationsFor(scrutin: Scrutin): Coloration[] {
   if (scrutin === "sociologie")
-    return ["revenu", "pauvrete", "inegalites", "prestations", "pensions", "age65", "chomage", "cadres", "diplome"];
+    return [
+      "revenu", "pauvrete", "inegalites", "prestations", "pensions",
+      "age65", "chomage", "cadres", "diplome",
+      "proprietaires", "ressecondaires", "logvacants",
+    ];
   if (scrutin === "tendances")
     return [
       "evo-abstention", "dynamique-rn", "dynamique-gauche",
@@ -209,6 +219,9 @@ const COLORATIONS = new Set<Coloration>([
   "chomage",
   "cadres",
   "diplome",
+  "proprietaires",
+  "ressecondaires",
+  "logvacants",
   "evo-abstention",
   "dynamique-rn",
   "dynamique-gauche",

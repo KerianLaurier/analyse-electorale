@@ -966,6 +966,32 @@ export function useRpColumnCommune(column: RpColumn, enabled = true) {
   });
 }
 
+// ─── Logement par commune (Palier 3 — base Comparateur de territoires) ────────
+const LOGEMENT_PARQUET = "logement_2022_commune.parquet";
+const LOGEMENT_COLUMNS = [
+  "partProprietaires", "partLocataires", "partResSecondaires", "partLogVacants",
+] as const;
+export type LogementColumn = (typeof LOGEMENT_COLUMNS)[number];
+
+/** Choroplèthe d'un indicateur logement par commune (statut d'occupation…). */
+export function useLogementColumnCommune(column: LogementColumn, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "logement", column],
+    queryFn: async (): Promise<CommuneNumericRow[]> => {
+      const url = inseeUrl(LOGEMENT_PARQUET);
+      const col: LogementColumn = LOGEMENT_COLUMNS.includes(column) ? column : "partProprietaires";
+      const rows = await query<{ code: string; value: number }>(`
+        SELECT code, ${col} AS value
+        FROM read_parquet('${url}')
+        WHERE ${col} IS NOT NULL
+      `);
+      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
 /** Indicateurs démographiques RP pour une commune (pour la fiche). */
 export function useDemographieCommune(code: string | null) {
   return useQuery({

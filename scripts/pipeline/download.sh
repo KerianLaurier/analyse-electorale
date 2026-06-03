@@ -52,6 +52,14 @@ for key in filosofi_2021; do
   fi
 done
 
+# INSEE — Comparateur de territoires (base communale, indicateurs logement)
+cmp_url=$(python3 -c "import json;print(json.load(open('scripts/pipeline/sources.json'))['insee']['comparateur_2022']['url'])")
+fetch "$cmp_url" "data/raw/insee/comparateur.zip"
+if [[ -f "data/raw/insee/comparateur.zip" ]] && ! ls "data/raw/insee/comparateur.d"/*.csv >/dev/null 2>&1; then
+  mkdir -p "data/raw/insee/comparateur.d"
+  unzip -o "data/raw/insee/comparateur.zip" -d "data/raw/insee/comparateur.d/" >/dev/null || echo "✗ unzip failed for comparateur.zip"
+fi
+
 # INSEE — Recensement de la population (RP 2022, datasets melodi SDMX)
 for ds in DS_RP_POPULATION_PRINC DS_RP_EMPLOI_LR_COMP DS_RP_DIPLOMES_PRINC; do
   fetch "https://api.insee.fr/melodi/file/${ds}/${ds}_2022_CSV_FR" "data/raw/insee/${ds}.zip"

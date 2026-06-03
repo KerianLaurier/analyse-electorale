@@ -15,6 +15,7 @@ import {
   useTauxPauvreteCommune,
   useSocioColumnCommune,
   useRpColumnCommune,
+  useLogementColumnCommune,
   useSociologieCommune,
   useSociologieBureau,
   useTrendColumn,
@@ -142,6 +143,24 @@ const DIPLOME_STOPS: Array<[number, string]> = [
   [25, "#5eead4"],
   [40, "#14b8a6"],
   [60, "#0f766e"],
+];
+const PROPRIETAIRES_STOPS: Array<[number, string]> = [
+  [35, "#eff6ff"],
+  [55, "#bfdbfe"],
+  [70, "#60a5fa"],
+  [85, "#1d4ed8"],
+];
+const RESSEC_STOPS: Array<[number, string]> = [
+  [2, "#fff7ed"],
+  [10, "#fdba74"],
+  [25, "#f97316"],
+  [45, "#9a3412"],
+];
+const LOGVAC_STOPS: Array<[number, string]> = [
+  [3, "#faf5ff"],
+  [8, "#d8b4fe"],
+  [13, "#a855f7"],
+  [20, "#6b21a8"],
 ];
 
 // Paliers DIVERGENTS pour les deltas (taux 0..1, signés). Négatif → positif.
@@ -281,6 +300,9 @@ function ExplorerView() {
   const chomage = useRpColumnCommune("tauxChomage", scrutin === "sociologie" && coloration === "chomage");
   const cadres = useRpColumnCommune("partCadres", scrutin === "sociologie" && coloration === "cadres");
   const diplome = useRpColumnCommune("partDiplomeSup", scrutin === "sociologie" && coloration === "diplome");
+  const proprietaires = useLogementColumnCommune("partProprietaires", scrutin === "sociologie" && coloration === "proprietaires");
+  const ressecondaires = useLogementColumnCommune("partResSecondaires", scrutin === "sociologie" && coloration === "ressecondaires");
+  const logvacants = useLogementColumnCommune("partLogVacants", scrutin === "sociologie" && coloration === "logvacants");
   const trendDef = scrutin === "tendances" ? TREND_DEF[coloration] : undefined;
   const trend = useTrendColumn(
     trendDef?.file ?? "presid_2017_2022",
@@ -330,6 +352,12 @@ function ExplorerView() {
         return cadres.data ? continuousChoropleth("cadres", CADRES_STOPS, cadres.data) : undefined;
       case "diplome":
         return diplome.data ? continuousChoropleth("diplome", DIPLOME_STOPS, diplome.data) : undefined;
+      case "proprietaires":
+        return proprietaires.data ? continuousChoropleth("proprietaires", PROPRIETAIRES_STOPS, proprietaires.data) : undefined;
+      case "ressecondaires":
+        return ressecondaires.data ? continuousChoropleth("ressecondaires", RESSEC_STOPS, ressecondaires.data) : undefined;
+      case "logvacants":
+        return logvacants.data ? continuousChoropleth("logvacants", LOGVAC_STOPS, logvacants.data) : undefined;
       default:
         return undefined;
     }
@@ -337,6 +365,9 @@ function ExplorerView() {
     coloration,
     trendDef,
     trend.data,
+    proprietaires.data,
+    ressecondaires.data,
+    logvacants.data,
     winner.data,
     participation.data,
     abstention.data,
@@ -364,6 +395,9 @@ function ExplorerView() {
     chomage.isFetching ||
     cadres.isFetching ||
     diplome.isFetching ||
+    proprietaires.isFetching ||
+    ressecondaires.isFetching ||
+    logvacants.isFetching ||
     trend.isFetching;
 
   return (
@@ -640,6 +674,12 @@ function MapBottomLegend({
         <ContinuousMiniLegend stops={CADRES_STOPS} fmt={(v) => `${v}%`} />
       ) : coloration === "diplome" ? (
         <ContinuousMiniLegend stops={DIPLOME_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "proprietaires" ? (
+        <ContinuousMiniLegend stops={PROPRIETAIRES_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "ressecondaires" ? (
+        <ContinuousMiniLegend stops={RESSEC_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "logvacants" ? (
+        <ContinuousMiniLegend stops={LOGVAC_STOPS} fmt={(v) => `${v}%`} />
       ) : TREND_DEF[coloration] ? (
         <ContinuousMiniLegend stops={TREND_DEF[coloration]!.stops} fmt={fmtSignedPts} />
       ) : null}
