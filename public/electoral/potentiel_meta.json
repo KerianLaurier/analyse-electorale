@@ -7,72 +7,84 @@
   "tauxChomage",
   "partDiplomeSup",
   "partProprietaires",
-  "partResSecondaires"
+  "partResSecondaires",
+  "partFamMono",
+  "partPersonnesSeules"
  ],
  "blocs": {
   "rn": {
-   "r2": 0.343,
+   "r2": 0.349,
    "moyenne": 38.6,
    "poids": {
-    "partCadres": 0.37,
-    "partOuvriers": 0.18,
-    "part65plus": -2.56,
-    "tauxChomage": 0.4,
-    "partDiplomeSup": -5.2,
-    "partProprietaires": 1.48,
-    "partResSecondaires": -0.9
+    "partCadres": 0.4,
+    "partOuvriers": 0.24,
+    "part65plus": -2.09,
+    "tauxChomage": 0.38,
+    "partDiplomeSup": -5.28,
+    "partProprietaires": 0.98,
+    "partResSecondaires": -0.65,
+    "partFamMono": 0.14,
+    "partPersonnesSeules": -1.15
    }
   },
   "gauche": {
-   "r2": 0.149,
+   "r2": 0.171,
    "moyenne": 22.2,
    "poids": {
-    "partCadres": -0.76,
-    "partOuvriers": -0.45,
-    "part65plus": 0.3,
-    "tauxChomage": 1.04,
-    "partDiplomeSup": 1.88,
-    "partProprietaires": -1.63,
-    "partResSecondaires": 0.78
+    "partCadres": -0.79,
+    "partOuvriers": -0.5,
+    "part65plus": -0.3,
+    "tauxChomage": 0.99,
+    "partDiplomeSup": 1.99,
+    "partProprietaires": -0.76,
+    "partResSecondaires": 0.43,
+    "partFamMono": 0.5,
+    "partPersonnesSeules": 1.46
    }
   },
   "ecolo": {
-   "r2": 0.303,
+   "r2": 0.306,
    "moyenne": 3.8,
    "poids": {
-    "partCadres": 0.0,
-    "partOuvriers": 0.04,
-    "part65plus": -0.01,
-    "tauxChomage": -0.07,
-    "partDiplomeSup": 1.13,
-    "partProprietaires": -0.1,
-    "partResSecondaires": 0.12
+    "partCadres": -0.0,
+    "partOuvriers": 0.03,
+    "part65plus": -0.07,
+    "tauxChomage": -0.06,
+    "partDiplomeSup": 1.14,
+    "partProprietaires": -0.04,
+    "partResSecondaires": 0.09,
+    "partFamMono": -0.06,
+    "partPersonnesSeules": 0.17
    }
   },
   "centre": {
-   "r2": 0.166,
+   "r2": 0.179,
    "moyenne": 25.6,
    "poids": {
-    "partCadres": 0.5,
-    "partOuvriers": 0.48,
-    "part65plus": 1.28,
-    "tauxChomage": -0.88,
-    "partDiplomeSup": 2.2,
-    "partProprietaires": -0.22,
-    "partResSecondaires": -1.16
+    "partCadres": 0.51,
+    "partOuvriers": 0.49,
+    "part65plus": 1.52,
+    "tauxChomage": -0.81,
+    "partDiplomeSup": 2.15,
+    "partProprietaires": -0.73,
+    "partResSecondaires": -1.01,
+    "partFamMono": -0.68,
+    "partPersonnesSeules": -0.58
    }
   },
   "droite": {
-   "r2": 0.061,
+   "r2": 0.062,
    "moyenne": 5.0,
    "poids": {
     "partCadres": 0.26,
-    "partOuvriers": 0.08,
-    "part65plus": 0.31,
-    "tauxChomage": -0.31,
+    "partOuvriers": 0.07,
+    "part65plus": 0.3,
+    "tauxChomage": -0.3,
     "partDiplomeSup": 0.08,
-    "partProprietaires": 0.11,
-    "partResSecondaires": 0.3
+    "partProprietaires": 0.08,
+    "partResSecondaires": 0.3,
+    "partFamMono": -0.11,
+    "partPersonnesSeules": 0.03
    }
   }
  }
