@@ -16,10 +16,12 @@ import {
   useSocioColumnCommune,
   useRpColumnCommune,
   useSociologieCommune,
+  useSociologieBureau,
   type WinningNuanceRow,
   type NumericRow,
   type ScrutinDetail,
   type CommuneSociologie,
+  type BureauSociologie,
 } from "@/lib/queries";
 import type { Choropleth } from "@/components/map";
 import { buildNuanceMatchExpression, nuanceColor, nuanceLabel } from "@/lib/nuances";
@@ -655,14 +657,17 @@ function FicheTerritoire({
 }) {
   const election = isElection(scrutin);
   const isCommune = maille === "communes";
+  const isBureau = maille === "bureaux";
+  const hasSocio = isCommune || isBureau;
   const [tab, setTab] = useState<FicheTab>(election ? "resultats" : "socio");
 
   const detail = useScrutinDetail(election ? scrutin : null, maille, code);
   const socio = useSociologieCommune(isCommune ? code : null);
+  const bureauSocio = useSociologieBureau(isBureau ? code : null);
   const nationalPart = useScrutinNationalParticipation(election ? scrutin : null);
 
   useEffect(() => {
-    setTab(election ? "resultats" : isCommune ? "socio" : "france");
+    setTab(election ? "resultats" : hasSocio ? "socio" : "france");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, scrutin]);
 
@@ -673,14 +678,16 @@ function FicheTerritoire({
 
   const tabs: { id: FicheTab; label: string; enabled: boolean }[] = [
     { id: "resultats", label: "Résultats", enabled: election },
-    { id: "socio", label: "Socio-démo", enabled: isCommune },
-    { id: "france", label: "vs France", enabled: election || isCommune },
+    { id: "socio", label: "Socio-démo", enabled: hasSocio },
+    { id: "france", label: "vs France", enabled: election || hasSocio },
   ];
   const active = tabs.find((t) => t.id === tab && t.enabled) ?? tabs.find((t) => t.enabled);
   const tabId = active?.id ?? "resultats";
 
   const loading =
-    (election && detail.isFetching && !detail.data) || (isCommune && socio.isFetching && !socio.data);
+    (election && detail.isFetching && !detail.data) ||
+    (isCommune && socio.isFetching && !socio.data) ||
+    (isBureau && bureauSocio.isFetching && !bureauSocio.data);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -736,9 +743,17 @@ function FicheTerritoire({
         ) : tabId === "resultats" ? (
           detail.data ? <ResultsBlock detail={detail.data} /> : <FicheUnavailable />
         ) : tabId === "socio" ? (
-          <SocioBlock socio={socio.data ?? null} />
+          isBureau ? (
+            <BureauSocioBlock socio={bureauSocio.data ?? null} />
+          ) : (
+            <SocioBlock socio={socio.data ?? null} />
+          )
         ) : (
-          <FranceBlock detail={detail.data ?? null} socio={socio.data ?? null} nationalPart={nationalPart.data ?? null} />
+          <FranceBlock
+            detail={detail.data ?? null}
+            socio={isBureau ? (bureauSocio.data ?? null) : (socio.data ?? null)}
+            nationalPart={nationalPart.data ?? null}
+          />
         )}
       </div>
     </div>
@@ -820,13 +835,56 @@ function SocioBlock({ socio }: { socio: CommuneSociologie | null }) {
   );
 }
 
+function BureauSocioBlock({ socio }: { socio: BureauSociologie | null }) {
+  if (!socio || (socio.revenuMedian == null && socio.tauxPauvrete == null && socio.partCadres == null)) {
+    return <p className="text-[12px] text-muted-foreground">Données INSEE indisponibles pour ce bureau.</p>;
+  }
+  const pct = (n: number | null) => (n != null ? `${n.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %` : "—");
+  const profil: { label: string; value: number | null }[] = [
+    { label: "Cadres", value: socio.partCadres },
+    { label: "Ouvriers", value: socio.partOuvriers },
+    { label: "65 ans +", value: socio.part65plus },
+    { label: "Diplômés sup.", value: socio.partDiplomeSup },
+    { label: "Chômage", value: socio.tauxChomage },
+  ].filter((r) => r.value != null);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[10.5px] leading-snug text-muted-foreground">
+        Profil socio-démographique à l’échelle de la <strong className="font-medium text-foreground/80">commune</strong> du bureau (INSEE).
+      </p>
+      {socio.revenuMedian != null && (
+        <KPICard label="Revenu médian disponible" value={fmtEuro(socio.revenuMedian)} hint={`France : ${fmtEuro(FR.revenuMedian)}`} />
+      )}
+      {socio.tauxPauvrete != null && (
+        <KPICard
+          label="Taux de pauvreté"
+          value={`${socio.tauxPauvrete.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`}
+          hint={`France : ${FR.tauxPauvrete} %`}
+        />
+      )}
+      {profil.length > 0 && (
+        <div className="mt-0.5 grid grid-cols-2 gap-1.5">
+          {profil.map((r) => (
+            <div key={r.label} className="rounded-lg border border-foreground/5 bg-surface/60 px-2.5 py-1.5">
+              <p className="text-[10px] uppercase tracking-[0.04em] text-muted-foreground">{r.label}</p>
+              <p className="text-[14px] font-semibold tabular-nums tracking-tight">{pct(r.value)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FranceBlock({
   detail,
   socio,
   nationalPart,
 }: {
   detail: ScrutinDetail | null;
-  socio: CommuneSociologie | null;
+  // Commune ou bureau : on ne lit que revenu/pauvreté → type structurel minimal.
+  socio: Pick<CommuneSociologie, "revenuMedian" | "tauxPauvrete"> | null;
   nationalPart: number | null;
 }) {
   const rows: { label: string; local: number; national: number; fmt: (n: number) => string; pts?: boolean }[] = [];

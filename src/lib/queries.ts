@@ -790,6 +790,75 @@ export function useSociologieCommune(code: string | null) {
   });
 }
 
+// ─── Sociologie au niveau BUREAU DE VOTE (Palier 1 — croisement socio × BV) ───
+// Source : bureaux_socio.parquet (généré par build-bureaux-socio.py). La socio
+// est portée par la commune du bureau (1ers caractères du code = INSEE) →
+// granularité commune, exposée via `grain` pour rester transparent.
+
+const BUREAUX_SOCIO_PARQUET = "bureaux_socio.parquet";
+
+export type BureauSociologie = {
+  code: string;
+  insee: string;
+  grain: string;
+  revenuMedian: number | null;
+  tauxPauvrete: number | null;
+  interdecile: number | null;
+  partPensions: number | null;
+  partPrestations: number | null;
+  part65plus: number | null;
+  tauxChomage: number | null;
+  partCadres: number | null;
+  partOuvriers: number | null;
+  partDiplomeSup: number | null;
+};
+
+/** Profil socio-démo d'un bureau de vote (porté par sa commune). */
+export function useSociologieBureau(code: string | null) {
+  return useQuery({
+    enabled: !!code,
+    queryKey: ["sociologie-bureau", code],
+    queryFn: async (): Promise<BureauSociologie | null> => {
+      if (!code) return null;
+      const url = inseeUrl(BUREAUX_SOCIO_PARQUET);
+      const rows = await query<{
+        code: string; insee: string; socio_grain: string;
+        MED_SL: number | null; PR_MD60: number | null; IR_D9_D1_SL: number | null;
+        S_RET_PEN_DI: number | null; S_SOC_BEN_DI: number | null;
+        part65plus: number | null; tauxChomage: number | null;
+        partCadres: number | null; partOuvriers: number | null; partDiplomeSup: number | null;
+      }>(
+        `
+        SELECT code, insee, socio_grain,
+               MED_SL, PR_MD60, IR_D9_D1_SL, S_RET_PEN_DI, S_SOC_BEN_DI,
+               part65plus, tauxChomage, partCadres, partOuvriers, partDiplomeSup
+        FROM read_parquet('${url}')
+        WHERE code = ?
+      `,
+        [code],
+      );
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      return {
+        code: String(r.code),
+        insee: String(r.insee),
+        grain: String(r.socio_grain),
+        revenuMedian: numOrNull(r.MED_SL),
+        tauxPauvrete: numOrNull(r.PR_MD60),
+        interdecile: numOrNull(r.IR_D9_D1_SL),
+        partPensions: numOrNull(r.S_RET_PEN_DI),
+        partPrestations: numOrNull(r.S_SOC_BEN_DI),
+        part65plus: numOrNull(r.part65plus),
+        tauxChomage: numOrNull(r.tauxChomage),
+        partCadres: numOrNull(r.partCadres),
+        partOuvriers: numOrNull(r.partOuvriers),
+        partDiplomeSup: numOrNull(r.partDiplomeSup),
+      };
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 // ─── Démographie INSEE (Recensement RP 2022, niveau commune) ──────────────────
 
 export type DemographieCommune = {

@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Building2, Loader2, Map as MapIcon } from "lucide-react";
-import { useBureauHistory, type CircoTimelinePoint } from "@/lib/queries";
+import { useBureauHistory, useSociologieBureau, type CircoTimelinePoint, type BureauSociologie } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 import { ExportButton } from "@/components/export-button";
@@ -34,6 +34,7 @@ function decode(code: string): { insee: string; num: string } {
 
 export function BureauFiche({ code }: { code: string }) {
   const history = useBureauHistory(code);
+  const socio = useSociologieBureau(code);
   const { insee, num } = decode(code);
 
   const byScrutin = useMemo(() => {
@@ -157,6 +158,8 @@ export function BureauFiche({ code }: { code: string }) {
               </div>
             </section>
           )}
+
+          {socio.data && <BureauSocioSection socio={socio.data} />}
         </div>
       )}
     </div>
@@ -227,6 +230,42 @@ function KPI({ label, value, hint }: { label: string; value: string; hint?: stri
       <p className="mt-0.5 text-[15px] font-semibold tabular-nums tracking-tight">{value}</p>
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
     </div>
+  );
+}
+
+const FR_REF = { revenuMedian: 22040, tauxPauvrete: 14.4 };
+const fmtEuro = (n: number) => `${fmtInt(n)} €`;
+const fmtPctV = (n: number | null) =>
+  n != null ? `${n.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %` : "—";
+
+function BureauSocioSection({ socio }: { socio: BureauSociologie }) {
+  if (socio.revenuMedian == null && socio.tauxPauvrete == null && socio.partCadres == null) return null;
+  const profil: { label: string; value: number | null }[] = [
+    { label: "Cadres", value: socio.partCadres },
+    { label: "Ouvriers", value: socio.partOuvriers },
+    { label: "65 ans +", value: socio.part65plus },
+    { label: "Diplômés sup.", value: socio.partDiplomeSup },
+    { label: "Chômage", value: socio.tauxChomage },
+  ].filter((r) => r.value != null);
+
+  return (
+    <section>
+      <SectionTitle>Profil socio-démographique</SectionTitle>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        À l’échelle de la <strong className="font-medium text-foreground/80">commune</strong> du bureau (INSEE — Filosofi 2021 &amp; RP 2022).
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {socio.revenuMedian != null && (
+          <KPI label="Revenu médian" value={fmtEuro(socio.revenuMedian)} hint={`France : ${fmtEuro(FR_REF.revenuMedian)}`} />
+        )}
+        {socio.tauxPauvrete != null && (
+          <KPI label="Taux de pauvreté" value={fmtPctV(socio.tauxPauvrete)} hint={`France : ${FR_REF.tauxPauvrete} %`} />
+        )}
+        {profil.map((r) => (
+          <KPI key={r.label} label={r.label} value={fmtPctV(r.value)} />
+        ))}
+      </div>
+    </section>
   );
 }
 
