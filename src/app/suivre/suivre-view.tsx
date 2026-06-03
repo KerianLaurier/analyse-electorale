@@ -84,10 +84,10 @@ export function SuivreView({ initialCategory = "actualite" }: { initialCategory?
   const [category, setCategory] = useState<Category>(initialCategory);
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] w-full min-w-0 gap-3 overflow-hidden bg-canvas p-3">
-      {/* Rail catégories (commun) */}
-      <nav className="flex w-[180px] shrink-0 flex-col gap-1 rounded-lg bg-surface p-3 shadow-card">
-        <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="flex h-[calc(100dvh-3.5rem)] w-full min-w-0 flex-col gap-3 overflow-hidden bg-canvas p-3 lg:flex-row">
+      {/* Rail catégories : barre horizontale scrollable sur mobile, colonne sur desktop. */}
+      <nav className="flex shrink-0 gap-1 overflow-x-auto rounded-lg bg-surface p-2 shadow-card [-ms-overflow-style:none] [scrollbar-width:none] lg:w-[180px] lg:flex-col lg:overflow-visible lg:p-3 [&::-webkit-scrollbar]:hidden">
+        <p className="hidden px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground lg:block">
           Suivi
         </p>
         {CATEGORIES.map((c) => {
@@ -98,14 +98,15 @@ export function SuivreView({ initialCategory = "actualite" }: { initialCategory?
               key={c.id}
               type="button"
               onClick={() => setCategory(c.id)}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+                "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors lg:gap-2.5",
                 active
                   ? "bg-primary text-primary-foreground"
                   : "text-foreground/70 hover:bg-surface-soft hover:text-foreground",
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4 shrink-0" />
               {c.label}
             </button>
           );
