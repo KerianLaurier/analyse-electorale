@@ -362,13 +362,24 @@ function ContactRow({ contact, defaultOpen }: { contact: PhoneContact; defaultOp
         <span className={cn("shrink-0 rounded-pill px-2 py-0.5 text-[10.5px] font-medium", STATUS_TONE[contact.status])}>
           {CALL_STATUS_LABELS[contact.status]}
         </span>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-foreground/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-foreground hover:bg-foreground/[0.08]"
-        >
-          {handled ? "Modifier" : <><PhoneCall className="h-3.5 w-3.5" /> Appeler</>}
-        </button>
+        {handled ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-foreground/[0.04] px-3 py-2 text-[12px] font-medium text-foreground hover:bg-foreground/[0.08]"
+          >
+            Modifier
+          </button>
+        ) : (
+          // Mobile : compose le numéro (tel:) ET ouvre la saisie du résultat.
+          <a
+            href={`tel:${contact.phone.replace(/[^+0-9]/g, "")}`}
+            onClick={() => setOpen(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-primary px-3.5 py-2 text-[12px] font-medium text-primary-foreground hover:opacity-90"
+          >
+            <PhoneCall className="h-3.5 w-3.5" /> Appeler
+          </a>
+        )}
       </div>
       {open && <CallForm contact={contact} onDone={() => setOpen(false)} />}
     </div>
@@ -403,7 +414,7 @@ function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => vo
               key={st}
               type="button"
               onClick={() => setStatus(st)}
-              className={cn("rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors", status === st ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]")}
+              className={cn("rounded-pill px-3 py-2 text-[12.5px] font-medium transition-colors", status === st ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]")}
             >
               {CALL_STATUS_LABELS[st]}
             </button>
@@ -421,7 +432,7 @@ function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => vo
                 type="button"
                 onClick={() => setOpinion((v) => (v === op ? null : op))}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+                  "inline-flex items-center gap-1.5 rounded-pill px-3 py-2 text-[12.5px] font-medium transition-colors",
                   opinion === op ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
                 )}
               >
@@ -450,8 +461,8 @@ function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => vo
           <Trash2 className="h-3.5 w-3.5" />
         </button>
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onDone} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
-          <button type="button" onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
+          <button type="button" onClick={onDone} className="rounded-pill px-3 py-2 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
+          <button type="button" onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-5 py-2 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enregistrer
           </button>
         </div>

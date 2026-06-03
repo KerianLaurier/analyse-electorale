@@ -402,7 +402,7 @@ function ReportForm({ sectors, presetSector, onDone }: { sectors: Sector[]; pres
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
         </label>
       </div>
-      <div className="grid gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Num label="Bénévoles" value={volunteers} onChange={setVolunteers} />
         <Num label="Portes frappées" value={doors} onChange={setDoors} />
         <Num label="Favorables" value={favorable} onChange={setFavorable} accent="emerald" />
@@ -463,10 +463,40 @@ function ReportRow({ report, sectorName }: { report: CanvassReport; sectorName: 
 }
 
 export function Num({ label, value, onChange, accent }: { label: string; value: string; onChange: (v: string) => void; accent?: "emerald" | "red" }) {
+  const n = Math.max(0, Math.round(Number(value) || 0));
+  const set = (v: number) => onChange(String(Math.max(0, v)));
   return (
     <label className="flex flex-col gap-1">
       <span className={cn("text-[10.5px] font-medium uppercase tracking-wide", accent === "emerald" ? "text-emerald-600" : accent === "red" ? "text-red-600" : "text-muted-foreground")}>{label}</span>
-      <input type="number" inputMode="numeric" min={0} value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" className={field} />
+      {/* Compteur tactile : −/+ au pouce + saisie clavier directe. */}
+      <div className="flex items-stretch overflow-hidden rounded-md border border-border bg-surface focus-within:border-warm focus-within:ring-2 focus-within:ring-warm/20">
+        <button
+          type="button"
+          onClick={() => set(n - 1)}
+          aria-label={`Diminuer ${label}`}
+          className="grid w-10 shrink-0 place-items-center text-[18px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] active:bg-foreground/[0.08] disabled:opacity-30"
+          disabled={n <= 0}
+        >
+          −
+        </button>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="0"
+          className="w-full min-w-0 border-x border-border bg-transparent py-2 text-center text-[15px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+        <button
+          type="button"
+          onClick={() => set(n + 1)}
+          aria-label={`Augmenter ${label}`}
+          className="grid w-10 shrink-0 place-items-center text-[18px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] active:bg-foreground/[0.08]"
+        >
+          +
+        </button>
+      </div>
     </label>
   );
 }
