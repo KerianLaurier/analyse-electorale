@@ -101,7 +101,7 @@ export function PersonneFiche({
         <NotFound circo={circo} />
       ) : (
         <div className="mt-4 flex flex-col gap-7">
-          <header className="flex flex-wrap items-center gap-4 border-b border-black/5 pb-5">
+          <header className="flex flex-wrap items-center gap-4 border-b border-foreground/5 pb-5">
             <div
               className="grid h-14 w-14 shrink-0 place-items-center rounded-full text-white"
               style={{ background: nuanceColor(target.nuance) }}
@@ -169,7 +169,7 @@ export function PersonneFiche({
           {depute && (
             <section>
               <SectionTitle>Mandat à l&apos;Assemblée nationale</SectionTitle>
-              <div className="mt-2 flex flex-wrap items-center gap-4 rounded-2xl border border-black/5 bg-white/60 p-4">
+              <div className="mt-2 flex flex-wrap items-center gap-4 rounded-2xl border border-foreground/5 bg-surface/60 p-4">
                 <span
                   className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-medium text-white"
                   style={{ background: depute.groupeColor ?? "#475569" }}
@@ -202,7 +202,7 @@ export function PersonneFiche({
                 {circoLibelle ?? `circonscription ${circo}`}
               </Link>
             </SectionTitle>
-            <div className="mt-2 rounded-2xl border border-black/5 bg-white/60 p-5">
+            <div className="mt-2 rounded-2xl border border-foreground/5 bg-surface/60 p-5">
               <Ranking candidates={candidates} targetIndex={candidates.indexOf(target)} />
             </div>
           </section>
@@ -210,7 +210,7 @@ export function PersonneFiche({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/explorer?maille=circonscriptions&scrutin=${scrutin}&code=${encodeURIComponent(circo)}`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
             >
               <MapIcon className="h-3.5 w-3.5" />
               Voir sur la carte
@@ -254,7 +254,7 @@ function ActiviteSection({
         <KPI label="Présence" value={`${acti.present} / ${scrutins.length}`} />
       </div>
 
-      <div className="mt-3 flex flex-col divide-y divide-black/5 overflow-hidden rounded-2xl border border-black/5 bg-white/60">
+      <div className="mt-3 flex flex-col divide-y divide-foreground/5 overflow-hidden rounded-2xl border border-foreground/5 bg-surface/60">
         {recent.map(({ s, pos }) => {
           const meta = POSITION_META[pos];
           return (
@@ -319,7 +319,7 @@ function Ranking({
               </span>
               <span className="shrink-0 tabular-nums text-muted-foreground">{fmtPct(c.pct)}</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.05]">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.05]">
               <div
                 className="h-full rounded-full"
                 style={{ width: `${(c.pct / max) * 100}%`, background: nuanceColor(c.nuance) }}
@@ -342,7 +342,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function KPI({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={cn("rounded-xl border border-black/5 p-3", accent ? "bg-warm/10" : "bg-white/60")}>
+    <div className={cn("rounded-xl border border-foreground/5 p-3", accent ? "bg-warm/10" : "bg-surface/60")}>
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-[16px] font-semibold tabular-nums tracking-tight">{value}</p>
     </div>
@@ -360,14 +360,14 @@ function Loading() {
 
 function NotFound({ circo }: { circo: string }) {
   return (
-    <div className="mt-10 rounded-2xl border border-black/5 bg-white/60 p-8 text-center">
+    <div className="mt-10 rounded-2xl border border-foreground/5 bg-surface/60 p-8 text-center">
       <p className="text-[13px] font-medium">Personne introuvable</p>
       <p className="mt-1 text-[12px] text-muted-foreground">
         Ce candidat n&apos;apparaît pas dans les résultats de la circonscription {circo}.
       </p>
       <Link
         href={`/circo/${encodeURIComponent(circo)}`}
-        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
       >
         Voir la circonscription
       </Link>

@@ -20,6 +20,7 @@ import {
   type SocioUnit,
 } from "@/lib/analysis";
 import { CircoSocioProfile } from "@/components/circo-socio-profile";
+import { ErrorState } from "@/components/error-state";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -125,6 +126,12 @@ export function SociologieView() {
   );
 
   const isLoading = socio.isFetching || features.isFetching || matrix.isFetching;
+  const hasError = socio.isError || features.isError || matrix.isError;
+  const retryAll = () => {
+    void socio.refetch();
+    void features.refetch();
+    void matrix.refetch();
+  };
 
   return (
     <div className="flex h-full w-full min-h-0 flex-col gap-3 overflow-auto bg-canvas p-3">
@@ -173,6 +180,13 @@ export function SociologieView() {
           </select>
         </Field>
       </div>
+
+      {hasError && (
+        <ErrorState
+          message="Impossible de charger les données INSEE / électorales."
+          onRetry={retryAll}
+        />
+      )}
 
       {/* KPIs nationaux */}
       <div className="grid grid-cols-4 gap-2">
@@ -267,8 +281,8 @@ function CorrBar({ label, color, r }: { label: string; color: string; r: number 
           {r >= 0 ? "+" : ""}{r.toFixed(2)}
         </span>
       </div>
-      <div className="relative mt-1 h-2 rounded-full bg-black/[0.05]">
-        <span className="absolute left-1/2 top-0 h-full w-px bg-black/15" />
+      <div className="relative mt-1 h-2 rounded-full bg-foreground/[0.05]">
+        <span className="absolute left-1/2 top-0 h-full w-px bg-foreground/15" />
         <span
           className="absolute top-0 h-full rounded-full"
           style={{

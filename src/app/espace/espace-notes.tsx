@@ -4,16 +4,20 @@ import { useState } from "react";
 import Link from "next/link";
 import { Plus, Users, MapPin, Pencil, Trash2, Loader2, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNotes, addNote, updateNote, deleteNote, type Note } from "@/lib/notes";
+import { useNotes, useLoaded, addNote, updateNote, deleteNote, type Note } from "@/lib/notes";
 import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
 import { memberName, type WsContext } from "@/app/espace/types";
+import { TabSkeleton } from "@/components/skeleton";
 
 const fmtWhen = (ms: number) =>
   new Date(ms).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 
 export function EspaceNotes({ ctx }: { ctx: WsContext }) {
   const notes = useNotes();
+  const loaded = useLoaded();
   const [showForm, setShowForm] = useState(false);
+
+  if (!loaded) return <TabSkeleton rows={4} />;
 
   return (
     <div className="flex flex-col gap-5">
@@ -33,7 +37,7 @@ export function EspaceNotes({ ctx }: { ctx: WsContext }) {
       {showForm && <NoteForm ctx={ctx} onDone={() => setShowForm(false)} />}
 
       {notes.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-14 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-14 text-center">
           <span className="grid h-11 w-11 place-items-center rounded-pill bg-warm/15 text-warm">
             <StickyNote className="h-5 w-5" />
           </span>
@@ -141,7 +145,7 @@ function NoteCard({ note, ctx }: { note: Note; ctx: WsContext }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+    <div className="flex flex-col gap-2 rounded-lg border border-foreground/5 bg-surface p-4 shadow-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           {note.title && <p className="truncate text-[14px] font-semibold">{note.title}</p>}

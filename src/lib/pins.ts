@@ -53,6 +53,7 @@ let myTeamId: string | null = null;
 let rows: Row[] = [];
 let display: Pin[] = [];
 let loadStarted = false;
+let loaded = false;
 const listeners = new Set<() => void>();
 const EMPTY: Pin[] = [];
 
@@ -115,7 +116,7 @@ async function load() {
 function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
-  void load();
+  void load().finally(() => { loaded = true; emit(); });
   // Recharge quand l'utilisateur change (connexion / déconnexion).
   onIdentityChange(() => void load());
 }
@@ -233,4 +234,9 @@ export function useMyPinScope(type: PinType, id: string): PinScope {
 export function useMyTeamId(): string | null {
   usePins();
   return myTeamId;
+}
+
+/** True une fois le premier chargement terminé (pour les squelettes). */
+export function useLoaded(): boolean {
+  return useSyncExternalStore(subscribe, () => loaded, () => false);
 }

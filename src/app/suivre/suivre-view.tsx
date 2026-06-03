@@ -20,7 +20,10 @@ import {
   ChevronRight,
   Newspaper,
   MapPin,
+  Info,
+  TrendingUp,
 } from "lucide-react";
+import { BarometreView } from "@/app/suivre/barometre-view";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import type { NewsArticle } from "@/app/api/news/route";
@@ -65,19 +68,20 @@ function usePaged<T>(items: T[]) {
   return { pageItems, page: safePage, setPage, pageCount, total: items.length };
 }
 
-type Category = "actualite" | "presse" | "sondages" | "votes" | "lois" | "agenda";
+export type Category = "actualite" | "presse" | "sondages" | "barometre" | "votes" | "lois" | "agenda";
 
 const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
   { id: "actualite", label: "Actualité", icon: Newspaper },
   { id: "presse", label: "Presse locale", icon: MapPin },
   { id: "sondages", label: "Sondages", icon: BarChart3 },
+  { id: "barometre", label: "Baromètre 2027", icon: TrendingUp },
   { id: "votes", label: "Votes AN", icon: Vote },
   { id: "lois", label: "Lois & PPL", icon: FileText },
   { id: "agenda", label: "Agenda", icon: CalendarDays },
 ];
 
-export function SuivreView() {
-  const [category, setCategory] = useState<Category>("actualite");
+export function SuivreView({ initialCategory = "actualite" }: { initialCategory?: Category }) {
+  const [category, setCategory] = useState<Category>(initialCategory);
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] w-full min-w-0 gap-3 overflow-hidden bg-canvas p-3">
@@ -112,6 +116,7 @@ export function SuivreView() {
       {category === "actualite" && <ActualiteView />}
       {category === "presse" && <PresseLocaleView />}
       {category === "sondages" && <SondagesView />}
+      {category === "barometre" && <BarometreView />}
       {category === "votes" && <VotesView />}
       {category === "lois" && <LoisView />}
       {category === "agenda" && <AgendaView />}
@@ -186,7 +191,7 @@ function PresseLocaleView() {
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] text-muted-foreground">Exemples :</span>
         {["Élections législatives", "Conseil municipal", "Mobilisation locale"].map((ex) => (
-          <button key={ex} type="button" onClick={() => quick(ex)} className="rounded-pill bg-black/[0.04] px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-black/[0.08]">
+          <button key={ex} type="button" onClick={() => quick(ex)} className="rounded-pill bg-foreground/[0.04] px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-foreground/[0.08]">
             {ex}
           </button>
         ))}
@@ -218,7 +223,7 @@ function PresseLocaleView() {
                     href={a.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block rounded-lg border border-black/5 bg-canvas/40 p-3 transition-colors hover:border-warm/40"
+                    className="block rounded-lg border border-foreground/5 bg-canvas/40 p-3 transition-colors hover:border-warm/40"
                   >
                     <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                       <span className="inline-flex items-center gap-1 font-medium">
@@ -506,6 +511,18 @@ function SondagesOverview({ items, generatedAt }: { items: Notice[]; generatedAt
     return NATURE_ORDER.filter((x) => counts.has(x)).map((x) => ({ code: x, n: counts.get(x) ?? 0 }));
   }, [items]);
 
+  const topVilles = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of items) if (n.commune) m.set(n.commune, (m.get(n.commune) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  }, [items]);
+
+  const topPersonnalites = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of items) for (const p of n.personnalites ?? []) m.set(p, (m.get(p) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  }, [items]);
+
   const latest = items[0] ?? null;
 
   return (
@@ -558,9 +575,38 @@ function SondagesOverview({ items, generatedAt }: { items: Notice[]; generatedAt
         </div>
       )}
 
+      {topVilles.length > 0 && (
+        <RankBlock label="Villes les plus sondées" entries={topVilles} icon={Building2} />
+      )}
+      {topPersonnalites.length > 0 && (
+        <RankBlock label="Personnalités les plus sondées" entries={topPersonnalites} icon={Flag} />
+      )}
+
       <p className="mt-auto text-[10.5px] text-muted-foreground/70">
         Source · Commission des sondages{generatedAt ? ` — généré ${relativeFr(generatedAt)}` : ""}. Sélectionne une notice pour le détail.
       </p>
+    </div>
+  );
+}
+
+function RankBlock({ label, entries, icon: Icon }: { label: string; entries: [string, number][]; icon: typeof Building2 }) {
+  const max = Math.max(1, ...entries.map((e) => e[1]));
+  return (
+    <div>
+      <p className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <Icon className="h-3 w-3" /> {label}
+      </p>
+      <div className="mt-2 flex flex-col gap-1.5">
+        {entries.map(([name, n]) => (
+          <div key={name} className="flex items-center gap-2 text-[12px]">
+            <span className="w-36 shrink-0 truncate">{name}</span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-soft/60">
+              <span className="block h-full rounded-pill bg-warm/70" style={{ width: `${(n / max) * 100}%` }} />
+            </div>
+            <span className="w-7 shrink-0 text-right tabular-nums text-muted-foreground">{n}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -590,6 +636,20 @@ function NoticeDetail({ notice }: { notice: Notice }) {
         </div>
         <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">{notice.institut ?? "Institut non communiqué"}</h2>
         <p className="mt-1.5 text-[13px] text-foreground/80">{cleanLabel(notice)}</p>
+        {(notice.commune || (notice.personnalites && notice.personnalites.length > 0)) && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {notice.commune && (
+              <span className="inline-flex items-center gap-1 rounded-pill bg-surface-soft px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                <Building2 className="h-3 w-3" /> {notice.commune}
+              </span>
+            )}
+            {(notice.personnalites ?? []).map((p) => (
+              <span key={p} className="inline-flex items-center gap-1 rounded-pill bg-warm/15 px-2 py-0.5 text-[11px] font-medium text-warm">
+                <Flag className="h-3 w-3" /> {p}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <KPI label="Date de dépôt" value={notice.date ? formatDateFr(notice.date) : "—"} hint={relativeFr(notice.date)} icon={Calendar} />
@@ -597,6 +657,49 @@ function NoticeDetail({ notice }: { notice: Notice }) {
         <KPI label="Institut" value={notice.institut ?? "n.c."} icon={Building2} />
         <KPI label="Média / commanditaire" value={notice.media ?? "n.c."} />
       </div>
+
+      {(notice.echantillon != null || notice.methode || notice.terrain) && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Méthodologie · extraite du PDF</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {notice.echantillon != null && (
+              <KPI
+                label="Échantillon"
+                value={notice.echantillon.toLocaleString("fr-FR")}
+                hint={notice.effectif_utile ? `effectif utile ${notice.effectif_utile.toLocaleString("fr-FR")}` : "personnes interrogées"}
+                icon={BarChart3}
+              />
+            )}
+            {notice.methode && <KPI label="Mode de recueil" value={notice.methode} />}
+            {notice.terrain && <KPI label="Terrain" value={notice.terrain} icon={Calendar} />}
+          </div>
+        </div>
+      )}
+
+      {notice.intentions && notice.intentions.length > 0 && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Intentions de vote · extraites du PDF</p>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {notice.intentions.map((it, idx) => {
+              const v = it.redresse ?? it.brut;
+              return (
+                <div key={idx} className="flex items-center gap-2 text-[12px]">
+                  <span className="min-w-0 flex-1 truncate" title={it.label}>{it.label}</span>
+                  <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-pill bg-surface-soft/60">
+                    <span className="block h-full rounded-pill bg-warm" style={{ width: `${Math.min(100, v)}%` }} />
+                  </div>
+                  <span className="w-12 shrink-0 text-right font-semibold tabular-nums">
+                    {v.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 inline-flex items-start gap-1 text-[10px] text-muted-foreground/80">
+            <Info className="mt-px h-3 w-3 shrink-0" /> Extraction automatique — la notice officielle (ci-dessous) fait foi.
+          </p>
+        </div>
+      )}
       <div className="rounded-md border border-dashed border-border bg-surface-alt/50 p-4">
         <p className="text-[12px] font-medium">{notice.nature_label}</p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">

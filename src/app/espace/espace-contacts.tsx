@@ -6,6 +6,7 @@ import { Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Users, Loader2, Cont
 import { cn } from "@/lib/utils";
 import {
   useContacts,
+  useLoaded,
   addContact,
   updateContact,
   deleteContact,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/contacts";
 import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
 import type { WsContext } from "@/app/espace/types";
+import { TabSkeleton } from "@/components/skeleton";
 
 const KINDS = Object.keys(CONTACT_KIND_LABELS) as ContactKind[];
 const SUPPORTS = Object.keys(CONTACT_SUPPORT_LABELS) as ContactSupport[];
@@ -33,9 +35,12 @@ const field =
 
 export function EspaceContacts({ ctx }: { ctx: WsContext }) {
   const contacts = useContacts();
+  const loaded = useLoaded();
   const [kindFilter, setKindFilter] = useState<ContactKind | "all">("all");
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
+
+  if (!loaded) return <TabSkeleton />;
 
   const q = query.trim().toLowerCase();
   const visible = contacts.filter((c) => {
@@ -87,7 +92,7 @@ export function EspaceContacts({ ctx }: { ctx: WsContext }) {
       {showForm && <ContactForm ctx={ctx} onDone={() => setShowForm(false)} />}
 
       {visible.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-14 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-14 text-center">
           <span className="grid h-11 w-11 place-items-center rounded-pill bg-warm/15 text-warm">
             <ContactIcon className="h-5 w-5" />
           </span>
@@ -115,7 +120,7 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
       onClick={onClick}
       className={cn(
         "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-        active ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+        active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
       )}
     >
       {children}
@@ -215,7 +220,7 @@ function ContactCard({ contact, ctx }: { contact: Contact; ctx: WsContext }) {
   if (editing) return <ContactForm ctx={ctx} initial={contact} onDone={() => setEditing(false)} />;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+    <div className="flex flex-col gap-2 rounded-lg border border-foreground/5 bg-surface p-4 shadow-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold">{contact.name}</p>

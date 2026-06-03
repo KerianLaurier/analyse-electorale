@@ -98,7 +98,7 @@ export function CommuneFiche({ insee }: { insee: string }) {
         Explorer
       </Link>
 
-      <header className="mt-3 flex flex-wrap items-end justify-between gap-3 border-b border-black/5 pb-5">
+      <header className="mt-3 flex flex-wrap items-end justify-between gap-3 border-b border-foreground/5 pb-5">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Commune · INSEE {insee}
@@ -114,7 +114,7 @@ export function CommuneFiche({ insee }: { insee: string }) {
           {ordered.length > 0 && <ExportButton onClick={exportCsv} />}
           <Link
             href={`/explorer?maille=communes&scrutin=presid-2022-t2&code=${encodeURIComponent(insee)}`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
             <MapIcon className="h-3.5 w-3.5" />
             Voir sur la carte
@@ -128,7 +128,7 @@ export function CommuneFiche({ insee }: { insee: string }) {
         <Empty insee={insee} />
       ) : (
         <div className="mt-5">
-          <div className="flex gap-1 border-b border-black/5">
+          <div className="flex gap-1 border-b border-foreground/5">
             <TabButton active={tab === "elections"} onClick={() => setTab("elections")}>
               Élections
             </TabButton>
@@ -234,7 +234,7 @@ function DemographieSection({ demo }: { demo: DemographieCommune }) {
       <SectionTitle>Démographie — INSEE Recensement 2022</SectionTitle>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {items.map((i) => (
-          <div key={i.label} className="rounded-xl border border-black/5 bg-white/60 p-3">
+          <div key={i.label} className="rounded-xl border border-foreground/5 bg-surface/60 p-3">
             <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{i.label}</p>
             <p className="mt-0.5 text-[15px] font-semibold tabular-nums tracking-tight">{i.value}</p>
             {i.hint && <p className="text-[10px] text-muted-foreground">{i.hint}</p>}
@@ -265,7 +265,7 @@ function SociologieSection({ socio }: { socio: CommuneSociologie }) {
       <SectionTitle>Sociologie — INSEE Filosofi 2021</SectionTitle>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {items.map((i) => (
-          <div key={i.label} className="rounded-xl border border-black/5 bg-white/60 p-3">
+          <div key={i.label} className="rounded-xl border border-foreground/5 bg-surface/60 p-3">
             <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{i.label}</p>
             <p className="mt-0.5 text-[15px] font-semibold tabular-nums tracking-tight">{i.value}</p>
             {i.hint && <p className="text-[10px] text-muted-foreground">{i.hint}</p>}
@@ -281,7 +281,7 @@ const ordinal = (n: number) => (n === 1 ? "1ʳᵉ" : `${n}ᵉ`);
 function CirconscriptionsBanner({ circos }: { circos: string[] }) {
   const multi = circos.length > 1;
   return (
-    <section className="rounded-2xl border border-black/5 bg-white/60 p-4">
+    <section className="rounded-2xl border border-foreground/5 bg-surface/60 p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {multi ? `Circonscriptions législatives · ${circos.length}` : "Circonscription législative"}
       </p>
@@ -314,7 +314,7 @@ function CirconscriptionsBanner({ circos }: { circos: string[] }) {
 function ScrutinRow({ point }: { point: CircoTimelinePoint }) {
   const winner = point.candidates[0];
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-black/5 bg-white/60 px-3.5 py-3">
+    <div className="flex items-center gap-3 rounded-xl border border-foreground/5 bg-surface/60 px-3.5 py-3">
       <div className="w-[128px] shrink-0">
         <p className="text-[12px] font-medium leading-tight">{SCRUTIN_META[point.scrutin].short}</p>
         <p className="text-[10px] text-muted-foreground">
@@ -396,7 +396,7 @@ function KPI({
 }) {
   const good = delta != null && goodWhenPositive != null ? delta >= 0 === goodWhenPositive : null;
   return (
-    <div className="rounded-2xl border border-black/5 bg-white/60 p-4">
+    <div className="rounded-2xl border border-foreground/5 bg-surface/60 p-4">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <div className="mt-0.5 flex items-baseline justify-between gap-2">
         <p className="text-[18px] font-semibold tabular-nums tracking-tight">{value}</p>
@@ -427,14 +427,14 @@ function Loading() {
 
 function Empty({ insee }: { insee: string }) {
   return (
-    <div className="mt-10 rounded-2xl border border-black/5 bg-white/60 p-8 text-center">
+    <div className="mt-10 rounded-2xl border border-foreground/5 bg-surface/60 p-8 text-center">
       <p className="text-[13px] font-medium">Aucune donnée pour la commune {insee}</p>
       <p className="mt-1 text-[12px] text-muted-foreground">
         Vérifie le code INSEE (5 caractères, ex. « 26198 ») ou explore la carte.
       </p>
       <Link
         href="/explorer?maille=communes&scrutin=presid-2022-t2"
-        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
       >
         <MapIcon className="h-3.5 w-3.5" />
         Ouvrir l&apos;explorateur

@@ -24,6 +24,21 @@ export type Notice = {
   media: string | null;
   nature: NatureCode;
   nature_label: string;
+  /** Personnalités politiques citées (popularité / intentions). */
+  personnalites?: string[];
+  /** Commune sondée (municipales). */
+  commune?: string | null;
+  // ── Données extraites du PDF (build-cncs-parse.py) ──
+  /** Taille de l'échantillon interrogé. */
+  echantillon?: number | null;
+  /** Effectif utile (après redressement). */
+  effectif_utile?: number | null;
+  /** Mode de recueil : « En ligne », « Téléphone », « Face-à-face ». */
+  methode?: string | null;
+  /** Dates de terrain (texte brut). */
+  terrain?: string | null;
+  /** Intentions de vote extraites (best-effort) : libellé + % brut/redressé. */
+  intentions?: { label: string; brut: number; redresse: number | null }[];
   date: string | null;
   pdf: string;
 };

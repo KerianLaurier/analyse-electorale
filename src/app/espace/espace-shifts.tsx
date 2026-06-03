@@ -5,6 +5,7 @@ import { Plus, CalendarClock, MapPin, Users, Check, Trash2, Pencil, Loader2, Clo
 import { cn } from "@/lib/utils";
 import {
   useShifts,
+  useLoaded,
   addShift,
   updateShift,
   deleteShift,
@@ -15,6 +16,7 @@ import {
   type ShiftKind,
 } from "@/lib/shifts";
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
+import { TabSkeleton } from "@/components/skeleton";
 
 const KINDS = Object.keys(SHIFT_KIND_LABELS) as ShiftKind[];
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -26,8 +28,11 @@ const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13
 
 export function EspaceShifts({ ctx }: { ctx: WsContext }) {
   const shifts = useShifts();
+  const loaded = useLoaded();
   const [scope, setScope] = useState<"upcoming" | "all">("upcoming");
   const [showForm, setShowForm] = useState(false);
+
+  if (!loaded) return <TabSkeleton />;
 
   const today = todayISO();
   const visible = shifts.filter((s) => (scope === "upcoming" ? s.date >= today : true));
@@ -58,7 +63,7 @@ export function EspaceShifts({ ctx }: { ctx: WsContext }) {
       {showForm && <ShiftForm ctx={ctx} onDone={() => setShowForm(false)} />}
 
       {dates.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-14 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-14 text-center">
           <span className="grid h-11 w-11 place-items-center rounded-pill bg-warm/15 text-warm">
             <CalendarClock className="h-5 w-5" />
           </span>
@@ -95,7 +100,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={onClick}
       className={cn(
         "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-        active ? "bg-primary text-primary-foreground" : "bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08]",
+        active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
       )}
     >
       {children}
@@ -179,7 +184,7 @@ function ShiftCard({ shift, ctx }: { shift: Shift; ctx: WsContext }) {
   const full = shift.capacity != null && count >= shift.capacity;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+    <div className="flex flex-col gap-2 rounded-lg border border-foreground/5 bg-surface p-4 shadow-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold">{shift.title}</p>

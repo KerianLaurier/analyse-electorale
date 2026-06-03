@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound, Map as MapIcon, BarChart3, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { initials } from "@/lib/team";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
+import { ThemeSwitch } from "@/components/theme-switch";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -19,13 +20,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const PRIMARY_NAV = [
-  { href: "/explorer", label: "Explorer" },
-  { href: "/analyser", label: "Analyser" },
-  { href: "/suivre", label: "Suivre" },
-  { href: "/espace", label: "Mon QG" },
+  { href: "/explorer", label: "Explorer", icon: MapIcon },
+  { href: "/analyser", label: "Analyser", icon: BarChart3 },
+  { href: "/suivre", label: "Suivre", icon: Activity },
+  { href: "/espace", label: "Mon QG", icon: Megaphone },
 ] as const;
 
-const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
+// Pages sans chrome applicatif : écrans d'auth + landing publique (`/`),
+// qui possèdent leur propre en-tête.
+const NO_CHROME = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -80,6 +83,7 @@ export function AppHeader() {
   }
 
   return (
+    <>
     <header className="sticky top-0 z-40 bg-canvas/95 supports-[backdrop-filter]:bg-canvas/70 backdrop-blur">
       {/* Grid 3 colonnes : nav centrée géométriquement (justify-self-center)
          indépendamment des largeurs de gauche/droite. */}
@@ -100,9 +104,9 @@ export function AppHeader() {
           </span>
         </Link>
 
-        {/* Nav pill centrée géométriquement */}
+        {/* Nav pill centrée géométriquement (masquée sur mobile → barre basse) */}
         <nav
-          className="inline-flex items-center gap-1 justify-self-center rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)]"
+          className="hidden items-center gap-1 justify-self-center rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] lg:inline-flex"
           aria-label="Sections principales"
         >
           {PRIMARY_NAV.map((item) => {
@@ -196,6 +200,11 @@ export function AppHeader() {
                 Changer le mot de passe
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <div className="px-2 py-1.5">
+                <p className="mb-1.5 px-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Apparence</p>
+                <ThemeSwitch />
+              </div>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut}>
                 <LogOut className="h-4 w-4" />
                 Se déconnecter
@@ -205,6 +214,33 @@ export function AppHeader() {
         </div>
       </div>
     </header>
+
+      {/* Navigation basse (mobile) — sections principales, ergonomie pouce */}
+      <nav
+        aria-label="Sections principales"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-canvas/95 backdrop-blur supports-[backdrop-filter]:bg-canvas/80 lg:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {PRIMARY_NAV.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10.5px] font-medium transition-colors",
+                active ? "text-warm" : "text-foreground/60 hover:text-foreground",
+              )}
+            >
+              <Icon className="h-5 w-5" />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }
 
@@ -263,7 +299,7 @@ function NotificationsBell({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-black/10 bg-surface shadow-[0_8px_30px_rgba(10,10,12,0.18)]">
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-foreground/10 bg-surface shadow-[0_8px_30px_rgba(10,10,12,0.18)]">
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-[12px] font-semibold">Notifications</span>
             {count > 0 && (
@@ -300,7 +336,7 @@ function NotificationsBell({
                       type="button"
                       onClick={() => dismissNotification(n.id)}
                       aria-label="Marquer comme lu"
-                      className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground"
+                      className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>

@@ -40,9 +40,13 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {/* Thème : clair par défaut, sombre disponible via le sélecteur du menu
+            profil (next-themes pose `.dark` sur <html>). `enableSystem` permet
+            l'option « Système ». Toutes les surfaces/bordures passent par des
+            tokens CSS (cf. globals.css → :root / .dark). */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
@@ -51,7 +55,8 @@ export default function RootLayout({
               <RouteProgress />
             </Suspense>
             <AppHeader />
-            <main className="flex-1 flex flex-col">{children}</main>
+            {/* pb-16 : dégagement pour la barre de navigation basse (mobile). */}
+            <main className="flex-1 flex flex-col pb-16 lg:pb-0">{children}</main>
             <CommandPalette />
           </QueryProvider>
         </ThemeProvider>

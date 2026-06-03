@@ -33,7 +33,7 @@ import { CircoSocioProfile } from "@/components/circo-socio-profile";
 const TerritoryMap = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[420px] items-center justify-center rounded-2xl border border-black/5 bg-surface text-[13px] text-muted-foreground">
+    <div className="flex h-[420px] items-center justify-center rounded-2xl border border-foreground/5 bg-surface text-[13px] text-muted-foreground">
       <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement de la carte…
     </div>
   ),
@@ -180,7 +180,7 @@ export function CircoStrategie({
   return (
     <div className="mt-6 flex flex-col gap-8">
       {/* ── Synthèse ───────────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-black/5 bg-white/60 p-5">
+      <section className="rounded-2xl border border-foreground/5 bg-surface/60 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -230,7 +230,7 @@ export function CircoStrategie({
             );
             if (points.length === 0) return null;
             return (
-              <div key={family} className="rounded-2xl border border-black/5 bg-white/60 p-4">
+              <div key={family} className="rounded-2xl border border-foreground/5 bg-surface/60 p-4">
                 <p className="mb-2.5 text-[12px] font-medium">
                   {family === "presidentielle" ? "Présidentielles" : "Législatives"}
                 </p>
@@ -248,7 +248,7 @@ export function CircoStrategie({
       {/* ── Profil sociologique ────────────────────────────────────────── */}
       <section>
         <SectionTitle icon={Users2}>Profil sociologique du territoire</SectionTitle>
-        <div className="mt-3 rounded-2xl border border-black/5 bg-white/60 p-5">
+        <div className="mt-3 rounded-2xl border border-foreground/5 bg-surface/60 p-5">
           <CircoSocioProfile code={code} />
           <p className="mt-3 text-[11px] text-muted-foreground">
             Indicateurs INSEE (Filosofi 2021 · Recensement 2022) — écart à la moyenne nationale des
@@ -265,7 +265,7 @@ export function CircoStrategie({
       {winner && runnerUp && margin != null && (
         <section>
           <SectionTitle icon={Swords}>Second tour — rapport de force</SectionTitle>
-          <div className="mt-3 rounded-2xl border border-black/5 bg-white/60 p-5">
+          <div className="mt-3 rounded-2xl border border-foreground/5 bg-surface/60 p-5">
             <Duel a={winner} b={runnerUp} />
             <p className="mt-3 text-[12.5px] text-muted-foreground">
               {margin < 0.1 ? (
@@ -318,7 +318,7 @@ export function CircoStrategie({
             <Loader2 className="h-4 w-4 animate-spin" /> Calcul des bureaux prioritaires…
           </div>
         ) : bureaux.length === 0 ? (
-          <p className="mt-4 rounded-2xl border border-black/5 bg-white/60 p-5 text-[13px] text-muted-foreground">
+          <p className="mt-4 rounded-2xl border border-foreground/5 bg-surface/60 p-5 text-[13px] text-muted-foreground">
             Pas de données bureau de vote pour cette circonscription.
           </p>
         ) : (
@@ -334,7 +334,7 @@ export function CircoStrategie({
                 maille="bureaux"
                 choropleth={choropleth}
                 bounds={(bounds.data as LngLatBounds | null) ?? null}
-                className="h-[420px] w-full overflow-hidden rounded-2xl border border-black/5"
+                className="h-[420px] w-full overflow-hidden rounded-2xl border border-foreground/5"
               />
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
                 <Legend color="#ef4444" label="Prioritaire" />
@@ -370,7 +370,7 @@ export function CircoStrategie({
               ) : (
                 <Link
                   href="/auth/team"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-black/[0.08]"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-foreground/[0.04] px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-foreground/[0.08]"
                 >
                   <Info className="h-4 w-4" /> Créer une équipe pour planifier le terrain
                 </Link>
@@ -399,7 +399,7 @@ function BlocStack({ point }: { point: CircoTimelinePoint }) {
       <span className="w-[88px] shrink-0 text-[11px] text-muted-foreground">
         {SCRUTIN_META[point.scrutin].short}
       </span>
-      <div className="flex h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-black/[0.04]">
+      <div className="flex h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/[0.04]">
         {segments.map((s) => (
           <span
             key={s.key}
@@ -470,7 +470,7 @@ function SectionTitle({ icon: Icon, children }: { icon: typeof Crosshair; childr
 
 function KPI({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-white/60 p-2.5">
+    <div className="rounded-xl border border-foreground/5 bg-surface/60 p-2.5">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-[15px] font-semibold tabular-nums tracking-tight">{value}</p>
       {hint && <p className="truncate text-[10.5px] text-muted-foreground">{hint}</p>}

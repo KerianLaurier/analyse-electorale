@@ -56,6 +56,7 @@ let myUserId: string | null = null;
 let myTeamId: string | null = null;
 let reports: CanvassReport[] = [];
 let loadStarted = false;
+let loaded = false;
 const listeners = new Set<() => void>();
 const EMPTY: CanvassReport[] = [];
 
@@ -104,7 +105,7 @@ async function load() {
 function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
-  void load();
+  void load().finally(() => { loaded = true; emit(); });
   onIdentityChange(() => void load());
 }
 
@@ -288,4 +289,9 @@ export function weeklyTrend(reports: CanvassReport[]): WeekPoint[] {
         label: new Date(w.week + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }),
       };
     });
+}
+
+/** True une fois le premier chargement terminé (pour les squelettes). */
+export function useLoaded(): boolean {
+  return useSyncExternalStore(subscribe, () => loaded, () => false);
 }

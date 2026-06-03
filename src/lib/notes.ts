@@ -43,6 +43,7 @@ let myUserId: string | null = null;
 let myTeamId: string | null = null;
 let notes: Note[] = [];
 let loadStarted = false;
+let loaded = false;
 const listeners = new Set<() => void>();
 const EMPTY: Note[] = [];
 
@@ -94,7 +95,7 @@ async function load() {
 function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
-  void load();
+  void load().finally(() => { loaded = true; emit(); });
   onIdentityChange(() => void load());
 }
 
@@ -178,4 +179,9 @@ function subscribe(l: () => void): () => void {
 
 export function useNotes(): Note[] {
   return useSyncExternalStore(subscribe, () => notes, () => EMPTY);
+}
+
+/** True une fois le premier chargement terminé (pour les squelettes). */
+export function useLoaded(): boolean {
+  return useSyncExternalStore(subscribe, () => loaded, () => false);
 }

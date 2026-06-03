@@ -192,7 +192,7 @@ function ScrutinCard({ scrutin, maille, code }: { scrutin: Scrutin; maille: Mail
         {SCRUTIN_META[scrutin].short}
       </p>
       {detail.isFetching && !detail.data ? (
-        <div className="h-16 animate-pulse rounded bg-black/[0.05]" />
+        <div className="h-16 animate-pulse rounded bg-foreground/[0.05]" />
       ) : winner ? (
         <>
           <div className="flex items-baseline justify-between gap-2">

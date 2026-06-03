@@ -21,7 +21,7 @@ export function ExportButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-black/[0.08] disabled:cursor-not-allowed disabled:opacity-40",
+        "inline-flex items-center gap-1.5 rounded-full bg-foreground/[0.04] px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-foreground/[0.08] disabled:cursor-not-allowed disabled:opacity-40",
         className,
       )}
     >

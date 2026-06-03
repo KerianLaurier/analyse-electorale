@@ -40,7 +40,7 @@ export function PinButton({ pin, className }: { pin: PinInput; className?: strin
         title={pinned ? "Retirer des épingles" : "Ajouter aux épingles"}
         className={cn(
           BASE,
-          pinned ? "bg-warm/15 text-foreground" : "bg-black/[0.04] text-foreground hover:bg-black/[0.08]",
+          pinned ? "bg-warm/15 text-foreground" : "bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08]",
           className,
         )}
       >
@@ -67,7 +67,7 @@ export function PinButton({ pin, className }: { pin: PinInput; className?: strin
         title="Épingler ou partager avec l'équipe"
         className={cn(
           BASE,
-          pinned ? "bg-warm/15 text-foreground" : "bg-black/[0.04] text-foreground hover:bg-black/[0.08]",
+          pinned ? "bg-warm/15 text-foreground" : "bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08]",
           className,
         )}
       >

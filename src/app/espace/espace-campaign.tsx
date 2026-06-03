@@ -10,6 +10,7 @@ import {
   useCampaign,
   useSectors,
   useHasTeam,
+  useLoaded,
   saveCampaign,
   addSector,
   addSectorsBulk,
@@ -22,6 +23,7 @@ import {
   type Sector,
   type SectorStatus,
 } from "@/lib/campaign";
+import { PanelsSkeleton } from "@/components/skeleton";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const pctToFrac = (s: string) => {
@@ -34,10 +36,12 @@ const field =
   "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
 
 export function EspaceCampaign() {
+  const loaded = useLoaded();
   const hasTeam = useHasTeam();
+  if (!loaded) return <PanelsSkeleton />;
   if (!hasTeam) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/10 bg-surface/60 px-6 py-16 text-center">
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-16 text-center">
         <span className="grid h-12 w-12 place-items-center rounded-pill bg-warm/15 text-warm">
           <Megaphone className="h-5 w-5" />
         </span>
@@ -109,7 +113,7 @@ function TerritoryCard({ campaign }: { campaign: Campaign | null }) {
   }
 
   return (
-    <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+    <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
       <div className="flex items-center justify-between">
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Target className="h-3.5 w-3.5" /> Territoire de campagne
@@ -184,7 +188,7 @@ function ObjectiveCard({
   const canPrefill = dataRegistered != null && dataRegistered !== reg;
 
   return (
-    <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+    <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
       <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         <Flag className="h-3.5 w-3.5" /> Objectif électoral
       </h2>
@@ -326,7 +330,7 @@ function SectorsCard({
   }
 
   return (
-    <section className="rounded-lg border border-black/5 bg-surface p-5 shadow-card">
+    <section className="rounded-lg border border-foreground/5 bg-surface p-5 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <MapPin className="h-3.5 w-3.5" /> Plan de terrain · secteurs
@@ -371,7 +375,7 @@ function SectorsCard({
       )}
 
       {sectors.length === 0 ? (
-        <p className="mt-4 rounded-lg border border-dashed border-black/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
+        <p className="mt-4 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
           Découpez votre territoire en secteurs (bureaux de vote, quartiers) pour piloter le
           porte-à-porte et suivre les voix identifiées.
         </p>

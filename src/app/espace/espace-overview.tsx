@@ -4,16 +4,18 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock, Users2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTasks, TASK_KIND_LABELS, type Task } from "@/lib/tasks";
-import { useNotes } from "@/lib/notes";
-import { usePins } from "@/lib/pins";
-import { useShifts, SHIFT_KIND_LABELS, type Shift } from "@/lib/shifts";
-import { useContacts } from "@/lib/contacts";
-import { useReports, summarize } from "@/lib/canvass";
-import { usePhoneContacts, summarizePhoning } from "@/lib/phoning";
-import { useCampaign, useSectors, voteGoal } from "@/lib/campaign";
+import { useTasks, TASK_KIND_LABELS, useLoaded as useTasksLoaded, type Task } from "@/lib/tasks";
+import { useNotes, useLoaded as useNotesLoaded } from "@/lib/notes";
+import { usePins, useLoaded as usePinsLoaded } from "@/lib/pins";
+import { useShifts, SHIFT_KIND_LABELS, useLoaded as useShiftsLoaded, type Shift } from "@/lib/shifts";
+import { useContacts, useLoaded as useContactsLoaded } from "@/lib/contacts";
+import { useReports, summarize, useLoaded as useReportsLoaded } from "@/lib/canvass";
+import { usePhoneContacts, summarizePhoning, useLoaded as usePhoningLoaded } from "@/lib/phoning";
+import { useCampaign, useSectors, voteGoal, useLoaded as useCampaignLoaded } from "@/lib/campaign";
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
 import { RoleChips } from "@/components/role-chip";
+import { Skeleton } from "@/components/skeleton";
+import { EspaceOnboarding } from "@/app/espace/espace-onboarding";
 import type { Tab } from "@/app/espace/espace-view";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
@@ -31,6 +33,20 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
   const reports = useReports();
   const campaign = useCampaign();
   const sectors = useSectors();
+
+  // Disponibilité des données (évite le flash d'état vide au chargement).
+  // Tous les hooks sont appelés inconditionnellement (pas de court-circuit).
+  const loadedFlags = [
+    useTasksLoaded(),
+    useNotesLoaded(),
+    usePinsLoaded(),
+    useShiftsLoaded(),
+    useContactsLoaded(),
+    useReportsLoaded(),
+    usePhoningLoaded(),
+    useCampaignLoaded(),
+  ];
+  const ready = loadedFlags.every(Boolean);
 
   const goal = voteGoal(campaign);
   const identified = sectors.reduce((s, x) => s + x.favorable, 0);
@@ -67,8 +83,12 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
   }, [summary, phoneContacts]);
   const benevoles = contacts.filter((c) => c.kind === "benevole").length;
 
+  if (!ready) return <OverviewSkeleton />;
+
   return (
     <div className="flex flex-col gap-6">
+      <EspaceOnboarding ctx={ctx} campaign={campaign} sectors={sectors} goal={goal} setTab={setTab} />
+
       {/* Objectif de campagne */}
       {goal != null && (
         <button
@@ -107,7 +127,7 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
         <button
           type="button"
           onClick={() => setTab("canvass")}
-          className="rounded-lg border border-black/5 bg-surface p-4 text-left shadow-card transition-colors hover:border-warm/30"
+          className="rounded-lg border border-foreground/5 bg-surface p-4 text-left shadow-card transition-colors hover:border-warm/30"
         >
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -161,7 +181,7 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
             {notes.slice(0, 4).map((n) => (
-              <li key={n.id} className="rounded-lg border border-black/5 bg-canvas/40 p-3">
+              <li key={n.id} className="rounded-lg border border-foreground/5 bg-canvas/40 p-3">
                 {n.title && <p className="truncate text-[13px] font-medium">{n.title}</p>}
                 <p className="line-clamp-2 text-[12px] text-muted-foreground">{n.body}</p>
                 {n.context && (
@@ -177,7 +197,7 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
 
       {/* Qui fait quoi — équipe & rôles */}
       {ctx.teamId && ctx.members.length > 0 && (
-        <section className="rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+        <section className="rounded-lg border border-foreground/5 bg-surface p-4 shadow-card">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               <Users2 className="h-3.5 w-3.5" /> Qui fait quoi
@@ -216,6 +236,24 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
   );
 }
 
+function OverviewSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <Skeleton className="h-[68px] w-full rounded-lg" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-[104px] rounded-lg" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Skeleton className="h-40 rounded-lg" />
+        <Skeleton className="h-40 rounded-lg" />
+      </div>
+      <Skeleton className="h-40 rounded-lg" />
+    </div>
+  );
+}
+
 function Stat({
   icon: Icon,
   label,
@@ -235,7 +273,7 @@ function Stat({
       onClick={onClick}
       className={cn(
         "flex flex-col items-start gap-1 rounded-lg border p-4 text-left shadow-card transition-colors",
-        accent ? "border-warm/30 bg-warm/[0.06] hover:bg-warm/[0.1]" : "border-black/5 bg-surface hover:border-warm/30",
+        accent ? "border-warm/30 bg-warm/[0.06] hover:bg-warm/[0.1]" : "border-foreground/5 bg-surface hover:border-warm/30",
       )}
     >
       <Icon className={cn("h-4 w-4", accent ? "text-warm" : "text-muted-foreground")} />
@@ -257,7 +295,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-black/5 bg-surface p-4 shadow-card">
+    <section className="rounded-lg border border-foreground/5 bg-surface p-4 shadow-card">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Icon className="h-3.5 w-3.5" /> {title}

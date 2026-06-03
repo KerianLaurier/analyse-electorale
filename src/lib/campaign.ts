@@ -82,6 +82,7 @@ let hasTeam = false;
 let campaign: Campaign | null = null;
 let sectors: Sector[] = [];
 let loadStarted = false;
+let loaded = false;
 const listeners = new Set<() => void>();
 const EMPTY: Sector[] = [];
 
@@ -137,7 +138,7 @@ async function load() {
 function ensureLoaded() {
   if (loadStarted) return;
   loadStarted = true;
-  void load();
+  void load().finally(() => { loaded = true; emit(); });
   onIdentityChange(() => void load());
 }
 
@@ -288,4 +289,9 @@ export function useHasTeam(): boolean {
 export function voteGoal(c: Campaign | null): number | null {
   if (!c || c.registered == null || c.turnoutTarget == null || c.scoreTarget == null) return null;
   return Math.round(c.registered * c.turnoutTarget * c.scoreTarget);
+}
+
+/** True une fois le premier chargement terminé (pour les squelettes). */
+export function useLoaded(): boolean {
+  return useSyncExternalStore(subscribe, () => loaded, () => false);
 }
