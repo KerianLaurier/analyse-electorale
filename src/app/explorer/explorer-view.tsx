@@ -17,6 +17,7 @@ import {
   useRpColumnCommune,
   useLogementColumnCommune,
   useFamilleColumnCommune,
+  useMobiliteColumnCommune,
   useSociologieCommune,
   useSociologieBureau,
   useTrendColumn,
@@ -181,6 +182,12 @@ const PSEUL_STOPS: Array<[number, string]> = [
   [40, "#4f46e5"],
   [55, "#312e81"],
 ];
+const NOUVARR_STOPS: Array<[number, string]> = [
+  [4, "#f0fdfa"],
+  [8, "#5eead4"],
+  [14, "#14b8a6"],
+  [22, "#115e59"],
+];
 
 // Paliers DIVERGENTS pour les deltas (taux 0..1, signés). Négatif → positif.
 // Abstention présidentielle (faibles variations) vs législatives (chute ~20 pts
@@ -235,7 +242,7 @@ function colorationGroups(scrutin: Scrutin): ColorationGroup[] {
   if (scrutin === "sociologie")
     return [
       { title: "Revenus", items: ["revenu", "pauvrete", "inegalites", "prestations", "pensions"] },
-      { title: "Démographie", items: ["age65", "chomage", "cadres", "diplome"] },
+      { title: "Démographie", items: ["age65", "chomage", "cadres", "diplome", "nouveaux-arrivants"] },
       { title: "Logement", items: ["proprietaires", "ressecondaires", "logvacants"] },
       { title: "Famille", items: ["monoparentales", "personnes-seules"] },
     ];
@@ -393,6 +400,7 @@ function ExplorerView() {
   const logvacants = useLogementColumnCommune("partLogVacants", scrutin === "sociologie" && coloration === "logvacants");
   const monoparentales = useFamilleColumnCommune("partFamMono", scrutin === "sociologie" && coloration === "monoparentales");
   const personnesSeules = useFamilleColumnCommune("partPersonnesSeules", scrutin === "sociologie" && coloration === "personnes-seules");
+  const nouveauxArrivants = useMobiliteColumnCommune(scrutin === "sociologie" && coloration === "nouveaux-arrivants");
   const trendDef = scrutin === "tendances" ? TREND_DEF[coloration] : undefined;
   const trend = useTrendColumn(
     trendDef?.file ?? "presid_2017_2022",
@@ -457,6 +465,8 @@ function ExplorerView() {
         return monoparentales.data ? continuousChoropleth("monoparentales", MONO_STOPS, monoparentales.data) : undefined;
       case "personnes-seules":
         return personnesSeules.data ? continuousChoropleth("personnes-seules", PSEUL_STOPS, personnesSeules.data) : undefined;
+      case "nouveaux-arrivants":
+        return nouveauxArrivants.data ? continuousChoropleth("nouveaux-arrivants", NOUVARR_STOPS, nouveauxArrivants.data) : undefined;
       default:
         return undefined;
     }
@@ -471,6 +481,7 @@ function ExplorerView() {
     logvacants.data,
     monoparentales.data,
     personnesSeules.data,
+    nouveauxArrivants.data,
     winner.data,
     participation.data,
     abstention.data,
@@ -503,6 +514,7 @@ function ExplorerView() {
     logvacants.isFetching ||
     monoparentales.isFetching ||
     personnesSeules.isFetching ||
+    nouveauxArrivants.isFetching ||
     trend.isFetching ||
     potentiel.isFetching;
 
@@ -938,6 +950,8 @@ function MapBottomLegend({
         <ContinuousMiniLegend stops={MONO_STOPS} fmt={(v) => `${v}%`} />
       ) : coloration === "personnes-seules" ? (
         <ContinuousMiniLegend stops={PSEUL_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "nouveaux-arrivants" ? (
+        <ContinuousMiniLegend stops={NOUVARR_STOPS} fmt={(v) => `${v}%`} />
       ) : TREND_DEF[coloration] ? (
         <ContinuousMiniLegend stops={TREND_DEF[coloration]!.stops} fmt={fmtSignedPts} />
       ) : POT_DEF[coloration] ? (

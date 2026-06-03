@@ -118,6 +118,15 @@
       "license": "Licence Ouverte 2.0 — INSEE (RP 2022)",
       "description": "Couples-Familles-Ménages 2022 (base IRIS). Agrégée commune par build-famille.py : C22_MEN, C22_MENPSEUL, C22_FAM, C22_FAMMONO.",
       "extract_dir": "famille.d"
+    },
+    "evol_struct_pop_2022": {
+      "url": "https://www.insee.fr/fr/statistiques/fichier/8581696/base-cc-evol-struct-pop-2022_csv.zip",
+      "format": "zip-csv-semicolon",
+      "level": "commune",
+      "approx_size_mb": 47,
+      "license": "Licence Ouverte 2.0 — INSEE (RP 2022)",
+      "description": "Évolution et structure de la population 2022 (commune). Mobilité résidentielle (IRAN) extraite par build-mobilite.py : P22_POP01P, P22_POP01P_IRAN1.",
+      "extract_dir": "evolpop.d"
     }
   },
   "electoral": {
