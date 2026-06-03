@@ -38,7 +38,7 @@ META = ROOT / "public" / "electoral" / "potentiel_meta.json"
 REF = "presid-2022-t1"  # hypothèse à blocs séparés (lisible)
 FEATS = ["partCadres", "partOuvriers", "part65plus", "tauxChomage",
          "partDiplomeSup", "partProprietaires", "partResSecondaires",
-         "partFamMono", "partPersonnesSeules"]
+         "partFamMono", "partPersonnesSeules", "partNouveauxArrivants"]
 LAMBDA = 5.0  # régularisation ridge (stabilise face à la multicolinéarité)
 
 BLOCS = {
@@ -63,7 +63,8 @@ def main() -> int:
     rp = (INSEE / "rp_2022_commune.parquet").as_posix()
     log = (INSEE / "logement_2022_commune.parquet").as_posix()
     fam = (INSEE / "famille_2022_commune.parquet").as_posix()
-    for f in (cand, terr, rp, log, fam):
+    mob = (INSEE / "mobilite_2022_commune.parquet").as_posix()
+    for f in (cand, terr, rp, log, fam, mob):
         if not Path(f).exists():
             print(f"✗ source manquante : {f}", file=sys.stderr)
             return 1
@@ -81,11 +82,13 @@ def main() -> int:
         SELECT t.code, t.exprimes, {pct_sel},
                r.partCadres, r.partOuvriers, r.part65plus, r.tauxChomage, r.partDiplomeSup,
                l.partProprietaires, l.partResSecondaires,
-               fa.partFamMono, fa.partPersonnesSeules
+               fa.partFamMono, fa.partPersonnesSeules,
+               mo.partNouveauxArrivants
         FROM t JOIN b USING(code)
         JOIN read_parquet('{rp}') r ON r.code = t.code
         JOIN read_parquet('{log}') l ON l.code = t.code
         JOIN read_parquet('{fam}') fa ON fa.code = t.code
+        JOIN read_parquet('{mob}') mo ON mo.code = t.code
         """
     ).df()
 

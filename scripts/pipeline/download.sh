@@ -68,6 +68,14 @@ if [[ -f "data/raw/insee/famille.zip" ]] && ! ls "data/raw/insee/famille.d"/*.[c
   unzip -o "data/raw/insee/famille.zip" -d "data/raw/insee/famille.d/" >/dev/null || echo "✗ unzip failed for famille.zip"
 fi
 
+# INSEE — Évolution et structure de la population 2022 (commune ; mobilité IRAN)
+evp_url=$(python3 -c "import json;print(json.load(open('scripts/pipeline/sources.json'))['insee']['evol_struct_pop_2022']['url'])")
+fetch "$evp_url" "data/raw/insee/evolpop.zip"
+if [[ -f "data/raw/insee/evolpop.zip" ]] && ! ls "data/raw/insee/evolpop.d"/*.[cC][sS][vV] >/dev/null 2>&1; then
+  mkdir -p "data/raw/insee/evolpop.d"
+  unzip -o "data/raw/insee/evolpop.zip" -d "data/raw/insee/evolpop.d/" >/dev/null || echo "✗ unzip failed for evolpop.zip"
+fi
+
 # INSEE — Recensement de la population (RP 2022, datasets melodi SDMX)
 for ds in DS_RP_POPULATION_PRINC DS_RP_EMPLOI_LR_COMP DS_RP_DIPLOMES_PRINC; do
   fetch "https://api.insee.fr/melodi/file/${ds}/${ds}_2022_CSV_FR" "data/raw/insee/${ds}.zip"

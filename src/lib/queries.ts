@@ -1079,6 +1079,27 @@ export function useFamilleColumnCommune(column: FamilleColumn, enabled = true) {
   });
 }
 
+// ─── Mobilité résidentielle par commune (Palier 3 — évol-struct-pop) ──────────
+const MOBILITE_PARQUET = "mobilite_2022_commune.parquet";
+
+/** Choroplèthe du renouvellement résidentiel (part de nouveaux arrivants). */
+export function useMobiliteColumnCommune(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "mobilite"],
+    queryFn: async (): Promise<CommuneNumericRow[]> => {
+      const url = inseeUrl(MOBILITE_PARQUET);
+      const rows = await query<{ code: string; value: number }>(`
+        SELECT code, partNouveauxArrivants AS value
+        FROM read_parquet('${url}')
+        WHERE partNouveauxArrivants IS NOT NULL
+      `);
+      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
 /** Indicateurs démographiques RP pour une commune (pour la fiche). */
 export function useDemographieCommune(code: string | null) {
   return useQuery({
