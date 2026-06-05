@@ -17,8 +17,8 @@ import { RoleChips } from "@/components/role-chip";
 import { Skeleton } from "@/components/skeleton";
 import { EspaceOnboarding } from "@/app/espace/espace-onboarding";
 import type { Tab } from "@/app/espace/espace-view";
+import { fmtInt } from "@/lib/format";
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const fmtPct = (n: number) => `${Math.round(n * 100)} %`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmtDue = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });

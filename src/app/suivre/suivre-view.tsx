@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BarChart3,
   Vote,
@@ -56,9 +56,13 @@ const PER_PAGE = 12;
 /** Pagine un tableau ; reset à la page 0 quand le contenu change (filtres). */
 function usePaged<T>(items: T[]) {
   const [page, setPage] = useState(0);
-  useEffect(() => {
+  // Reset à la page 0 quand le contenu change (filtres) — ajusté pendant le
+  // rendu (pas d'effet, donc pas de rendu en cascade).
+  const [prevItems, setPrevItems] = useState(items);
+  if (items !== prevItems) {
+    setPrevItems(items);
     setPage(0);
-  }, [items]);
+  }
   const pageCount = Math.max(1, Math.ceil(items.length / PER_PAGE));
   const safePage = Math.min(page, pageCount - 1);
   const pageItems = items.slice(

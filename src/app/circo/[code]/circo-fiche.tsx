@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Loader2, Map as MapIcon, Crosshair, Target, BarChart3 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Map as MapIcon, Crosshair, Target, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCircoHistory, type CircoTimelinePoint } from "@/lib/queries";
 import { CircoStrategie } from "./circo-strategie";
@@ -12,7 +12,10 @@ import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state"
 import { ExportButton } from "@/components/export-button";
 import { PinButton } from "@/components/pin-button";
 import { ErrorState } from "@/components/error-state";
+import { InlineLoading } from "@/components/inline-loading";
+import { EmptyState } from "@/components/empty-state";
 import { downloadCsv, type CsvRow } from "@/lib/export";
+import { fmtInt, fmtPct } from "@/lib/format";
 
 const candidatHref = (scrutin: Scrutin, code: string, label: string) =>
   `/candidat/${encodeURIComponent(`${scrutin}__${code}__${candidatSlug(label)}`)}`;
@@ -22,9 +25,6 @@ const FAMILY_GROUPS: { family: ScrutinFamily; label: string }[] = [
   { family: "legislative", label: "Législatives" },
 ];
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-const fmtPct = (n: number, d = 1) =>
-  `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
 const fmtPts = (n: number) =>
   `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pts`;
 
@@ -136,9 +136,13 @@ export function CircoFiche({ code }: { code: string }) {
           onRetry={() => void history.refetch()}
         />
       ) : history.isLoading ? (
-        <Loading />
+        <InlineLoading label="Chargement de la circonscription…" />
       ) : ordered.length === 0 ? (
-        <Empty code={code} />
+        <EmptyState
+          title={`Aucune donnée pour la circonscription ${code}`}
+          description="Vérifie le code (format INSEE, ex. « 2602 ») ou explore la carte."
+          action={{ href: "/explorer?maille=circonscriptions&scrutin=legis-2024-t2", label: "Ouvrir l'explorateur" }}
+        />
       ) : (
         <>
           <nav className="mt-5 inline-flex items-center gap-1 rounded-pill bg-surface-soft/70 p-1 text-[13px]">
@@ -334,32 +338,3 @@ function KPI({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Loading() {
-  return (
-    <div className="mt-10 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      Chargement de la circonscription…
-    </div>
-  );
-}
-
-function Empty({ code }: { code: string }) {
-  return (
-    <div className="mt-10 rounded-2xl border border-foreground/5 bg-surface/60 p-8 text-center">
-      <p className="text-[13px] font-medium">Aucune donnée pour la circonscription {code}</p>
-      <p className="mt-1 text-[12px] text-muted-foreground">
-        Vérifie le code (format INSEE, ex. « 2602 ») ou explore la carte.
-      </p>
-      <Link
-        href="/explorer?maille=circonscriptions&scrutin=legis-2024-t2"
-        className={cn(
-          "mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5",
-          "text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90",
-        )}
-      >
-        <MapIcon className="h-3.5 w-3.5" />
-        Ouvrir l&apos;explorateur
-      </Link>
-    </div>
-  );
-}

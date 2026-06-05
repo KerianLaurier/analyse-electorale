@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { GitCompare, Activity, ArrowRight, Loader2, Layers, Crosshair, SlidersHorizontal, Gauge, Target, PieChart } from "lucide-react";
@@ -25,6 +25,9 @@ import {
   type TerritoryValue,
   type TerritoryWinner,
 } from "@/lib/analysis";
+import { ErrorState } from "@/components/error-state";
+import { fmtInt } from "@/lib/format";
+import { KpiCard as KPICard } from "@/components/kpi-card";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -58,8 +61,6 @@ const fmtPts = (v: number) =>
   `${v >= 0 ? "+" : ""}${(v * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pts`;
 const fmtPct = (v: number) =>
   `${(v * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
-const fmtInt = (v: number) => new Intl.NumberFormat("fr-FR").format(Math.round(v));
-
 // ─── Vue ────────────────────────────────────────────────────────────────────
 
 export function AnalyserView() {
@@ -88,6 +89,7 @@ export function AnalyserView() {
                 key={m.id}
                 type="button"
                 onClick={() => setMode(m.id)}
+                aria-pressed={active}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
                   active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
@@ -157,7 +159,7 @@ function ToolLink({
 function ComparaisonMode() {
   const [scrutinA, setScrutinA] = useState<Scrutin>("presid-2022-t1");
   const [scrutinB, setScrutinB] = useState<Scrutin>("legis-2024-t1");
-  const [maille, setMaille] = useState<Maille>("departements");
+  const [selectedMaille, setMaille] = useState<Maille>("departements");
   const [metric, setMetric] = useState<Metric>("bloc");
   const [blocId, setBlocId] = useState<BlocId>("rn");
 
@@ -166,9 +168,12 @@ function ComparaisonMode() {
     return maillesFor(scrutinB).filter((m) => a.has(m));
   }, [scrutinA, scrutinB]);
 
-  useEffect(() => {
-    if (!availableMailles.includes(maille)) setMaille(availableMailles[0] ?? "departements");
-  }, [availableMailles, maille]);
+  // Maille effective : la sélection si elle reste disponible pour la paire de
+  // scrutins, sinon la première proposée — dérivé pendant le rendu (pas d'effet
+  // de correction, donc pas de rendu en cascade).
+  const maille = availableMailles.includes(selectedMaille)
+    ? selectedMaille
+    : (availableMailles[0] ?? "departements");
 
   const bloc = blocById(blocId);
   const numeric = metric !== "bascule";
@@ -187,6 +192,19 @@ function ComparaisonMode() {
   const isLoading =
     (numeric && (srcA.isFetching || srcB.isFetching)) ||
     (metric === "bascule" && (winA.isFetching || winB.isFetching));
+
+  const isError =
+    (numeric && (srcA.isError || srcB.isError)) ||
+    (metric === "bascule" && (winA.isError || winB.isError));
+  const retry = () => {
+    if (numeric) {
+      void srcA.refetch();
+      void srcB.refetch();
+    } else {
+      void winA.refetch();
+      void winB.refetch();
+    }
+  };
 
   // Lignes numériques (bloc / participation)
   const numericRows = useMemo(() => {
@@ -313,6 +331,13 @@ function ComparaisonMode() {
           {isLoading && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
       </div>
+
+      {isError && (
+        <ErrorState
+          message="Impossible de charger les données de cette comparaison."
+          onRetry={retry}
+        />
+      )}
 
       {/* KPIs */}
       <div className="anim-stagger grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -498,6 +523,11 @@ function CorrelationMode() {
 
   const r2 = r * r;
   const isLoading = share.isFetching || socio.isFetching;
+  const isError = share.isError || socio.isError;
+  const retry = () => {
+    void share.refetch();
+    void socio.refetch();
+  };
 
   return (
     <>
@@ -518,6 +548,13 @@ function CorrelationMode() {
         />
         {isLoading && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
+
+      {isError && (
+        <ErrorState
+          message="Impossible de charger les données de cette corrélation."
+          onRetry={retry}
+        />
+      )}
 
       <div className="anim-stagger grid grid-cols-2 gap-2 sm:grid-cols-4">
         <KPICard label={`${mailleLabel} croisées`} value={fmtInt(n)} />
@@ -733,6 +770,7 @@ function PillGroup({
           key={o.id}
           type="button"
           onClick={() => onChange(o.id)}
+          aria-pressed={value === o.id}
           className={cn(
             "rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
             value === o.id
@@ -743,35 +781,6 @@ function PillGroup({
           {o.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-function KPICard({
-  label,
-  value,
-  hint,
-  accent,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  accent?: "positive" | "negative";
-}) {
-  return (
-    <div className="rounded-lg bg-surface p-4 shadow-card">
-      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "mt-1 truncate text-[24px] font-semibold leading-none tracking-tight tabular-nums",
-          accent === "positive" && "text-success",
-          accent === "negative" && "text-destructive",
-        )}
-        title={value}
-      >
-        {value}
-      </p>
-      {hint && <p className="mt-1.5 truncate text-[11px] text-muted-foreground/80" title={hint}>{hint}</p>}
     </div>
   );
 }

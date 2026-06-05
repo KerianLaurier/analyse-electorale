@@ -6,6 +6,7 @@ import { Target, MapPin, Users, Plus, Trash2, Sparkles, Flag, Megaphone, Wand2, 
 import { cn } from "@/lib/utils";
 import { usePins } from "@/lib/pins";
 import { useScrutinDetail, fetchTerritoryBureaux } from "@/lib/queries";
+import { fmtInt } from "@/lib/format";
 import {
   useCampaign,
   useSectors,
@@ -25,7 +26,6 @@ import {
 } from "@/lib/campaign";
 import { PanelsSkeleton } from "@/components/skeleton";
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 const pctToFrac = (s: string) => {
   const n = parseFloat(s.replace(",", "."));
   return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) / 100 : null;

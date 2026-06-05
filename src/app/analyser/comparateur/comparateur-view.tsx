@@ -74,6 +74,7 @@ export function ComparateurView() {
               key={m}
               type="button"
               onClick={() => changeMaille(m)}
+              aria-pressed={maille === m}
               className={cn(
                 "rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
                 maille === m
@@ -218,6 +219,14 @@ function ScrutinCard({ scrutin, maille, code }: { scrutin: Scrutin; maille: Mail
             Participation {detail.data ? fmtPct(detail.data.participation) : "—"}
           </p>
         </>
+      ) : detail.isError ? (
+        <button
+          type="button"
+          onClick={() => void detail.refetch()}
+          className="self-start text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Erreur — réessayer
+        </button>
       ) : (
         <p className="text-[11px] text-muted-foreground">Indisponible</p>
       )}

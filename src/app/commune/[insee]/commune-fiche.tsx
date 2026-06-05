@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Map as MapIcon } from "lucide-react";
+import { ArrowLeft, Map as MapIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ScrutinFamily } from "@/lib/url-state";
 import {
@@ -18,12 +18,11 @@ import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
 import { ExportButton } from "@/components/export-button";
 import { PinButton } from "@/components/pin-button";
+import { ErrorState } from "@/components/error-state";
+import { InlineLoading } from "@/components/inline-loading";
+import { EmptyState } from "@/components/empty-state";
 import { downloadCsv, type CsvRow } from "@/lib/export";
-
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-const fmtPct = (n: number, d = 1) =>
-  `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
-const fmtEuro = (n: number) => `${fmtInt(n)} €`;
+import { fmtInt, fmtEuro, fmtPct } from "@/lib/format";
 
 const FR = { revenuMedian: 22040, tauxPauvrete: 14.4 };
 
@@ -122,10 +121,20 @@ export function CommuneFiche({ insee }: { insee: string }) {
         </div>
       </header>
 
-      {history.isLoading ? (
-        <Loading />
+      {history.isError ? (
+        <ErrorState
+          className="mt-10"
+          message="Impossible de charger les données de cette commune."
+          onRetry={() => void history.refetch()}
+        />
+      ) : history.isLoading ? (
+        <InlineLoading label="Chargement de la commune…" />
       ) : ordered.length === 0 && !socio.data ? (
-        <Empty insee={insee} />
+        <EmptyState
+          title={`Aucune donnée pour la commune ${insee}`}
+          description="Vérifie le code INSEE (5 caractères, ex. « 26198 ») ou explore la carte."
+          action={{ href: "/explorer?maille=communes&scrutin=presid-2022-t2", label: "Ouvrir l'explorateur" }}
+        />
       ) : (
         <div className="mt-5">
           <div className="flex gap-1 border-b border-foreground/5">
@@ -416,29 +425,3 @@ function KPI({
   );
 }
 
-function Loading() {
-  return (
-    <div className="mt-10 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      Chargement de la commune…
-    </div>
-  );
-}
-
-function Empty({ insee }: { insee: string }) {
-  return (
-    <div className="mt-10 rounded-2xl border border-foreground/5 bg-surface/60 p-8 text-center">
-      <p className="text-[13px] font-medium">Aucune donnée pour la commune {insee}</p>
-      <p className="mt-1 text-[12px] text-muted-foreground">
-        Vérifie le code INSEE (5 caractères, ex. « 26198 ») ou explore la carte.
-      </p>
-      <Link
-        href="/explorer?maille=communes&scrutin=presid-2022-t2"
-        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-      >
-        <MapIcon className="h-3.5 w-3.5" />
-        Ouvrir l&apos;explorateur
-      </Link>
-    </div>
-  );
-}

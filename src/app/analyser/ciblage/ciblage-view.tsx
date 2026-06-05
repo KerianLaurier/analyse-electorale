@@ -9,10 +9,10 @@ import { useCircoList, useCircoBureaux, scoreBureaux, type TargetBureau, type Ta
 import { BLOCS, blocById, type BlocId } from "@/lib/analysis";
 import { useHasTeam, addSectorsBulk } from "@/lib/campaign";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
+import { ErrorState } from "@/components/error-state";
+import { InlineLoading } from "@/components/inline-loading";
+import { fmtInt, fmtPct } from "@/lib/format";
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-const fmtPct = (n: number, d = 1) =>
-  `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
 
 const REASON: Record<TargetReason, { label: string; className: string } | null> = {
   bascule: { label: "Bascule à portée", className: "bg-amber-100 text-amber-700" },
@@ -127,8 +127,14 @@ export function CiblageView() {
 
       {!circo ? (
         <Empty>Choisissez une circonscription et votre positionnement pour classer ses bureaux par priorité.</Empty>
+      ) : raw.isError ? (
+        <ErrorState
+          className="mt-6"
+          message="Impossible de charger les bureaux de cette circonscription."
+          onRetry={() => void raw.refetch()}
+        />
       ) : raw.isLoading ? (
-        <Loading />
+        <InlineLoading label="Calcul du ciblage…" />
       ) : rows.length === 0 ? (
         <Empty>
           Aucun bureau exploitable pour cette circonscription. Les circos dont les communes sont
@@ -262,14 +268,6 @@ function KPI({ label, value, small }: { label: string; value: string; small?: bo
     <div className="rounded-xl border border-foreground/5 bg-surface p-3 shadow-card">
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className={cn("mt-0.5 font-semibold tabular-nums tracking-tight", small ? "truncate text-[13px]" : "text-[16px]")}>{value}</p>
-    </div>
-  );
-}
-
-function Loading() {
-  return (
-    <div className="mt-10 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" /> Calcul du ciblage…
     </div>
   );
 }

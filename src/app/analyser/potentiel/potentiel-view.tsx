@@ -17,6 +17,9 @@ import {
   type OverPerfRow,
 } from "@/lib/analysis";
 import { ExportButton } from "@/components/export-button";
+import { ErrorState } from "@/components/error-state";
+import { fmtInt } from "@/lib/format";
+import { KpiCard as KPICard } from "@/components/kpi-card";
 import { downloadCsv, type CsvRow } from "@/lib/export";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
@@ -34,7 +37,6 @@ const ELECTIONS = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(
 
 const fmtPct = (v: number) => `${(v * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
 const fmtPts = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pts`;
-const fmtInt = (v: number) => new Intl.NumberFormat("fr-FR").format(Math.round(v));
 
 const UNDER = "#2563eb"; // sous-performance (réserve)
 const OVER = "#dc2626"; // sur-performance (bastion)
@@ -84,6 +86,11 @@ export function PotentielView() {
   }, [model.rows, maxAbs]);
 
   const isLoading = share.isFetching || features.isFetching;
+  const isError = share.isError || features.isError;
+  const retry = () => {
+    void share.refetch();
+    void features.refetch();
+  };
 
   function exportCsv() {
     const rows: CsvRow[] = sorted.map((r) => ({
@@ -132,6 +139,13 @@ export function PotentielView() {
           </select>
         </div>
       </div>
+
+      {isError && (
+        <ErrorState
+          message="Impossible de charger les données du potentiel électoral."
+          onRetry={retry}
+        />
+      )}
 
       <div className="anim-stagger grid grid-cols-4 gap-2">
         <KPICard label="Circonscriptions" value={fmtInt(model.n)} />
@@ -207,12 +221,3 @@ function PerfList({
   );
 }
 
-function KPICard({ label, value, hint, accent }: { label: string; value: string; hint?: string; accent?: "over" | "under" }) {
-  return (
-    <div className="rounded-lg bg-surface p-4 shadow-card">
-      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-      <p className={cn("mt-1 truncate text-[24px] font-semibold leading-none tracking-tight tabular-nums", accent === "over" && "text-destructive", accent === "under" && "text-[color:#2563eb]")} title={value}>{value}</p>
-      {hint && <p className="mt-1.5 truncate text-[11px] text-muted-foreground/80" title={hint}>{hint}</p>}
-    </div>
-  );
-}

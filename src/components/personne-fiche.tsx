@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Loader2, Map as MapIcon, Trophy } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Map as MapIcon, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useScrutinDetail } from "@/lib/queries";
 import { useDeputes } from "@/lib/deputes";
@@ -22,6 +22,8 @@ import {
   candidatSlug,
   displayName,
 } from "@/lib/personnes";
+import { fmtInt, fmtPct } from "@/lib/format";
+import { InlineLoading } from "@/components/inline-loading";
 
 const fmtDateFr = (iso: string | null) => {
   if (!iso) return null;
@@ -31,9 +33,6 @@ const fmtDateFr = (iso: string | null) => {
     : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 };
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-const fmtPct = (n: number, d = 1) =>
-  `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
 const fmtPts = (n: number) =>
   `${n >= 0 ? "+" : ""}${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pts`;
 
@@ -96,7 +95,7 @@ export function PersonneFiche({
       </Link>
 
       {detail.isLoading ? (
-        <Loading />
+        <InlineLoading />
       ) : !target || !scrutin ? (
         <NotFound circo={circo} />
       ) : (
@@ -345,15 +344,6 @@ function KPI({ label, value, accent }: { label: string; value: string; accent?: 
     <div className={cn("rounded-xl border border-foreground/5 p-3", accent ? "bg-warm/10" : "bg-surface/60")}>
       <p className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-[16px] font-semibold tabular-nums tracking-tight">{value}</p>
-    </div>
-  );
-}
-
-function Loading() {
-  return (
-    <div className="mt-10 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      Chargement…
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { Choropleth } from "@/components/map";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
 import { type Maille } from "@/lib/map-config";
+import { fmtInt } from "@/lib/format";
 import {
   BLOCS,
   SOCIO_INDICATORS,
@@ -40,7 +41,6 @@ const MAILLES: { id: Maille; label: string }[] = [
   { id: "communes", label: "Communes" },
 ];
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 function fmtSocio(v: number, unit: SocioUnit): string {
   if (unit === "euro") return `${fmtInt(v)} €`;
   if (unit === "ratio") return `${v.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}×`;
