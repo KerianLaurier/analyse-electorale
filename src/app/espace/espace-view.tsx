@@ -71,6 +71,7 @@ export function EspaceView({ ctx, initialTab }: { ctx: WsContext; initialTab?: s
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
+                aria-current={active ? "page" : undefined}
                 className={cn(
                   "inline-flex flex-1 min-w-max items-center justify-center gap-1.5 rounded-pill px-2.5 py-1.5 text-[12.5px] font-medium transition-all duration-200",
                   active

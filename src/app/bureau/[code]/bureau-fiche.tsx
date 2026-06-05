@@ -2,22 +2,22 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Building2, Loader2, Map as MapIcon } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Building2, Map as MapIcon } from "lucide-react";
 import { useBureauHistory, useSociologieBureau, type CircoTimelinePoint, type BureauSociologie } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 import { ExportButton } from "@/components/export-button";
 import { PinButton } from "@/components/pin-button";
+import { ErrorState } from "@/components/error-state";
+import { InlineLoading } from "@/components/inline-loading";
+import { EmptyState } from "@/components/empty-state";
 import { downloadCsv, type CsvRow } from "@/lib/export";
+import { fmtInt, fmtEuro, fmtPct } from "@/lib/format";
 
 const FAMILY_GROUPS: { family: ScrutinFamily; label: string }[] = [
   { family: "presidentielle", label: "Présidentielles" },
   { family: "legislative", label: "Législatives" },
 ];
-
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-const fmtPct = (n: number, d = 1) =>
-  `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
 
 const DISPLAY_ORDER: Scrutin[] = [
   "presid-2017-t1", "presid-2017-t2",
@@ -116,10 +116,20 @@ export function BureauFiche({ code }: { code: string }) {
         </div>
       </header>
 
-      {history.isLoading ? (
-        <Loading />
+      {history.isError ? (
+        <ErrorState
+          className="mt-10"
+          message="Impossible de charger les résultats de ce bureau de vote."
+          onRetry={() => void history.refetch()}
+        />
+      ) : history.isLoading ? (
+        <InlineLoading label="Chargement du bureau…" />
       ) : ordered.length === 0 ? (
-        <Empty code={code} />
+        <EmptyState
+          title={`Aucune donnée pour le bureau ${code}`}
+          description="Format attendu : « {INSEE}_{numéro} » (ex. « 01001_0001 »)."
+          action={{ href: "/explorer?maille=bureaux&scrutin=legis-2024-t2", label: "Ouvrir l'explorateur" }}
+        />
       ) : (
         <div className="mt-6 flex flex-col gap-8">
           {latest && (
@@ -234,7 +244,6 @@ function KPI({ label, value, hint }: { label: string; value: string; hint?: stri
 }
 
 const FR_REF = { revenuMedian: 22040, tauxPauvrete: 14.4 };
-const fmtEuro = (n: number) => `${fmtInt(n)} €`;
 const fmtPctV = (n: number | null) =>
   n != null ? `${n.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %` : "—";
 
@@ -269,29 +278,3 @@ function BureauSocioSection({ socio }: { socio: BureauSociologie }) {
   );
 }
 
-function Loading() {
-  return (
-    <div className="mt-10 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      Chargement du bureau…
-    </div>
-  );
-}
-
-function Empty({ code }: { code: string }) {
-  return (
-    <div className="mt-10 rounded-2xl border border-foreground/5 bg-surface/60 p-8 text-center">
-      <p className="text-[13px] font-medium">Aucune donnée pour le bureau {code}</p>
-      <p className="mt-1 text-[12px] text-muted-foreground">
-        Format attendu : « {`{INSEE}_{numéro}`} » (ex. « 01001_0001 »).
-      </p>
-      <Link
-        href="/explorer?maille=bureaux&scrutin=legis-2024-t2"
-        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-      >
-        <MapIcon className="h-3.5 w-3.5" />
-        Ouvrir l&apos;explorateur
-      </Link>
-    </div>
-  );
-}

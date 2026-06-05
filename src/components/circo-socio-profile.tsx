@@ -4,8 +4,8 @@ import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SOCIO_INDICATORS, useSocioFeaturesCirco, type SocioUnit } from "@/lib/analysis";
+import { fmtInt } from "@/lib/format";
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 function fmtSocio(v: number, unit: SocioUnit): string {
   if (unit === "euro") return `${fmtInt(v)} €`;
   if (unit === "ratio") return `${v.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}×`;

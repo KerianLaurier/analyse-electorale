@@ -27,6 +27,7 @@ import { BLOCS, blocById, marginDiagnostic, type BlocId } from "@/lib/analysis";
 import { useHasTeam, addSectorsBulk } from "@/lib/campaign";
 import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 import { nuanceLabel } from "@/lib/nuances";
+import { fmtInt, fmtPct } from "@/lib/format";
 import type { Choropleth } from "@/components/map";
 import { CircoSocioProfile } from "@/components/circo-socio-profile";
 
@@ -39,9 +40,6 @@ const TerritoryMap = dynamic(() => import("@/components/map").then((m) => m.Map)
   ),
 });
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-const fmtPct = (n: number, d = 1) =>
-  `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
 const fmtPts = (n: number) =>
   `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pts`;
 

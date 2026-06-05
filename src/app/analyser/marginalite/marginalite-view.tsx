@@ -9,6 +9,8 @@ import type { Choropleth } from "@/components/map";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
 import { useMarginalite, type MarginRow } from "@/lib/analysis";
+import { ErrorState } from "@/components/error-state";
+import { fmtInt } from "@/lib/format";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -25,7 +27,6 @@ const fmtPts = (v: number) => {
   const d = Math.abs(p) < 1 ? 2 : 1;
   return `${p.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} pts`;
 };
-const fmtInt = (v: number) => new Intl.NumberFormat("fr-FR").format(Math.round(v));
 
 const MARGIN_STOPS: Array<[number, string]> = [
   [0, "#b91c1c"],
@@ -88,6 +89,13 @@ export function MarginaliteView() {
           <input type="range" min={1} max={30} value={seuil} onChange={(e) => setSeuil(Number(e.target.value))} className="w-40 accent-[color:var(--warm)]" />
         </label>
       </div>
+
+      {q.isError && (
+        <ErrorState
+          message="Impossible de charger les marges de ce scrutin."
+          onRetry={() => void q.refetch()}
+        />
+      )}
 
       <div className="anim-stagger grid grid-cols-4 gap-2">
         <KPICard label="Circonscriptions" value={fmtInt(rows.length)} />

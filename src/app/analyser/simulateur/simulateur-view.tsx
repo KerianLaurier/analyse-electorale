@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft, RotateCcw, Loader2 } from "lucide-react";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { Choropleth } from "@/components/map";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
 import { BLOCS, useCircoBlocMatrix, type BlocId, type CircoBlocRow } from "@/lib/analysis";
+import { KpiCard as KPICard } from "@/components/kpi-card";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -40,31 +41,30 @@ export function SimulateurView() {
   const matrix = useCircoBlocMatrix(BASELINE, true);
   const [targets, setTargets] = useState<Targets | null>(null);
 
-  // Initialise les curseurs sur le rapport de force national observé.
-  useEffect(() => {
-    if (matrix.data && !targets) setTargets({ ...matrix.data.national });
-  }, [matrix.data, targets]);
-
   const national = matrix.data?.national;
   const circos = matrix.data?.circos ?? [];
+
+  // Curseurs : valeurs éditées par l'utilisateur, sinon rapport de force national
+  // observé (dérivé pendant le rendu — pas d'effet d'initialisation à recâbler).
+  const effectiveTargets = targets ?? national ?? null;
 
   const baselineSeats = useMemo(() => seatCount(circos, (c) => c.shares), [circos]);
 
   const projectedSeats = useMemo(() => {
-    if (!national || !targets) return null;
-    return seatCount(circos, (c) => adjust(c.shares, targets, national));
-  }, [circos, national, targets]);
+    if (!national || !effectiveTargets) return null;
+    return seatCount(circos, (c) => adjust(c.shares, effectiveTargets, national));
+  }, [circos, national, effectiveTargets]);
 
   const choropleth = useMemo<Choropleth | undefined>(() => {
-    if (!national || !targets || circos.length === 0) return undefined;
+    if (!national || !effectiveTargets || circos.length === 0) return undefined;
     const entries: (string)[] = [];
     for (const b of BLOCS) entries.push(b.id, b.color);
     return {
       stateKey: "bloc",
-      data: circos.map((c) => ({ code: c.code, value: winnerBloc(adjust(c.shares, targets, national)) })),
+      data: circos.map((c) => ({ code: c.code, value: winnerBloc(adjust(c.shares, effectiveTargets, national)) })),
       paint: ["match", ["feature-state", "bloc"], ...entries, AUTRES_COLOR] as unknown as Choropleth["paint"],
     };
-  }, [circos, national, targets]);
+  }, [circos, national, effectiveTargets]);
 
   const total = circos.length;
   const majorite = Math.floor(total / 2) + 1;
@@ -99,11 +99,11 @@ export function SimulateurView() {
         {/* Curseurs */}
         <div className="flex flex-col gap-4 rounded-lg bg-surface p-4 shadow-card">
           <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Hypothèses nationales</p>
-          {!national || !targets ? (
+          {!national || !effectiveTargets ? (
             <p className="text-[12px] text-muted-foreground">Chargement de la base…</p>
           ) : (
             BLOCS.map((b) => {
-              const val = targets[b.id];
+              const val = effectiveTargets[b.id];
               const delta = val - national[b.id];
               return (
                 <div key={b.id} className="flex flex-col gap-1">
@@ -121,7 +121,7 @@ export function SimulateurView() {
                   </div>
                   <input
                     type="range" min={0} max={0.6} step={0.005} value={val}
-                    onChange={(e) => setTargets({ ...targets, [b.id]: Number(e.target.value) })}
+                    onChange={(e) => setTargets({ ...effectiveTargets, [b.id]: Number(e.target.value) })}
                     className="w-full"
                     style={{ accentColor: b.color }}
                   />
@@ -130,7 +130,7 @@ export function SimulateurView() {
             })
           )}
           <p className="mt-1 text-[10.5px] text-muted-foreground/70">
-            Base nationale = {SCRUTIN_META[BASELINE].short}. Modèle de report uniforme : l'écart national est appliqué identiquement à chaque circonscription. Indicatif.
+            Base nationale = {SCRUTIN_META[BASELINE].short}. Modèle de report uniforme : l&apos;écart national est appliqué identiquement à chaque circonscription. Indicatif.
           </p>
         </div>
 
@@ -230,12 +230,3 @@ function leadSeats(seats: Record<string, number>): number {
   return e ? e[1] : 0;
 }
 
-function KPICard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-lg bg-surface p-4 shadow-card">
-      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-      <p className="mt-1 truncate text-[24px] font-semibold leading-none tracking-tight tabular-nums" title={value}>{value}</p>
-      {hint && <p className="mt-1.5 truncate text-[11px] text-muted-foreground/80">{hint}</p>}
-    </div>
-  );
-}

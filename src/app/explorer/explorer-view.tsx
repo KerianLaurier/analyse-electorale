@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Loader2, X, Search, BadgeCheck, ArrowUpRight, Info, SlidersHorizontal } from "lucide-react";
+import { Loader2, X, Search, BadgeCheck, ArrowUpRight, Info, SlidersHorizontal, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
 import {
@@ -39,6 +39,7 @@ import {
 } from "@/lib/queries";
 import type { Choropleth } from "@/components/map";
 import { buildNuanceMatchExpression, nuanceColor, nuanceLabel } from "@/lib/nuances";
+import { fmtInt, fmtEuro, fmtPct } from "@/lib/format";
 import {
   useExplorerUrlState,
   type Scrutin,
@@ -328,10 +329,6 @@ function openSearchPalette() {
 
 // ─── Formatage ────────────────────────────────────────────────────────────────
 
-const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
-const fmtPct = (n: number, d = 1) =>
-  `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
-const fmtEuro = (n: number) => `${fmtInt(n)} €`;
 const fmtSignedPts = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`;
 const fmtSignedInt = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}`;
 
@@ -518,6 +515,18 @@ function ExplorerView() {
     trend.isFetching ||
     potentiel.isFetching;
 
+  // Couches interrogées (une seule active à la fois selon la coloration) : permet
+  // de dériver l'état d'erreur et un « réessayer » ciblé sur les seules en échec.
+  const layers = [
+    winner, participation, abstention, revenu, pauvrete, inegalites, prestations,
+    pensions, age65, chomage, cadres, diplome, proprietaires, ressecondaires,
+    logvacants, monoparentales, personnesSeules, nouveauxArrivants, trend, potentiel,
+  ];
+  const isError = layers.some((q) => q.isError);
+  const retryLayers = () => {
+    for (const q of layers) if (q.isError) void q.refetch();
+  };
+
   // Aperçu au survol (sans clic) — throttlé en rAF pour rester fluide même à la
   // maille bureaux (~70k entités).
   const choroByCode = useMemo(() => {
@@ -578,6 +587,17 @@ function ExplorerView() {
             <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> Mise à jour de la carte…
             </span>
+          </div>
+        )}
+        {!isLoading && isError && (
+          <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
+            <button
+              type="button"
+              onClick={retryLayers}
+              className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-red-600 shadow-sm backdrop-blur transition-colors hover:bg-surface"
+            >
+              <RotateCw className="h-3.5 w-3.5" /> Données indisponibles — réessayer
+            </button>
           </div>
         )}
         <MapView
@@ -1025,7 +1045,27 @@ function FicheTerritoire({
   const isTrends = scrutin === "tendances";
   const isPot = scrutin === "potentiel";
   const hasSocio = isCommune || isBureau;
-  const [tab, setTab] = useState<FicheTab>(election ? "resultats" : "socio");
+
+  // Onglet par défaut selon le contexte (scrutin × maille).
+  const defaultTab: FicheTab = election
+    ? "resultats"
+    : isTrends
+      ? "tendances"
+      : isPot
+        ? "potentiel"
+        : hasSocio
+          ? "socio"
+          : "france";
+  const [tab, setTab] = useState<FicheTab>(defaultTab);
+
+  // Réinitialise l'onglet quand on change de territoire ou de scrutin/maille —
+  // ajusté pendant le rendu (pas d'effet, donc pas de rendu en cascade).
+  const ctxKey = `${code}|${scrutin}|${maille}`;
+  const [tabCtx, setTabCtx] = useState(ctxKey);
+  if (ctxKey !== tabCtx) {
+    setTabCtx(ctxKey);
+    setTab(defaultTab);
+  }
 
   const detail = useScrutinDetail(election ? scrutin : null, maille, code);
   const socio = useSociologieCommune(isCommune ? code : null);
@@ -1035,10 +1075,6 @@ function FicheTerritoire({
   const potentielTerr = usePotentielTerritoire(isPot ? code : null);
   const potMeta = usePotentielMeta();
   const nationalPart = useScrutinNationalParticipation(election ? scrutin : null);
-
-  useEffect(() => {
-    setTab(election ? "resultats" : isTrends ? "tendances" : isPot ? "potentiel" : hasSocio ? "socio" : "france");
-  }, [code, scrutin, election, isTrends, isPot, hasSocio]);
 
   if (!code) return <FicheEmpty />;
 
