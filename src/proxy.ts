@@ -18,11 +18,76 @@ function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname);
 }
 
+// Préfixes « applicatifs » : tout le reste (/, manifest, assets) = vitrine.
+const APP_PREFIXES = [
+  "/explorer",
+  "/analyser",
+  "/suivre",
+  "/espace",
+  "/circo",
+  "/commune",
+  "/bureau",
+  "/candidat",
+  "/elu",
+  "/admin",
+  "/auth",
+  "/api",
+];
+function isAppPath(pathname: string): boolean {
+  return APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
+/**
+ * Séparation vitrine / application par sous-domaine. Active **uniquement** si
+ * `NEXT_PUBLIC_APP_URL` est défini (ex. `https://app.mouvancia.fr`) — sinon tout
+ * reste sur un seul host (comportement local/dev inchangé).
+ *
+ * - sur `app.mouvancia.fr` : `/` → `/explorer`, le reste suit le gating normal ;
+ * - sur le domaine racine (vitrine) : les routes applicatives sont renvoyées
+ *   (308) vers le sous-domaine app ; les routes vitrine sont servies sans auth.
+ *
+ * Renvoie une réponse si la requête est gérée ici, sinon `null` (on poursuit).
+ */
+function routeBySubdomain(request: NextRequest): NextResponse | null {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) return null;
+
+  let appHost: string;
+  try {
+    appHost = new URL(appUrl).host;
+  } catch {
+    return null;
+  }
+  const host = request.headers.get("host") ?? "";
+  const { pathname, search } = request.nextUrl;
+
+  // Domaine app : la racine renvoie vers l'entrée applicative, le reste suit.
+  if (host === appHost) {
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/explorer";
+      return NextResponse.redirect(url);
+    }
+    return null;
+  }
+
+  // Domaine racine (vitrine) : on déporte les routes applicatives vers l'app,
+  // on sert les routes vitrine sans gating ni session.
+  if (isAppPath(pathname)) {
+    return NextResponse.redirect(`${appUrl.replace(/\/$/, "")}${pathname}${search}`, 308);
+  }
+  return NextResponse.next();
+}
+
 /**
  * Gating d'accès : seules les personnes connectées disposant d'un abonnement
  * valide (actif ou essai en cours) accèdent à l'application.
  */
 export async function proxy(request: NextRequest) {
+  // Aiguillage vitrine / app par sous-domaine (no-op si NEXT_PUBLIC_APP_URL absent).
+  const routed = routeBySubdomain(request);
+  if (routed) return routed;
+
   const { supabase, response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
