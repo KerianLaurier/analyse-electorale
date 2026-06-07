@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand-mark";
 import { LandingDeck } from "@/components/landing-deck";
 import { LandingStats } from "@/components/landing-stats";
+import { LandingZoom } from "@/components/landing-zoom";
 
 // Typographie scopée à la landing : Archivo (display affirmé, grotesque
 // éditorial) + Public Sans (corps institutionnel, lignée USWDS). Volontairement
@@ -300,6 +301,23 @@ export default async function HomePage() {
               </Link>
             );
           })}
+        </div>
+      </section>
+
+      {/* ── Séquence de zoom : du national au bureau de vote ─────────────── */}
+      <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8 lg:py-24">
+        <div className="max-w-2xl">
+          <SectionLabel>Explorer</SectionLabel>
+          <h2 className={cn(DISPLAY, "mt-3 text-[clamp(1.8rem,3.6vw,2.9rem)] font-extrabold leading-[1.02] tracking-[-0.02em]")}>
+            Du national au bureau de vote.
+          </h2>
+          <p className="mt-3 text-[14.5px] leading-relaxed text-muted-foreground">
+            La même carte, cinq échelles. Zoomez du résultat national jusqu&apos;au moindre bureau de vote —
+            10 scrutins, la sociologie et les dynamiques de blocs, partout.
+          </p>
+        </div>
+        <div className="mt-12 lg:mt-16">
+          <LandingZoom />
         </div>
       </section>
 

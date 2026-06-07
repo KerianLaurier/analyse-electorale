@@ -122,6 +122,27 @@ Produit :
 - **Git** : non initialisé (choix utilisateur). À faire avant tout déploiement.
 - **Identité visuelle** : palette neutre par défaut shadcn (`neutral`). Charte à définir en phase design.
 
+## Déploiement — vitrine & application (même marque)
+
+Un **seul projet**, déployé une fois, peut servir la **vitrine** sur le domaine
+racine et l'**application** sur un sous-domaine, via le routage par hôte du
+middleware (`src/proxy.ts`).
+
+1. **DNS / Netlify** : pointer `mouvancia.fr` **et** `app.mouvancia.fr` vers le
+   même site Netlify (SSL géré pour les deux).
+2. **Variable d'environnement** (Netlify → Site settings → Environment) :
+   ```
+   NEXT_PUBLIC_APP_URL=https://app.mouvancia.fr
+   ```
+   - Définie → split actif : `app.mouvancia.fr` sert l'app (`/` → `/explorer`),
+     `mouvancia.fr` sert la vitrine et **renvoie (308)** les routes applicatives
+     (`/explorer`, `/analyser`, `/espace`, `/auth`, …) vers le sous-domaine app.
+   - **Absente** (local/dev) → tout reste sur un seul host, comportement inchangé.
+
+Itération indépendante : modifier la vitrine n'affecte pas le runtime de l'app
+(code splitté), et les Deploy Previews Netlify (par branche/PR) permettent de
+prévisualiser sans risque.
+
 ## Conformité
 
 - RGPD : pas de données personnelles d'électeurs (uniquement agrégats publics).
