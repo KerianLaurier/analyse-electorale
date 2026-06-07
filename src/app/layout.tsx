@@ -13,7 +13,8 @@ import { RouteProgress } from "@/components/route-progress";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  // 300 retiré (inutilisé) → un fichier de police de moins à charger.
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -49,6 +50,16 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {/* Résolution anticipée des connexions externes (gros gain de latence
+            sur mobile) : WASM DuckDB, fond de carte, tuiles bureaux, glyphes.
+            Rendus dans l'arbre : React 19 les hisse dans <head>. */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://a.basemaps.cartocdn.com" />
+        <link rel="dns-prefetch" href="https://b.basemaps.cartocdn.com" />
+        <link rel="dns-prefetch" href="https://c.basemaps.cartocdn.com" />
+        <link rel="dns-prefetch" href="https://d.basemaps.cartocdn.com" />
+        <link rel="dns-prefetch" href="https://object.files.data.gouv.fr" />
+        <link rel="dns-prefetch" href="https://demotiles.maplibre.org" />
         {/* Thème : clair par défaut, sombre disponible via le sélecteur du menu
             profil (next-themes pose `.dark` sur <html>). `enableSystem` permet
             l'option « Système ». Toutes les surfaces/bordures passent par des
