@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/brand-mark";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { initials } from "@/lib/team";
@@ -112,12 +113,7 @@ export function AppHeader() {
           href="/"
           className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80 lg:justify-self-start"
         >
-          <span
-            aria-hidden
-            className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground"
-          >
-            <span className="block h-3 w-3 rounded-sm bg-primary-foreground" />
-          </span>
+          <BrandMark tileClassName="h-8 w-8 rounded-md" svgClassName="h-5 w-5" />
           <span className="text-[13px] font-semibold tracking-tight">MOUVANCIA</span>
         </Link>
 

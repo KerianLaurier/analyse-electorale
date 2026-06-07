@@ -93,15 +93,21 @@ export function CommandPalette() {
   }
 
   function openEntry(entry: SearchEntry) {
-    if (entry.type === "depute") {
-      go(`/elu/${encodeURIComponent(entry.code)}`);
-      return;
+    // On ouvre directement la fiche du territoire/personne quand elle existe
+    // (plus lisible qu'un simple surlignage sur la carte). Région & département
+    // n'ont pas de fiche dédiée → on retombe sur l'explorateur centré.
+    switch (entry.type) {
+      case "depute":
+        return go(`/elu/${encodeURIComponent(entry.code)}`);
+      case "commune":
+        return go(`/commune/${encodeURIComponent(entry.code)}`);
+      case "circo":
+        return go(`/circo/${encodeURIComponent(entry.code)}`);
+      default: {
+        const params = new URLSearchParams({ maille: mailleForType(entry.type), code: entry.code });
+        return go(`/explorer?${params.toString()}`);
+      }
     }
-    const params = new URLSearchParams({
-      maille: mailleForType(entry.type),
-      code: entry.code,
-    });
-    go(`/explorer?${params.toString()}`);
   }
 
   return (
