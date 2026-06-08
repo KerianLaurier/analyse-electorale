@@ -9,10 +9,22 @@ import maplibregl, {
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { type Maille, MAILLE_ORDER, TILES } from "@/lib/map-config";
+import { type Maille, MAILLE_ORDER, TILES, communeTileIds, communeCityCode } from "@/lib/map-config";
 
 const FRANCE_CENTER: [number, number] = [2.4, 46.6];
 const FRANCE_ZOOM = 5;
+
+/** Ids de tuile à highlight pour une sélection (étend les villes PLM à leurs arrondissements). */
+function selectionIds(maille: Maille, code: string | number): Array<string | number> {
+  return maille === "communes" ? communeTileIds(String(code)) : [code];
+}
+
+/** Normalise le `code` d'une feature de tuile (arrondissement PLM → ville) pour le survol/clic. */
+function normProps(maille: Maille, props: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const p = props ?? {};
+  if (maille === "communes" && p.code != null) return { ...p, code: communeCityCode(String(p.code)) };
+  return p;
+}
 
 let protocolRegistered = false;
 function registerPmtilesProtocol() {
@@ -223,7 +235,7 @@ export function Map({
         }
         onFeatureHoverRef.current?.({
           maille: m,
-          properties: feature.properties ?? {},
+          properties: normProps(m, feature.properties),
           point: { x: e.point.x, y: e.point.y },
         });
       });
@@ -246,7 +258,7 @@ export function Map({
         if (!e.features?.length || !cb) return;
         cb({
           maille: m,
-          properties: e.features[0].properties ?? {},
+          properties: normProps(m, e.features[0].properties),
         });
       });
     }
@@ -328,9 +340,11 @@ export function Map({
           const stateKey = choropleth.stateKey;
           const sourceLayer = cfg.sourceLayer;
           const CHUNK = 5000;
+          const plm = maille === "communes";
           if (data.length <= CHUNK) {
             for (const entry of data) {
-              map.setFeatureState({ source: m, sourceLayer, id: entry.code }, { [stateKey]: entry.value });
+              const ids = plm ? communeTileIds(String(entry.code)) : [entry.code];
+              for (const id of ids) map.setFeatureState({ source: m, sourceLayer, id }, { [stateKey]: entry.value });
             }
           } else {
             let i = 0;
@@ -339,7 +353,8 @@ export function Map({
               const end = Math.min(i + CHUNK, data.length);
               for (; i < end; i++) {
                 const entry = data[i];
-                map.setFeatureState({ source: m, sourceLayer, id: entry.code }, { [stateKey]: entry.value });
+                const ids = plm ? communeTileIds(String(entry.code)) : [entry.code];
+                for (const id of ids) map.setFeatureState({ source: m, sourceLayer, id }, { [stateKey]: entry.value });
               }
               fsRafRef.current = i < data.length ? requestAnimationFrame(step) : null;
             };
@@ -363,10 +378,8 @@ export function Map({
       const sel = selectedRef.current;
       if (sel) {
         const selCfg = TILES[sel.maille];
-        map.setFeatureState(
-          { source: sel.maille, sourceLayer: selCfg.sourceLayer, id: sel.code },
-          { selected: true },
-        );
+        for (const id of selectionIds(sel.maille, sel.code))
+          map.setFeatureState({ source: sel.maille, sourceLayer: selCfg.sourceLayer, id }, { selected: true });
       }
     };
 
@@ -383,19 +396,15 @@ export function Map({
       const prev = selectedRef.current;
       if (prev) {
         const prevCfg = TILES[prev.maille];
-        map.setFeatureState(
-          { source: prev.maille, sourceLayer: prevCfg.sourceLayer, id: prev.code },
-          { selected: false },
-        );
+        for (const id of selectionIds(prev.maille, prev.code))
+          map.setFeatureState({ source: prev.maille, sourceLayer: prevCfg.sourceLayer, id }, { selected: false });
         selectedRef.current = null;
       }
       // Apply new selected.
       if (selectedCode) {
         const cfg = TILES[maille];
-        map.setFeatureState(
-          { source: maille, sourceLayer: cfg.sourceLayer, id: selectedCode },
-          { selected: true },
-        );
+        for (const id of selectionIds(maille, selectedCode))
+          map.setFeatureState({ source: maille, sourceLayer: cfg.sourceLayer, id }, { selected: true });
         selectedRef.current = { maille, code: selectedCode };
       }
     };
