@@ -8,6 +8,33 @@ export const MAILLE_ORDER = [
 
 export type Maille = (typeof MAILLE_ORDER)[number];
 
+// ── Paris / Lyon / Marseille (PLM) ────────────────────────────────────────────
+// Les tuiles « communes » sont découpées par arrondissement (75101–75120,
+// 69381–69389, 13201–13216), alors que les résultats électoraux sont agrégés au
+// niveau ville (75056, 69123, 13055). Sans pont, le polygone ville n'est jamais
+// apparié → couleur de base (turquoise) confondue avec une nuance. On relie les
+// deux sens : coloration ville → arrondissements, clic arrondissement → ville.
+function arrRange(start: number, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => String(start + i));
+}
+const CITY_TO_ARRONDISSEMENTS: Record<string, string[]> = {
+  "75056": arrRange(75101, 20), // Paris
+  "69123": arrRange(69381, 9), // Lyon
+  "13055": arrRange(13201, 16), // Marseille
+};
+const ARRONDISSEMENT_TO_CITY: Record<string, string> = {};
+for (const [city, arr] of Object.entries(CITY_TO_ARRONDISSEMENTS)) {
+  for (const a of arr) ARRONDISSEMENT_TO_CITY[a] = city;
+}
+/** Codes de tuile (arrondissements PLM) à colorer pour un code commune de données. */
+export function communeTileIds(code: string): string[] {
+  return CITY_TO_ARRONDISSEMENTS[code] ?? [code];
+}
+/** Code commune de données (ville) pour un code de tuile (arrondissement PLM). */
+export function communeCityCode(tileCode: string): string {
+  return ARRONDISSEMENT_TO_CITY[tileCode] ?? tileCode;
+}
+
 type TileConfig = {
   path: string;
   sourceLayer: string;
