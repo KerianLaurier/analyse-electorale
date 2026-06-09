@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { toast } from "@/components/toaster";
 
 /**
  * Notes de terrain — persistées côté serveur (table `notes`). Personnelles
@@ -110,13 +111,14 @@ export type NewNote = {
   context?: NoteContext | null;
 };
 
-export async function addNote(input: NewNote): Promise<void> {
+/** Ajoute une note. Renvoie false en cas d'échec (le formulaire reste rempli). */
+export async function addNote(input: NewNote): Promise<boolean> {
   const { userId } = await getIdentity();
-  if (!userId) return;
+  if (!userId) return false;
   myUserId = userId;
   const supabase = createClient();
   const team_id = input.shared && myTeamId ? myTeamId : null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("notes")
     .insert({
       user_id: userId,
@@ -130,10 +132,13 @@ export async function addNote(input: NewNote): Promise<void> {
     })
     .select("*")
     .single();
-  if (data) {
-    notes = [mapRow(data as Row), ...notes];
-    emit();
+  if (error || !data) {
+    toast.error("Impossible d'ajouter la note — vérifiez votre connexion puis réessayez.");
+    return false;
   }
+  notes = [mapRow(data as Row), ...notes];
+  emit();
+  return true;
 }
 
 export type NotePatch = { title?: string | null; body?: string; shared?: boolean };
@@ -159,14 +164,21 @@ export async function updateNote(id: string, patch: NotePatch): Promise<void> {
 
   const supabase = createClient();
   const { error } = await supabase.from("notes").update(dbPatch).eq("id", id);
-  if (error) await load();
+  if (error) {
+    await load(); // rollback : on recharge l'état serveur
+    toast.error("Modification non enregistrée — réessayez.");
+  }
 }
 
 export async function deleteNote(id: string): Promise<void> {
   notes = notes.filter((n) => n.id !== id);
   emit();
   const supabase = createClient();
-  await supabase.from("notes").delete().eq("id", id);
+  const { error } = await supabase.from("notes").delete().eq("id", id);
+  if (error) {
+    await load(); // rollback : la note réapparaît
+    toast.error("Suppression impossible — réessayez.");
+  }
 }
 
 function subscribe(l: () => void): () => void {

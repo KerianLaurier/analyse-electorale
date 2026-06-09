@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Loader2, Info, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { authErrorMessage } from "@/lib/auth-errors";
 
 export function ForgotForm() {
   const [status, setStatus] = useState<"idle" | "pending" | "sent" | "error">("idle");
@@ -20,7 +21,7 @@ export function ForgotForm() {
       redirectTo: `${window.location.origin}/auth/reset`,
     });
     if (error) {
-      setError(error.message);
+      setError(authErrorMessage(error));
       setStatus("error");
       return;
     }

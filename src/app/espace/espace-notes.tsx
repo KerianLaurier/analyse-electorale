@@ -72,9 +72,10 @@ function NoteForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
     e.preventDefault();
     if (!body.trim() || busy) return;
     setBusy(true);
-    await addNote({ title: title.trim() || null, body: body.trim(), shared: shared && !!ctx.teamId, context });
+    const ok = await addNote({ title: title.trim() || null, body: body.trim(), shared: shared && !!ctx.teamId, context });
     setBusy(false);
-    onDone();
+    // En cas d'échec (toast affiché par le store), le formulaire reste rempli.
+    if (ok) onDone();
   }
 
   return (

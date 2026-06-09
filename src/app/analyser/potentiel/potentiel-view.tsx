@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft, Loader2, TrendingUp, TrendingDown } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { Choropleth } from "@/components/map";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
 import {

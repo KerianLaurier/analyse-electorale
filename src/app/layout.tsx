@@ -7,6 +7,7 @@ import { QueryProvider } from "@/providers/query-provider";
 import { AppHeader } from "@/components/app-header";
 import { CommandPalette } from "@/components/command-palette";
 import { RouteProgress } from "@/components/route-progress";
+import { Toaster } from "@/components/toaster";
 
 // On charge explicitement les poids utilisés dans les maquettes v3 modern
 // (300 light, 400 regular, 500 medium dominant, 600 semibold).
@@ -35,7 +36,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f4f3ef",
+  // Barre système accordée au thème (approximation media : le choix manuel
+  // clair/sombre de next-themes ne peut pas être reflété ici côté serveur).
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f3ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
+  ],
   // Confort mobile : occupe la zone sûre (encoches), zoom utilisateur permis.
   viewportFit: "cover",
 };
@@ -51,9 +57,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {/* Résolution anticipée des connexions externes (gros gain de latence
-            sur mobile) : WASM DuckDB, fond de carte, tuiles bureaux, glyphes.
+            sur mobile) : fond de carte, tuiles bureaux, glyphes. Le WASM DuckDB
+            est self-hosté (cf. scripts/copy-duckdb.mjs) → plus de CDN tiers.
             Rendus dans l'arbre : React 19 les hisse dans <head>. */}
-        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://a.basemaps.cartocdn.com" />
         <link rel="dns-prefetch" href="https://b.basemaps.cartocdn.com" />
         <link rel="dns-prefetch" href="https://c.basemaps.cartocdn.com" />
@@ -78,6 +84,7 @@ export default function RootLayout({
             {/* pb réservé à la nav basse mobile (--bottom-nav = 0 en desktop). */}
             <main className="flex-1 flex flex-col pb-[var(--bottom-nav)]">{children}</main>
             <CommandPalette />
+            <Toaster />
           </QueryProvider>
         </ThemeProvider>
       </body>

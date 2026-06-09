@@ -43,6 +43,10 @@ next-env.d.ts
 # data pipeline (sources brutes regénérables via scripts/pipeline/all.sh)
 /data/
 
+# Bundles DuckDB-WASM self-hostés — copiés depuis node_modules par
+# scripts/copy-duckdb.mjs (lancé automatiquement avant dev/build).
+/public/duckdb/
+
 # Les données servies (public/tiles, public/electoral, public/insee,
 # public/sondages/notices.json, public/search-index.json) SONT commitées
 # pour que le déploiement fonctionne sans relancer le pipeline lourd

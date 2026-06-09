@@ -42,7 +42,8 @@ export function SimulateurView() {
   const [targets, setTargets] = useState<Targets | null>(null);
 
   const national = matrix.data?.national;
-  const circos = matrix.data?.circos ?? [];
+  // Référence stable pour les useMemo en aval.
+  const circos = useMemo(() => matrix.data?.circos ?? [], [matrix.data]);
 
   // Curseurs : valeurs éditées par l'utilisateur, sinon rapport de force national
   // observé (dérivé pendant le rendu — pas d'effet d'initialisation à recâbler).

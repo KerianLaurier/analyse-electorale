@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { toast } from "@/components/toaster";
 
 /**
  * Territoires & personnes épinglés — persistés côté serveur (table `pins`).
@@ -173,10 +174,19 @@ export async function setPinScope(
 
   const supabase = createClient();
   if (scope === "none") {
-    await supabase.from("pins").delete().eq("user_id", userId).eq("type", pin.type).eq("item_id", pin.id);
+    const { error } = await supabase
+      .from("pins")
+      .delete()
+      .eq("user_id", userId)
+      .eq("type", pin.type)
+      .eq("item_id", pin.id);
+    if (error) {
+      await load(); // rollback : l'épingle réapparaît
+      toast.error("Épingle non retirée — réessayez.");
+    }
     return;
   }
-  await supabase.from("pins").upsert(
+  const { error } = await supabase.from("pins").upsert(
     {
       user_id: userId,
       type: pin.type,
@@ -188,6 +198,10 @@ export async function setPinScope(
     },
     { onConflict: "user_id,type,item_id" },
   );
+  if (error) {
+    await load(); // rollback : on recharge l'état serveur
+    toast.error("Épingle non enregistrée — réessayez.");
+  }
 }
 
 /** Épingle / désépingle (personnel). Renvoie le nouvel état épinglé. */

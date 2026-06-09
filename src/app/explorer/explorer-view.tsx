@@ -58,7 +58,6 @@ import {
   scrutinFor,
   defaultScrutinFor,
 } from "@/lib/url-state";
-import { CommandPalette } from "@/components/command-palette";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
@@ -594,7 +593,7 @@ function ExplorerView() {
             <button
               type="button"
               onClick={retryLayers}
-              className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-red-600 shadow-sm backdrop-blur transition-colors hover:bg-surface"
+              className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-destructive shadow-sm backdrop-blur transition-colors hover:bg-surface"
             >
               <RotateCw className="h-3.5 w-3.5" /> Données indisponibles — réessayer
             </button>
@@ -657,8 +656,8 @@ function ExplorerView() {
           onClear={() => update({ code: null })}
         />
       </aside>
-
-      <CommandPalette />
+      {/* La CommandPalette est rendue globalement par le layout racine —
+         un second rendu ici doublait les écouteurs clavier (⌘K, F). */}
     </div>
   );
 }

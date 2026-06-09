@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { toast } from "@/components/toaster";
 
 /**
  * Phoning d'équipe — modèle « listes d'appels + résultat par numéro ».
@@ -132,12 +133,15 @@ export async function createList(name: string, description?: string | null): Pro
   const { userId, teamId } = await getIdentity();
   if (!userId || !teamId) return null;
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("phone_lists")
     .insert({ team_id: teamId, created_by: userId, name, description: description ?? null })
     .select("*")
     .single();
-  if (!data) return null;
+  if (error || !data) {
+    toast.error("Impossible de créer la liste — vérifiez votre connexion puis réessayez.");
+    return null;
+  }
   lists = [mapList(data as ListRow), ...lists];
   emit();
   return (data as ListRow).id;
@@ -148,7 +152,11 @@ export async function deleteList(id: string): Promise<void> {
   contacts = contacts.filter((c) => c.listId !== id);
   emit();
   const supabase = createClient();
-  await supabase.from("phone_lists").delete().eq("id", id);
+  const { error } = await supabase.from("phone_lists").delete().eq("id", id);
+  if (error) {
+    await load(); // rollback : la liste réapparaît
+    toast.error("Suppression impossible — réessayez.");
+  }
 }
 
 export type NewNumber = { phone: string; name?: string | null };
@@ -164,7 +172,11 @@ export async function addNumbers(listId: string, items: NewNumber[]): Promise<nu
     phone: it.phone,
     name: it.name ?? null,
   }));
-  const { data } = await supabase.from("phone_contacts").insert(rows).select("*");
+  const { data, error } = await supabase.from("phone_contacts").insert(rows).select("*");
+  if (error) {
+    toast.error("Import des numéros impossible — vérifiez votre connexion puis réessayez.");
+    return 0;
+  }
   const mapped = ((data ?? []) as ContactRow[]).map(mapContact);
   if (mapped.length > 0) {
     contacts = [...contacts, ...mapped];
@@ -213,14 +225,21 @@ export async function logCall(id: string, patch: CallPatch): Promise<void> {
 
   const supabase = createClient();
   const { error } = await supabase.from("phone_contacts").update(dbPatch).eq("id", id);
-  if (error) await load();
+  if (error) {
+    await load(); // rollback : on recharge l'état serveur
+    toast.error("Résultat d'appel non enregistré — réessayez.");
+  }
 }
 
 export async function deleteContact(id: string): Promise<void> {
   contacts = contacts.filter((c) => c.id !== id);
   emit();
   const supabase = createClient();
-  await supabase.from("phone_contacts").delete().eq("id", id);
+  const { error } = await supabase.from("phone_contacts").delete().eq("id", id);
+  if (error) {
+    await load(); // rollback : le numéro réapparaît
+    toast.error("Suppression impossible — réessayez.");
+  }
 }
 
 // ── Hooks ──────────────────────────────────────────────────────────────────

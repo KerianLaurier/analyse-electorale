@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Loader2, AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { authErrorMessage } from "@/lib/auth-errors";
 
 type Phase = "checking" | "ready" | "invalid" | "saving" | "done";
 
@@ -56,7 +57,7 @@ export function ResetForm() {
     setError(null);
     const { error } = await createClient().auth.updateUser({ password: pw });
     if (error) {
-      setError(error.message);
+      setError(authErrorMessage(error));
       setPhase("ready");
       return;
     }
@@ -105,7 +106,7 @@ export function ResetForm() {
           )}
 
           {phase === "done" && (
-            <div className="mt-4 flex items-start gap-2 rounded-md bg-emerald-50 px-3 py-2.5 text-[12.5px] text-emerald-700">
+            <div className="mt-4 flex items-start gap-2 rounded-md bg-success/10 px-3 py-2.5 text-[12.5px] text-success">
               <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>Mot de passe mis à jour. Redirection…</span>
             </div>

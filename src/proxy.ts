@@ -80,6 +80,17 @@ function routeBySubdomain(request: NextRequest): NextResponse | null {
 }
 
 /**
+ * Cache mémoire du gating par utilisateur : évite une requête `profiles` à
+ * CHAQUE navigation (50-150 ms d'aller-retour). On ne met en cache que les
+ * accès accordés — un refus (pas d'abonnement) est re-vérifié à chaque requête
+ * pour que l'accès soit immédiat après souscription. Cache par isolat (perdu
+ * au cold start, ce qui revient au comportement précédent).
+ */
+type GateEntry = { isSuperAdmin: boolean; expires: number };
+const gateCache = new Map<string, GateEntry>();
+const GATE_TTL_MS = 5 * 60_000;
+
+/**
  * Gating d'accès : seules les personnes connectées disposant d'un abonnement
  * valide (actif ou essai en cours) accèdent à l'application.
  */
@@ -99,6 +110,17 @@ export async function proxy(request: NextRequest) {
     url.pathname = "/auth/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
+  }
+
+  const cached = gateCache.get(user.id);
+  if (cached && cached.expires > Date.now()) {
+    if ((pathname === "/admin" || pathname.startsWith("/admin/")) && !cached.isSuperAdmin) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/explorer";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
   }
 
   // Connecté → profil (abonnement + statut super-admin).
@@ -128,6 +150,11 @@ export async function proxy(request: NextRequest) {
       (profile.subscription_status === "active" ||
         (profile.subscription_status === "trial" &&
           (!profile.trial_ends_at || new Date(profile.trial_ends_at as string) > new Date()))));
+
+  if (hasAccess) {
+    if (gateCache.size > 1000) gateCache.clear(); // borne mémoire, reconstruction lazy
+    gateCache.set(user.id, { isSuperAdmin, expires: Date.now() + GATE_TTL_MS });
+  }
 
   if (!hasAccess && pathname !== "/auth/abonnement") {
     const url = request.nextUrl.clone();

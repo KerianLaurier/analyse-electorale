@@ -15,6 +15,7 @@ import {
 import { useHasTeam, useLoaded as useCampaignLoaded } from "@/lib/campaign";
 import { fmtInt, fmtPct, KPI, Legend, Progress } from "@/app/espace/espace-canvass";
 import { PanelsSkeleton } from "@/components/skeleton";
+import { ConfirmButton } from "@/components/confirm-button";
 
 const STATUS_ORDER: CallStatus[] = ["joint", "repondeur", "occupe", "faux", "refus", "rappeler"];
 const STATUS_TONE: Record<CallStatus, string> = {
@@ -228,13 +229,15 @@ function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: 
             <h2 className="text-[20px] font-semibold tracking-tight">{list.name}</h2>
             {list.description && <p className="text-[12.5px] text-muted-foreground">{list.description}</p>}
           </div>
-          <button
-            type="button"
-            onClick={() => { if (confirm(`Supprimer la liste « ${list.name} » et tous ses numéros ?`)) void deleteList(list.id); }}
-            className="inline-flex items-center gap-1.5 rounded-pill bg-foreground/[0.04] px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600"
+          <ConfirmButton
+            onConfirm={() => void deleteList(list.id)}
+            ariaLabel={`Supprimer la liste ${list.name} et tous ses numéros`}
+            className="inline-flex items-center gap-1.5 rounded-pill bg-foreground/[0.04] px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            confirmClassName="bg-destructive/10 text-destructive"
+            confirmContent={<><Trash2 className="h-3.5 w-3.5" /> Supprimer la liste et ses numéros ?</>}
           >
             <Trash2 className="h-3.5 w-3.5" /> Supprimer la liste
-          </button>
+          </ConfirmButton>
         </div>
       </div>
 
@@ -452,14 +455,15 @@ function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => vo
       />
 
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => { if (confirm("Supprimer ce numéro ?")) void deleteContact(contact.id); }}
-          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-600"
-          aria-label="Supprimer le numéro"
+        <ConfirmButton
+          onConfirm={() => void deleteContact(contact.id)}
+          ariaLabel="Supprimer le numéro"
+          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          confirmClassName="w-auto whitespace-nowrap px-2.5 text-[12px] font-medium bg-destructive/10 text-destructive"
+          confirmContent="Supprimer ?"
         >
           <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        </ConfirmButton>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" onClick={onDone} className="rounded-pill px-3 py-2 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
           <button type="button" onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-5 py-2 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">

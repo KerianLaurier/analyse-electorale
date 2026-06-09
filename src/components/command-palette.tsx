@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { MapPin, Building2, Map, Vote, Loader2, ArrowRight, UserRound, Star, Users } from "lucide-react";
 import { usePins } from "@/lib/pins";
+import { toast } from "@/components/toaster";
 import {
   Command,
   CommandDialog,
@@ -46,8 +47,23 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const router = useRouter();
+  const pathname = usePathname();
 
-  const indexQuery = useSearchIndex(open);
+  // Préchargement de l'index (~2,7 Mo) pendant un temps creux : la première
+  // recherche ⌘K répond instantanément. Pages applicatives seulement — pas de
+  // téléchargement inutile sur la vitrine ni les écrans d'auth.
+  const [warm, setWarm] = useState(false);
+  useEffect(() => {
+    if (warm || pathname === "/" || pathname.startsWith("/auth/")) return;
+    const idle = window.requestIdleCallback?.(() => setWarm(true), { timeout: 5000 });
+    const fallback = idle === undefined ? window.setTimeout(() => setWarm(true), 2500) : undefined;
+    return () => {
+      if (idle !== undefined) window.cancelIdleCallback?.(idle);
+      if (fallback !== undefined) window.clearTimeout(fallback);
+    };
+  }, [pathname, warm]);
+
+  const indexQuery = useSearchIndex(open || warm);
   const pins = usePins();
   const results = useMemo<SearchEntry[]>(() => {
     if (!query || !indexQuery.data) return [];
@@ -75,10 +91,13 @@ export function CommandPalette() {
         const isEditable =
           target?.tagName === "INPUT" ||
           target?.tagName === "TEXTAREA" ||
+          target?.tagName === "SELECT" ||
           target?.isContentEditable;
         if (!isEditable) {
           event.preventDefault();
-          document.documentElement.classList.toggle("focus-mode");
+          const active = document.documentElement.classList.toggle("focus-mode");
+          // Un appui accidentel masque tout le chrome : on explique comment sortir.
+          if (active) toast.info("Mode focus activé — appuyez sur F pour quitter.");
         }
       }
     }
