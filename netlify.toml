@@ -1,0 +1,15 @@
+# Netlify — déploiement MOUVANCIA (Next.js, adaptateur auto-détecté).
+#
+# Split vitrine / application par sous-domaine : on définit NEXT_PUBLIC_APP_URL
+# UNIQUEMENT en production. Le middleware (src/proxy.ts) sert alors la vitrine sur
+# le domaine racine (mouvancia.fr) et renvoie les routes applicatives vers
+# app.mouvancia.fr. Les Deploy Previews (par branche/PR) n'ont pas la variable →
+# tout reste sur un seul host, comportement de test inchangé.
+#
+# Prérequis côté Netlify/DNS (à faire dans l'interface, voir README) :
+#   1. Ajouter app.mouvancia.fr comme domaine du site (alias).
+#   2. DNS : CNAME `app` → la cible Netlify du site.
+#   3. Vérifier que les variables Supabase sont bien définies (build + runtime).
+
+[context.production.environment]
+  NEXT_PUBLIC_APP_URL = "https://app.mouvancia.fr"
