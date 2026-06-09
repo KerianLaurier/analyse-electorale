@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -30,6 +30,9 @@ import { BarometreView } from "@/app/suivre/barometre-view";
 import { BriefingView } from "@/app/suivre/briefing-view";
 import { useCampaign } from "@/lib/campaign";
 import { territoryFrom } from "@/lib/territoire";
+import { useDeputes } from "@/lib/deputes";
+import { useWatchKeywords } from "@/lib/watch-keywords";
+import { useSectionSeen, markSeen, countNewer, type SeenSection } from "@/lib/last-seen";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import type { NewsArticle } from "@/app/api/news/route";
@@ -46,7 +49,9 @@ import {
   useLois,
   useAgenda,
   useVeille,
+  groupePosition,
   type VoteAN,
+  type VoteGroupe,
   type Loi,
   type LoiStep,
   type AgendaEvent,
@@ -111,6 +116,32 @@ export function SuivreView() {
     [router],
   );
 
+  // « Depuis votre dernière visite » : compteurs de nouveautés par section
+  // (timestamp local par appareil). Les jeux de données sont déjà chargés par
+  // le briefing — React Query déduplique.
+  const lastSeen = useSectionSeen();
+  const veille = useVeille();
+  const noticesQ = useNotices();
+  const votesQ = useVotesAN();
+  const loisQ = useLois();
+  const newCounts = useMemo(() => {
+    const m: Record<SeenSection, number> = {
+      medias: countNewer((veille.data?.articles ?? []).map((a) => a.date), lastSeen?.medias),
+      opinion: countNewer((noticesQ.data?.notices ?? []).map((n) => n.date), lastSeen?.opinion),
+      parlement:
+        countNewer((votesQ.data?.votes ?? []).map((v) => v.date), lastSeen?.parlement) +
+        countNewer((loisQ.data?.lois ?? []).map((l) => l.date), lastSeen?.parlement),
+    };
+    return { ...m, total: m.medias + m.opinion + m.parlement };
+  }, [veille.data, noticesQ.data, votesQ.data, loisQ.data, lastSeen]);
+
+  // Ouvrir une section la marque comme vue (le badge du rail s'efface).
+  useEffect(() => {
+    if (section === "medias" || section === "opinion" || section === "parlement") {
+      markSeen(section);
+    }
+  }, [section]);
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-3 bg-canvas p-3 lg:h-[calc(100dvh-3.5rem-var(--bottom-nav))] lg:flex-row lg:overflow-hidden">
       {/* Rail sections : barre horizontale scrollable sur mobile, colonne sur desktop. */}
@@ -121,6 +152,9 @@ export function SuivreView() {
         {SECTIONS.map((c) => {
           const Icon = c.icon;
           const active = section === c.id;
+          const fresh = c.id === "medias" || c.id === "opinion" || c.id === "parlement"
+            ? newCounts[c.id]
+            : 0;
           return (
             <button
               key={c.id}
@@ -136,6 +170,14 @@ export function SuivreView() {
             >
               <Icon className="h-4 w-4 shrink-0" />
               {c.label}
+              {fresh > 0 && !active && (
+                <span
+                  className="ml-auto rounded-pill bg-warm/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-warm"
+                  aria-label={`${fresh} nouveautés`}
+                >
+                  {fresh > 99 ? "99+" : fresh}
+                </span>
+              )}
             </button>
           );
         })}
@@ -156,7 +198,7 @@ export function SuivreView() {
       </nav>
 
       {/* Contenu par section */}
-      {section === "briefing" && <BriefingView onOpen={setSection} />}
+      {section === "briefing" && <BriefingView onOpen={setSection} newCount={newCounts.total} />}
       {section === "medias" && <MediasView />}
       {section === "opinion" && <OpinionView />}
       {section === "parlement" && <ParlementView />}
@@ -206,16 +248,20 @@ function SectionBody({ children }: { children: React.ReactNode }) {
 function MediasView() {
   const campaign = useCampaign();
   const territory = useMemo(() => territoryFrom(campaign?.target), [campaign?.target]);
+  const keywords = useWatchKeywords();
   const [tab, setTab] = useState<"territoire" | "national" | null>(null);
   // Par défaut : la presse du territoire quand un QG est configuré.
   const active = tab ?? (territory?.newsQuery ? "territoire" : "national");
 
+  // Raccourcis de recherche : territoire du QG + mots-clés suivis.
   const suggestions = useMemo(() => {
-    if (!territory) return [];
-    return [...new Set([territory.communeName, territory.deptName, territory.newsQuery].filter(
-      (s): s is string => !!s,
-    ))];
-  }, [territory]);
+    return [...new Set([
+      territory?.communeName,
+      territory?.deptName,
+      territory?.newsQuery,
+      ...keywords.map((k) => k.keyword),
+    ].filter((s): s is string => !!s))];
+  }, [territory, keywords]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
@@ -877,11 +923,30 @@ function NoticeDetail({ notice }: { notice: Notice }) {
 //  VOTES AN
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** Normalise la position majoritaire d'un groupe (« pour » / « contre » / « abstention »). */
+function normPosition(p: string | null | undefined): "pour" | "contre" | "abstention" | null {
+  const v = (p ?? "").toLowerCase();
+  if (v.startsWith("pour")) return "pour";
+  if (v.startsWith("contre")) return "contre";
+  if (v.includes("abst")) return "abstention";
+  return null;
+}
+const POSITION_LABELS = { pour: "a voté pour", contre: "a voté contre", abstention: "s'est abstenu" } as const;
+const POSITION_COLORS = { pour: "#2b7748", contre: "#b0212b", abstention: "#8a8a93" } as const;
+
 function VotesView() {
   const { data, isLoading, error } = useVotesAN();
   const [sortFilter, setSortFilter] = useState<"all" | "adopte" | "rejete">("all");
+  const [posFilter, setPosFilter] = useState<"all" | "pour" | "contre" | "abstention">("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Groupe du député de la circonscription du QG → filtre « votre groupe ».
+  const campaign = useCampaign();
+  const territory = useMemo(() => territoryFrom(campaign?.target), [campaign?.target]);
+  const deputes = useDeputes(!!territory?.circoCode);
+  const myDepute = territory?.circoCode ? deputes.data?.get(territory.circoCode) ?? null : null;
+  const mySigle = myDepute?.groupe ?? null;
 
   // Référence stable pour les useMemo en aval.
   const votes = useMemo(() => data?.votes ?? [], [data]);
@@ -891,10 +956,13 @@ function VotesView() {
       const isAdopte = (v.sort ?? "").toLowerCase().includes("adopt");
       if (sortFilter === "adopte" && !isAdopte) return false;
       if (sortFilter === "rejete" && isAdopte) return false;
+      if (posFilter !== "all" && mySigle) {
+        if (normPosition(groupePosition(v, mySigle)?.position) !== posFilter) return false;
+      }
       if (q && !(v.titre ?? "").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [votes, sortFilter, query]);
+  }, [votes, sortFilter, posFilter, mySigle, query]);
 
   const selected = useMemo(
     () => (selectedId ? votes.find((v) => v.numero === selectedId) : items[0]) ?? null,
@@ -911,17 +979,25 @@ function VotesView() {
           <FilterRow active={sortFilter === "adopte"} label="Adoptés" icon={CheckCircle2} color="#2b7748" onClick={() => setSortFilter("adopte")} />
           <FilterRow active={sortFilter === "rejete"} label="Rejetés" icon={XCircle} color="#b0212b" onClick={() => setSortFilter("rejete")} />
         </FilterSection>
+        {mySigle && (
+          <FilterSection label={`Votre groupe · ${mySigle}`}>
+            <FilterRow active={posFilter === "all"} label="Toutes positions" icon={Landmark} onClick={() => setPosFilter("all")} />
+            <FilterRow active={posFilter === "pour"} label="A voté pour" icon={CheckCircle2} color="#2b7748" onClick={() => setPosFilter(posFilter === "pour" ? "all" : "pour")} />
+            <FilterRow active={posFilter === "contre"} label="A voté contre" icon={XCircle} color="#b0212b" onClick={() => setPosFilter(posFilter === "contre" ? "all" : "contre")} />
+            <FilterRow active={posFilter === "abstention"} label="S'est abstenu" icon={MinusCircle} color="#8a8a93" onClick={() => setPosFilter(posFilter === "abstention" ? "all" : "abstention")} />
+          </FilterSection>
+        )}
       </FilterSidebar>
 
       <ListColumn eyebrow="Assemblée nationale · 17e lég." title={`Scrutins publics · ${items.length}`}
         meta={data?.generated_at ? `maj ${relativeFr(data.generated_at)}` : undefined} loading={isLoading} error={!!error}
         pager={{ page, pageCount, total, onPage: setPage }}>
-        {pageItems.map((v) => <VoteRow key={v.numero} vote={v} active={selected?.numero === v.numero} onClick={() => setSelectedId(v.numero)} />)}
+        {pageItems.map((v) => <VoteRow key={v.numero} vote={v} mySigle={mySigle} active={selected?.numero === v.numero} onClick={() => setSelectedId(v.numero)} />)}
         {!isLoading && items.length === 0 && <EmptyRow />}
       </ListColumn>
 
       <DetailColumn k={selected?.numero}>
-        {selected ? <VoteDetail vote={selected} /> : <DetailEmpty label="un scrutin" />}
+        {selected ? <VoteDetail vote={selected} mySigle={mySigle} /> : <DetailEmpty label="un scrutin" />}
       </DetailColumn>
     </>
   );
@@ -931,21 +1007,36 @@ function voteAdopted(v: VoteAN): boolean {
   return (v.sort ?? "").toLowerCase().includes("adopt");
 }
 
-function VoteRow({ vote, active, onClick }: { vote: VoteAN; active: boolean; onClick: () => void }) {
+function VoteRow({ vote, mySigle, active, onClick }: { vote: VoteAN; mySigle: string | null; active: boolean; onClick: () => void }) {
   const adopted = voteAdopted(vote);
+  const myPos = normPosition(groupePosition(vote, mySigle)?.position);
   return (
     <FeedItem active={active} onClick={onClick}
       icon={adopted ? CheckCircle2 : XCircle} iconColor={adopted ? "#2b7748" : "#b0212b"}
       title={vote.sort_libelle ?? (adopted ? "Adopté" : "Rejeté")}
       time={relativeFr(vote.date)}
       subtitle={vote.titre ?? "—"}
-      badge={{ label: `${vote.pour} pour · ${vote.contre} contre`, color: adopted ? "#2b7748" : "#b0212b" }} />
+      badge={{ label: `${vote.pour} pour · ${vote.contre} contre`, color: adopted ? "#2b7748" : "#b0212b" }}
+      badge2={myPos && mySigle ? { label: `${mySigle} ${POSITION_LABELS[myPos]}`, color: POSITION_COLORS[myPos] } : undefined} />
   );
 }
 
-function VoteDetail({ vote }: { vote: VoteAN }) {
+function VoteDetail({ vote, mySigle }: { vote: VoteAN; mySigle: string | null }) {
   const adopted = voteAdopted(vote);
   const total = Math.max(vote.pour + vote.contre + vote.abstentions, 1);
+  // Ventilation triée par poids (exprimés) décroissant, groupe du QG en premier.
+  const groupes = useMemo(() => {
+    const list = [...(vote.groupes ?? [])];
+    list.sort((a, b) => {
+      if (mySigle) {
+        if (a.sigle === mySigle) return -1;
+        if (b.sigle === mySigle) return 1;
+      }
+      return b.pour + b.contre + b.abstentions - (a.pour + a.contre + a.abstentions);
+    });
+    return list;
+  }, [vote.groupes, mySigle]);
+
   return (
     <div className="flex flex-col gap-5 p-6 text-[13px]">
       <Breadcrumb parts={["Suivre", "Votes AN", `Scrutin n°${vote.numero}`]} />
@@ -979,7 +1070,49 @@ function VoteDetail({ vote }: { vote: VoteAN }) {
         <KPI label="Exprimés" value={String(vote.exprimes)} />
       </div>
 
+      {/* Position par groupe parlementaire */}
+      {groupes.length > 0 && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Position par groupe
+          </p>
+          <div className="mt-2 flex flex-col gap-1">
+            {groupes.map((g) => (
+              <GroupePositionRow key={g.sigle} groupe={g} highlight={g.sigle === mySigle} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <SourceNote>Assemblée nationale — open data officiel (17e législature).</SourceNote>
+    </div>
+  );
+}
+
+function GroupePositionRow({ groupe, highlight }: { groupe: VoteGroupe; highlight: boolean }) {
+  const pos = normPosition(groupe.position);
+  const color = pos ? POSITION_COLORS[pos] : "#8a8a93";
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[12px]",
+        highlight && "bg-warm/10 ring-1 ring-warm/30",
+      )}
+    >
+      <span className="w-20 shrink-0 truncate font-medium">
+        {groupe.sigle}
+        {highlight && <span className="ml-1 text-[9.5px] font-semibold uppercase text-warm">vous</span>}
+      </span>
+      <span
+        className="inline-flex shrink-0 items-center rounded-pill px-2 py-0.5 text-[10.5px] font-medium"
+        style={{ background: `${color}1a`, color }}
+      >
+        {pos ? POSITION_LABELS[pos] : "position n.c."}
+      </span>
+      <span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted-foreground">
+        {groupe.pour} pour · {groupe.contre} contre
+        {groupe.abstentions > 0 ? ` · ${groupe.abstentions} abst.` : ""}
+      </span>
     </div>
   );
 }
@@ -1368,11 +1501,13 @@ function DetailColumn({ k, children }: { k?: string | null; children: React.Reac
 }
 
 function FeedItem({
-  active, onClick, icon: Icon, iconColor, title, time, subtitle, dim, badge,
+  active, onClick, icon: Icon, iconColor, title, time, subtitle, dim, badge, badge2,
 }: {
   active: boolean; onClick: () => void; icon: typeof Vote; iconColor: string;
   title: string; time: string; subtitle: string; dim?: boolean;
   badge?: { label: string; color?: string };
+  /** Badge secondaire (ex. position du groupe de l'utilisateur sur un vote). */
+  badge2?: { label: string; color?: string };
 }) {
   return (
     <li>
@@ -1394,15 +1529,22 @@ function FeedItem({
             <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">{time}</span>
           </div>
           <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{subtitle}</p>
-          {badge && (
-            <span
-              className="mt-1.5 inline-flex items-center rounded-pill px-1.5 py-0.5 text-[9.5px] font-medium"
-              style={{
-                background: badge.color ? `${badge.color}1a` : "var(--surface-soft)",
-                color: badge.color ?? "var(--muted-foreground)",
-              }}
-            >
-              {badge.label}
+          {(badge || badge2) && (
+            <span className="mt-1.5 flex flex-wrap items-center gap-1">
+              {[badge, badge2].map((b, i) =>
+                b ? (
+                  <span
+                    key={i}
+                    className="inline-flex items-center rounded-pill px-1.5 py-0.5 text-[9.5px] font-medium"
+                    style={{
+                      background: b.color ? `${b.color}1a` : "var(--surface-soft)",
+                      color: b.color ?? "var(--muted-foreground)",
+                    }}
+                  >
+                    {b.label}
+                  </span>
+                ) : null,
+              )}
             </span>
           )}
         </div>

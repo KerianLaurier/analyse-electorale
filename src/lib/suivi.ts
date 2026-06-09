@@ -4,6 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 
 // ─── Votes AN ───────────────────────────────────────────────────────────────
 
+export type VoteGroupe = {
+  sigle: string;
+  /** Position majoritaire du groupe : « pour », « contre », « abstention »… */
+  position: string | null;
+  pour: number;
+  contre: number;
+  abstentions: number;
+};
+
 export type VoteAN = {
   numero: string | null;
   date: string | null;
@@ -17,7 +26,15 @@ export type VoteAN = {
   pour: number;
   contre: number;
   abstentions: number;
+  /** Ventilation par groupe (absente sur les données antérieures au pipeline v2). */
+  groupes?: VoteGroupe[];
 };
+
+/** Position d'un groupe (par sigle) sur un scrutin, si la ventilation est connue. */
+export function groupePosition(vote: VoteAN, sigle: string | null | undefined): VoteGroupe | null {
+  if (!sigle || !vote.groupes) return null;
+  return vote.groupes.find((g) => g.sigle === sigle) ?? null;
+}
 
 export type VotesANData = {
   source: string;

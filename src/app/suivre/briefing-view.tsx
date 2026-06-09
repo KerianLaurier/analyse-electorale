@@ -1,16 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   ArrowRight, ArrowUpRight, BarChart3, CalendarDays, ExternalLink, Landmark,
-  MapPin, Newspaper, PenLine, UserRound, Vote,
+  MapPin, Newspaper, PenLine, Plus, Tags, UserRound, Vote, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NewsArticle } from "@/app/api/news/route";
 import { useCampaign, useLoaded as useCampaignLoaded } from "@/lib/campaign";
 import { territoryFrom } from "@/lib/territoire";
+import {
+  useWatchKeywords, useLoaded as useKeywordsLoaded, addKeyword, removeKeyword, MAX_KEYWORDS,
+} from "@/lib/watch-keywords";
 import { useDeputes } from "@/lib/deputes";
 import { useNotices, formatDateFr, relativeFr, cleanLabel } from "@/lib/sondages";
 import { useVotesAN, useAgenda, useVeille } from "@/lib/suivi";
@@ -43,22 +46,31 @@ function todayFr(): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+async function fetchNews(query: string): Promise<NewsArticle[]> {
+  const res = await fetch(`/api/news?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error("indisponible");
+  const j = (await res.json()) as { articles?: NewsArticle[] };
+  return j.articles ?? [];
+}
+
 /** Presse du territoire (Google Actualités via /api/news). */
 function useTerritoryNews(query: string | null) {
   return useQuery({
     enabled: !!query,
     queryKey: ["local-news", query],
     staleTime: 10 * 60 * 1000,
-    queryFn: async (): Promise<NewsArticle[]> => {
-      const res = await fetch(`/api/news?q=${encodeURIComponent(query ?? "")}`);
-      if (!res.ok) throw new Error("indisponible");
-      const j = (await res.json()) as { articles?: NewsArticle[] };
-      return j.articles ?? [];
-    },
+    queryFn: () => fetchNews(query ?? ""),
   });
 }
 
-export function BriefingView({ onOpen }: { onOpen: (s: Section) => void }) {
+export function BriefingView({
+  onOpen,
+  newCount = 0,
+}: {
+  onOpen: (s: Section) => void;
+  /** Nouveautés (toutes sections) depuis la dernière visite — cf. last-seen. */
+  newCount?: number;
+}) {
   const campaign = useCampaign();
   const campaignLoaded = useCampaignLoaded();
   const territory = useMemo(() => territoryFrom(campaign?.target), [campaign?.target]);
@@ -126,6 +138,12 @@ export function BriefingView({ onOpen }: { onOpen: (s: Section) => void }) {
             <h1 className="mt-1 text-[26px] font-semibold leading-tight tracking-tight lg:text-[32px]">
               {todayFr()}
             </h1>
+            {newCount > 0 && (
+              <p className="mt-1 text-[12.5px] text-muted-foreground">
+                <span className="font-semibold text-warm">{fmtInt(newCount)}</span>{" "}
+                nouveauté{newCount > 1 ? "s" : ""} depuis votre dernière visite
+              </p>
+            )}
           </div>
           {campaignLoaded && (
             territory ? (
@@ -334,6 +352,9 @@ export function BriefingView({ onOpen }: { onOpen: (s: Section) => void }) {
           </section>
         )}
 
+        {/* ── Veille par mots-clés ──────────────────────────────────────── */}
+        <KeywordsWatch />
+
         {/* ── À la une (veille nationale) ───────────────────────────────── */}
         <section>
           <SectionHeading
@@ -365,6 +386,124 @@ export function BriefingView({ onOpen }: { onOpen: (s: Section) => void }) {
           )}
         </section>
       </div>
+    </section>
+  );
+}
+
+// ─── Veille par mots-clés ─────────────────────────────────────────────────────
+
+/**
+ * Mots-clés suivis par l'équipe (adversaires, thèmes locaux…) : chaque mot-clé
+ * agrège ses derniers articles de presse. Ajout/retrait inline.
+ */
+function KeywordsWatch() {
+  const keywords = useWatchKeywords();
+  const loaded = useKeywordsLoaded();
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const newsQueries = useQueries({
+    queries: keywords.map((k) => ({
+      queryKey: ["local-news", k.keyword],
+      staleTime: 10 * 60 * 1000,
+      queryFn: () => fetchNews(k.keyword),
+    })),
+  });
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || input.trim().length < 2) return;
+    setBusy(true);
+    const ok = await addKeyword(input);
+    setBusy(false);
+    if (ok) setInput("");
+  }
+
+  return (
+    <section>
+      <SectionHeading title="Veille par mots-clés" detail="adversaires, thèmes, sujets locaux" />
+
+      <form onSubmit={submit} className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[220px] flex-1 sm:max-w-[320px]">
+          <Tags className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            maxLength={80}
+            placeholder="Ex. nom d'un adversaire, « éoliennes », ZFE…"
+            className="w-full rounded-md border border-border bg-surface py-2 pl-8 pr-3 text-[12.5px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={busy || input.trim().length < 2 || keywords.length >= MAX_KEYWORDS}
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-2 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          <Plus className="h-3.5 w-3.5" /> Suivre
+        </button>
+        {keywords.length > 0 && (
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            {keywords.length}/{MAX_KEYWORDS}
+          </span>
+        )}
+      </form>
+
+      {!loaded ? (
+        <LoadingRows n={2} />
+      ) : keywords.length === 0 ? (
+        <p className="mt-3 rounded-md border border-dashed border-border bg-surface-alt/50 px-4 py-5 text-center text-[12.5px] text-muted-foreground">
+          Suivez vos adversaires et vos sujets de campagne : chaque mot-clé remonte ici
+          ses derniers articles de presse. La liste est partagée avec votre équipe.
+        </p>
+      ) : (
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {keywords.map((k, i) => {
+            const q = newsQueries[i];
+            const articles = (q?.data ?? []).slice(0, 2);
+            return (
+              <div key={k.id} className="rounded-lg border border-border/60 p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex min-w-0 items-center gap-1.5 rounded-pill bg-warm/12 px-2.5 py-1 text-[12px] font-medium text-warm">
+                    <Tags className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{k.keyword}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void removeKeyword(k.id)}
+                    aria-label={`Ne plus suivre « ${k.keyword} »`}
+                    className="relative grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors before:absolute before:-inset-1.5 before:content-[''] hover:bg-foreground/[0.06] hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {q?.isLoading ? (
+                  <LoadingRows n={2} />
+                ) : articles.length === 0 ? (
+                  <p className="mt-2 text-[11.5px] text-muted-foreground">Aucun article récent.</p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {articles.map((a, j) => (
+                      <li key={`${a.url}-${j}`}>
+                        <a
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group block min-w-0"
+                        >
+                          <span className="block truncate text-[12.5px] font-medium leading-snug group-hover:text-warm">
+                            {a.title}
+                          </span>
+                          <span className="mt-0.5 block text-[10.5px] text-muted-foreground">{a.source ?? "Presse"}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
