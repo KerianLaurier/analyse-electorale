@@ -5,10 +5,19 @@ import * as duckdb from "@duckdb/duckdb-wasm";
 let dbPromise: Promise<duckdb.AsyncDuckDB> | null = null;
 
 async function init(): Promise<duckdb.AsyncDuckDB> {
-  // jsDelivr-hosted WASM + workers. Sufficient for dev and early production.
-  // À remplacer par un bundle self-hosté + COI quand on activera les pthreads.
-  const bundles = duckdb.getJsDelivrBundles();
-  const bundle = await duckdb.selectBundle(bundles);
+  // Bundles self-hostés (copiés dans /public/duckdb par scripts/copy-duckdb.mjs,
+  // lancé avant dev/build) : pas de dépendance à un CDN tiers au runtime.
+  // COI/pthreads restent désactivés (les headers COEP casseraient les tuiles CARTO).
+  const bundle = await duckdb.selectBundle({
+    mvp: {
+      mainModule: "/duckdb/duckdb-mvp.wasm",
+      mainWorker: "/duckdb/duckdb-browser-mvp.worker.js",
+    },
+    eh: {
+      mainModule: "/duckdb/duckdb-eh.wasm",
+      mainWorker: "/duckdb/duckdb-browser-eh.worker.js",
+    },
+  });
   if (!bundle.mainWorker) {
     throw new Error("DuckDB-WASM: aucun worker disponible pour ce navigateur");
   }

@@ -164,10 +164,12 @@ function ContactForm({
       notes: notes.trim() || null,
       shared: shared && !!ctx.teamId,
     };
+    let ok = true;
     if (initial) await updateContact(initial.id, payload);
-    else await addContact({ ...payload, context });
+    else ok = await addContact({ ...payload, context });
     setBusy(false);
-    onDone();
+    // En cas d'échec d'ajout (toast affiché par le store), le formulaire reste rempli.
+    if (ok) onDone();
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { toast } from "@/components/toaster";
 
 /**
  * Actions de terrain (tâches) d'une équipe de campagne — persistées côté
@@ -149,13 +150,14 @@ export type NewTask = {
   context?: TaskContext | null;
 };
 
-export async function addTask(input: NewTask): Promise<void> {
+/** Ajoute une tâche. Renvoie false en cas d'échec (le formulaire reste rempli). */
+export async function addTask(input: NewTask): Promise<boolean> {
   const { userId } = await getIdentity();
-  if (!userId) return;
+  if (!userId) return false;
   myUserId = userId;
   const supabase = createClient();
   const team_id = input.shared && myTeamId ? myTeamId : null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("tasks")
     .insert({
       user_id: userId,
@@ -173,10 +175,13 @@ export async function addTask(input: NewTask): Promise<void> {
     })
     .select("*")
     .single();
-  if (data) {
-    tasks = [mapRow(data as Row), ...tasks];
-    emit();
+  if (error || !data) {
+    toast.error("Impossible d'ajouter la tâche — vérifiez votre connexion puis réessayez.");
+    return false;
   }
+  tasks = [mapRow(data as Row), ...tasks];
+  emit();
+  return true;
 }
 
 export type TaskPatch = {
@@ -227,14 +232,21 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
 
   const supabase = createClient();
   const { error } = await supabase.from("tasks").update(dbPatch).eq("id", id);
-  if (error) await load();
+  if (error) {
+    await load(); // rollback : on recharge l'état serveur
+    toast.error("Modification non enregistrée — réessayez.");
+  }
 }
 
 export async function deleteTask(id: string): Promise<void> {
   tasks = tasks.filter((t) => t.id !== id);
   emit();
   const supabase = createClient();
-  await supabase.from("tasks").delete().eq("id", id);
+  const { error } = await supabase.from("tasks").delete().eq("id", id);
+  if (error) {
+    await load(); // rollback : la tâche réapparaît
+    toast.error("Suppression impossible — réessayez.");
+  }
 }
 
 function subscribe(l: () => void): () => void {

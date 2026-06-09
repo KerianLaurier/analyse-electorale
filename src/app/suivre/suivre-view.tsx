@@ -271,7 +271,8 @@ function ActualiteView() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const articles = data?.articles ?? [];
+  // Référence stable pour les useMemo en aval.
+  const articles = useMemo(() => data?.articles ?? [], [data]);
   const sources = useMemo(() => {
     const m = new Map<string, number>();
     for (const a of articles) m.set(a.source, (m.get(a.source) ?? 0) + 1);
@@ -399,7 +400,8 @@ function SondagesView() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const notices = data?.notices ?? [];
+  // Référence stable pour les useMemo en aval.
+  const notices = useMemo(() => data?.notices ?? [], [data]);
 
   const scrutinsPresent = useMemo(() => {
     const counts = new Map<ScrutinCode, number>();
@@ -729,7 +731,8 @@ function VotesView() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const votes = data?.votes ?? [];
+  // Référence stable pour les useMemo en aval.
+  const votes = useMemo(() => data?.votes ?? [], [data]);
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
     return votes.filter((v) => {
@@ -839,7 +842,8 @@ function LoisView() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const lois = data?.lois ?? [];
+  // Référence stable pour les useMemo en aval.
+  const lois = useMemo(() => data?.lois ?? [], [data]);
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
     return lois.filter((l) => {
@@ -1010,7 +1014,8 @@ const AGENDA_TYPE_COLOR: Record<string, string> = {
 function AgendaView() {
   const { data, isLoading, error } = useAgenda();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const events = data?.evenements ?? [];
+  // Référence stable pour les useMemo en aval.
+  const events = useMemo(() => data?.evenements ?? [], [data]);
   const selected = useMemo(
     () => (selectedId ? events.find((e) => e.date + e.titre === selectedId) : events.find((e) => !e.passe) ?? events[0]) ?? null,
     [selectedId, events],

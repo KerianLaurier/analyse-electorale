@@ -86,7 +86,7 @@ export function TeamView({
       .update({ full_name: pName.trim() || null, organisation: pOrg.trim() || null })
       .eq("id", account.id);
     setBusy(false);
-    if (error) return flash(`Échec de l'enregistrement : ${error.message}`);
+    if (error) { console.error(error); return flash("Échec de l'enregistrement — réessayez."); }
     setEditingProfile(false);
     flash("Profil mis à jour.");
     router.refresh();
@@ -107,7 +107,7 @@ export function TeamView({
     const supabase = createClient();
     const { error } = await supabase.from("team_roles").insert({ team_id: team.id, name: name.trim(), color });
     setBusy(false);
-    if (error) return flash(`Échec : ${error.message}`);
+    if (error) { console.error(error); return flash("Échec de l'opération — réessayez."); }
     router.refresh();
   }
 
@@ -151,7 +151,7 @@ export function TeamView({
     const supabase = createClient();
     const { error } = await supabase.rpc("create_team", { p_name: teamName });
     setBusy(false);
-    if (error) return flash(`Échec de la création : ${error.message}`);
+    if (error) { console.error(error); return flash("Échec de la création — réessayez."); }
     setTeamName("");
     flash("Équipe créée. Partagez le code d’invitation à vos coéquipiers.");
     await afterTeamChange();
@@ -176,7 +176,7 @@ export function TeamView({
     const supabase = createClient();
     const { error } = await supabase.rpc("leave_team");
     setBusy(false);
-    if (error) return flash(`Échec : ${error.message}`);
+    if (error) { console.error(error); return flash("Échec de l'opération — réessayez."); }
     flash("Vous avez quitté l’équipe.");
     await afterTeamChange();
   }

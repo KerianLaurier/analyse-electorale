@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { toast } from "@/components/toaster";
 
 /**
  * Carnet de contacts de campagne (bénévoles, soutiens, presse, élus…) —
@@ -138,13 +139,14 @@ export type NewContact = {
   context?: ContactContext | null;
 };
 
-export async function addContact(input: NewContact): Promise<void> {
+/** Ajoute un contact. Renvoie false en cas d'échec (le formulaire reste rempli). */
+export async function addContact(input: NewContact): Promise<boolean> {
   const { userId } = await getIdentity();
-  if (!userId) return;
+  if (!userId) return false;
   myUserId = userId;
   const supabase = createClient();
   const team_id = input.shared && myTeamId ? myTeamId : null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("contacts")
     .insert({
       user_id: userId,
@@ -164,10 +166,13 @@ export async function addContact(input: NewContact): Promise<void> {
     })
     .select("*")
     .single();
-  if (data) {
-    contacts = [mapRow(data as Row), ...contacts];
-    emit();
+  if (error || !data) {
+    toast.error("Impossible d'ajouter le contact — vérifiez votre connexion puis réessayez.");
+    return false;
   }
+  contacts = [mapRow(data as Row), ...contacts];
+  emit();
+  return true;
 }
 
 export type ContactPatch = {
@@ -209,14 +214,21 @@ export async function updateContact(id: string, patch: ContactPatch): Promise<vo
 
   const supabase = createClient();
   const { error } = await supabase.from("contacts").update(dbPatch).eq("id", id);
-  if (error) await load();
+  if (error) {
+    await load(); // rollback : on recharge l'état serveur
+    toast.error("Modification non enregistrée — réessayez.");
+  }
 }
 
 export async function deleteContact(id: string): Promise<void> {
   contacts = contacts.filter((c) => c.id !== id);
   emit();
   const supabase = createClient();
-  await supabase.from("contacts").delete().eq("id", id);
+  const { error } = await supabase.from("contacts").delete().eq("id", id);
+  if (error) {
+    await load(); // rollback : le contact réapparaît
+    toast.error("Suppression impossible — réessayez.");
+  }
 }
 
 function subscribe(l: () => void): () => void {

@@ -41,7 +41,9 @@ export function MarginaliteView() {
   const [seuil, setSeuil] = useState(10); // points
 
   const q = useMarginalite(scrutin, "circonscriptions", true);
-  const rows = q.data ?? [];
+  // Référence stable (sinon `?? []` recrée un tableau à chaque render et
+  // invalide tous les useMemo en aval).
+  const rows = useMemo(() => q.data ?? [], [q.data]);
 
   const disputed = useMemo(() => rows.filter((r) => r.marginPts * 100 <= seuil), [rows, seuil]);
 

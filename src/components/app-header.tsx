@@ -27,6 +27,11 @@ const PRIMARY_NAV = [
   { href: "/espace", label: "Mon QG" },
 ] as const;
 
+// Zone tactile étendue (~44 px, WCAG 2.5.8) sans grossir le rendu : le
+// pseudo-élément capte les taps autour de l'élément. Extension verticale
+// seulement — l'horizontale ferait se chevaucher des cibles voisines.
+const HIT_AREA = "relative before:absolute before:-inset-y-1.5 before:-inset-x-0.5 before:content-['']";
+
 // Pages sans chrome applicatif : écrans d'auth + landing publique (`/`),
 // qui possèdent leur propre en-tête.
 const NO_CHROME = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
@@ -91,7 +96,7 @@ export function AppHeader() {
         href={item.href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200 ease-out",
+          "relative rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200 ease-out before:absolute before:-inset-y-2 before:inset-x-0 before:content-['']",
           active
             ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(10,10,12,0.18)]"
             : "text-foreground/70 hover:text-foreground hover:bg-surface/60",
@@ -133,7 +138,7 @@ export function AppHeader() {
             onClick={openPalette}
             aria-label="Rechercher"
             title="Recherche universelle (⌘K)"
-            className="grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
+            className={cn("grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95", HIT_AREA)}
           >
             <Search className="h-4 w-4" />
           </button>
@@ -141,7 +146,7 @@ export function AppHeader() {
             href="/espace?tab=pins"
             aria-label="Mes épingles"
             title="Mes épingles"
-            className="hidden h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95 sm:grid"
+            className={cn("hidden h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95 sm:grid", HIT_AREA)}
           >
             <Star className="h-4 w-4" />
           </Link>
@@ -153,14 +158,14 @@ export function AppHeader() {
             href="/auth/team"
             aria-label="Paramètres de l'équipe"
             title="Équipe & abonnement"
-            className="hidden h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95 sm:grid"
+            className={cn("hidden h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95 sm:grid", HIT_AREA)}
           >
             <Settings2 className="h-4 w-4" />
           </Link>
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Compte"
-              className="ml-1 grid h-8 w-8 place-items-center rounded-pill bg-warm/90 text-[11px] font-semibold text-on-dark transition-transform duration-150 hover:scale-105 active:scale-95"
+              className={cn("ml-1 grid h-8 w-8 place-items-center rounded-pill bg-warm/90 text-[11px] font-semibold text-on-dark transition-transform duration-150 hover:scale-105 active:scale-95", HIT_AREA)}
             >
               {avatarInitials}
             </DropdownMenuTrigger>
@@ -235,9 +240,9 @@ const NOTIF_ICON = {
   campaign: Target,
 } as const;
 const NOTIF_TONE = {
-  warn: "text-red-600",
+  warn: "text-destructive",
   info: "text-warm",
-  success: "text-emerald-600",
+  success: "text-success",
 } as const;
 
 function NotificationsBell({
@@ -273,11 +278,11 @@ function NotificationsBell({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={`Notifications${count > 0 ? ` (${count})` : ""}`}
-        className="relative grid h-8 w-8 place-items-center rounded-md text-foreground/70 outline-none transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95"
+        className={cn("grid h-8 w-8 place-items-center rounded-md text-foreground/70 outline-none transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95", HIT_AREA)}
       >
         <Bell className="h-4 w-4" />
         {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">
+          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-white">
             {count > 9 ? "9+" : count}
           </span>
         )}
@@ -321,7 +326,7 @@ function NotificationsBell({
                       type="button"
                       onClick={() => dismissNotification(n.id)}
                       aria-label="Marquer comme lu"
-                      className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                      className="relative mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors before:absolute before:-inset-1.5 before:content-[''] hover:bg-foreground/[0.06] hover:text-foreground"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>

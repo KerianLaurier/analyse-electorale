@@ -6,8 +6,21 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2, Info, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { authErrorMessage } from "@/lib/auth-errors";
 
 type Mode = "login" | "signup";
+
+/**
+ * Attend que le client @supabase/ssr ait écrit les cookies de session avant la
+ * navigation complète (l'écriture est asynchrone après signIn — un délai fixe
+ * créait une course sur les appareils lents). Repli au bout de ~1 s.
+ */
+async function waitForSessionCookie(): Promise<void> {
+  for (let i = 0; i < 40; i++) {
+    if (document.cookie.includes("-auth-token")) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const isLogin = mode === "login";
@@ -28,12 +41,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setError(error.message);
+        setError(authErrorMessage(error));
         setStatus("error");
         return;
       }
-      // Laisse le client écrire les cookies de session avant la navigation complète.
-      await new Promise((r) => setTimeout(r, 200));
+      await waitForSessionCookie();
       window.location.assign(next);
       return;
     }
@@ -49,13 +61,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
       },
     });
     if (error) {
-      setError(error.message);
+      setError(authErrorMessage(error));
       setStatus("error");
       return;
     }
     // Session immédiate (confirmation e-mail désactivée) → on entre directement.
     if (data.session) {
-      await new Promise((r) => setTimeout(r, 200));
+      await waitForSessionCookie();
       window.location.assign(next);
       return;
     }
@@ -110,7 +122,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             {status === "check-email" && (
               <div className="flex items-start gap-2 rounded-md bg-warm/12 px-3 py-2.5 text-[12px] text-foreground/80">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
-                <span>Compte créé. Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.</span>
+                <span>Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse, puis connectez-vous.</span>
               </div>
             )}
             {status === "error" && error && (

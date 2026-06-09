@@ -150,7 +150,7 @@ function TaskForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
     e.preventDefault();
     if (!title.trim() || busy) return;
     setBusy(true);
-    await addTask({
+    const ok = await addTask({
       title: title.trim(),
       kind,
       priority,
@@ -160,7 +160,8 @@ function TaskForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
       context,
     });
     setBusy(false);
-    onDone();
+    // En cas d'échec (toast affiché par le store), le formulaire reste rempli.
+    if (ok) onDone();
   }
 
   const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";

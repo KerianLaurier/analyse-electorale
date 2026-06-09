@@ -23,7 +23,6 @@ export default function AppleIcon() {
           background: "#0a0a0c",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img width={104} height={104} src={`data:image/svg+xml,${encodeURIComponent(MARK)}`} alt="" />
       </div>
     ),

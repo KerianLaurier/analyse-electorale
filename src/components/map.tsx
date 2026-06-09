@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTheme } from "next-themes";
 import maplibregl, {
   type Map as MapLibreMap,
   type StyleSpecification,
@@ -34,20 +35,32 @@ function registerPmtilesProtocol() {
   protocolRegistered = true;
 }
 
+const CARTO_ATTRIBUTION =
+  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>';
+
+function basemapTiles(variant: "light_nolabels" | "dark_nolabels"): string[] {
+  return ["a", "b", "c", "d"].map(
+    (s) => `https://${s}.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}.png`,
+  );
+}
+
 function buildStyle(origin: string): StyleSpecification {
   const sources: StyleSpecification["sources"] = {
-    // Fond raster CARTO Positron — basemap sobre, peu d'infos, labels FR discrets.
-    "basemap": {
+    // Fonds raster CARTO — sobres, peu d'infos. Les deux variantes (claire et
+    // sombre) sont déclarées d'emblée ; on bascule la visibilité selon le thème
+    // (cf. effet `resolvedTheme`) sans toucher aux couches data ni aux
+    // feature-states.
+    "basemap-light": {
       type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-      ],
+      tiles: basemapTiles("light_nolabels"),
       tileSize: 256,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>',
+      attribution: CARTO_ATTRIBUTION,
+    },
+    "basemap-dark": {
+      type: "raster",
+      tiles: basemapTiles("dark_nolabels"),
+      tileSize: 256,
+      attribution: CARTO_ATTRIBUTION,
     },
   };
 
@@ -63,7 +76,13 @@ function buildStyle(origin: string): StyleSpecification {
   }
 
   const layers: StyleSpecification["layers"] = [
-    { id: "basemap", type: "raster", source: "basemap" },
+    { id: "basemap-light", type: "raster", source: "basemap-light" },
+    {
+      id: "basemap-dark",
+      type: "raster",
+      source: "basemap-dark",
+      layout: { visibility: "none" },
+    },
   ];
 
   for (const maille of MAILLE_ORDER) {
@@ -164,6 +183,7 @@ export function Map({
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const { resolvedTheme } = useTheme();
   const styleLoadedRef = useRef(false);
   const hoveredFeatureRef = useRef<{
     source: string;
@@ -267,8 +287,20 @@ export function Map({
       map.remove();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fond de carte accordé au thème (clair / sombre).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !resolvedTheme) return;
+    const dark = resolvedTheme === "dark";
+    const apply = () => {
+      map.setLayoutProperty("basemap-light", "visibility", dark ? "none" : "visible");
+      map.setLayoutProperty("basemap-dark", "visibility", dark ? "visible" : "none");
+    };
+    if (styleLoadedRef.current || map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [resolvedTheme]);
 
   // Maille visibility.
   useEffect(() => {
