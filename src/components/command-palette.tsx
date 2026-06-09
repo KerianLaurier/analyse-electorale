@@ -37,9 +37,12 @@ const NAV_SHORTCUTS = [
   { href: "/explorer", label: "Ouvrir l'explorateur" },
   { href: "/analyser/simulateur", label: "Simulateur législatif" },
   { href: "/analyser/marginalite", label: "Carte des sièges marginaux" },
-  { href: "/suivre/sondages", label: "Sondages" },
+  { href: "/suivre", label: "Briefing du jour" },
+  { href: "/suivre?s=medias", label: "Veille médias & territoire" },
+  { href: "/suivre?s=opinion", label: "Sondages & baromètre" },
+  { href: "/suivre?s=parlement", label: "Votes & lois (AN)" },
+  { href: "/suivre?s=echeances", label: "Agenda électoral" },
   { href: "/suivre/parrainages", label: "Parrainages 2027" },
-  { href: "/suivre/agenda", label: "Agenda électoral" },
   { href: "/suivre/soiree", label: "Soirée électorale" },
 ] as const;
 
@@ -134,7 +137,7 @@ export function CommandPalette() {
       open={open}
       onOpenChange={setOpen}
       title="Recherche universelle"
-      description="Tape une commune, une circonscription, un département ou une région."
+      description="Saisissez une commune, une circonscription, un département ou une région."
     >
       <Command shouldFilter={false}>
       <CommandInput
@@ -184,7 +187,7 @@ export function CommandPalette() {
               ))}
             </CommandGroup>
             <div className="px-3 py-2 text-[11px] text-muted-foreground/80">
-              Tape pour rechercher parmi {indexQuery.data?.length ?? "…"}{" "}
+              Recherchez parmi {indexQuery.data?.length ?? "…"}{" "}
               territoires et députés en exercice.
             </div>
           </>
