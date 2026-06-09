@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   BarChart3,
   Vote,
@@ -19,11 +21,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Newspaper,
-  MapPin,
   Info,
-  TrendingUp,
+  PenLine,
+  Sunrise,
+  Tv,
 } from "lucide-react";
 import { BarometreView } from "@/app/suivre/barometre-view";
+import { BriefingView } from "@/app/suivre/briefing-view";
+import { useCampaign } from "@/lib/campaign";
+import { territoryFrom } from "@/lib/territoire";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import type { NewsArticle } from "@/app/api/news/route";
@@ -72,36 +78,54 @@ function usePaged<T>(items: T[]) {
   return { pageItems, page: safePage, setPage, pageCount, total: items.length };
 }
 
-export type Category = "actualite" | "presse" | "sondages" | "barometre" | "votes" | "lois" | "agenda";
+export type Section = "briefing" | "medias" | "opinion" | "parlement" | "echeances";
 
-const CATEGORIES: { id: Category; label: string; icon: typeof Vote }[] = [
-  { id: "actualite", label: "Actualité", icon: Newspaper },
-  { id: "presse", label: "Presse locale", icon: MapPin },
-  { id: "sondages", label: "Sondages", icon: BarChart3 },
-  { id: "barometre", label: "Baromètre 2027", icon: TrendingUp },
-  { id: "votes", label: "Votes AN", icon: Vote },
-  { id: "lois", label: "Lois & PPL", icon: FileText },
-  { id: "agenda", label: "Agenda", icon: CalendarDays },
+const SECTIONS: { id: Section; label: string; icon: typeof Vote }[] = [
+  { id: "briefing", label: "Briefing", icon: Sunrise },
+  { id: "medias", label: "Médias", icon: Newspaper },
+  { id: "opinion", label: "Opinion", icon: BarChart3 },
+  { id: "parlement", label: "Parlement", icon: Landmark },
+  { id: "echeances", label: "Échéances", icon: CalendarDays },
 ];
 
-export function SuivreView({ initialCategory = "actualite" }: { initialCategory?: Category }) {
-  const [category, setCategory] = useState<Category>(initialCategory);
+// Pages dédiées de l'univers « Suivre » (auparavant introuvables en navigant).
+const SECTION_LINKS = [
+  { href: "/suivre/parrainages", label: "Parrainages 2027", icon: PenLine },
+  { href: "/suivre/soiree", label: "Soirée électorale", icon: Tv },
+] as const;
+
+function parseSection(v: string | null): Section {
+  return SECTIONS.some((s) => s.id === v) ? (v as Section) : "briefing";
+}
+
+export function SuivreView() {
+  // Section pilotée par l'URL (?s=) : retour navigateur, partage de lien et
+  // rafraîchissement conservent l'écran courant.
+  const router = useRouter();
+  const params = useSearchParams();
+  const section = parseSection(params.get("s"));
+  const setSection = useCallback(
+    (s: Section) => {
+      router.replace(s === "briefing" ? "/suivre" : `/suivre?s=${s}`, { scroll: false });
+    },
+    [router],
+  );
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-3 bg-canvas p-3 lg:h-[calc(100dvh-3.5rem-var(--bottom-nav))] lg:flex-row lg:overflow-hidden">
-      {/* Rail catégories : barre horizontale scrollable sur mobile, colonne sur desktop. */}
+      {/* Rail sections : barre horizontale scrollable sur mobile, colonne sur desktop. */}
       <nav className="flex shrink-0 gap-1 overflow-x-auto rounded-lg bg-surface p-2 shadow-card [-ms-overflow-style:none] [scrollbar-width:none] lg:w-[180px] lg:flex-col lg:overflow-visible lg:p-3 [&::-webkit-scrollbar]:hidden">
         <p className="hidden px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground lg:block">
           Suivi
         </p>
-        {CATEGORIES.map((c) => {
+        {SECTIONS.map((c) => {
           const Icon = c.icon;
-          const active = category === c.id;
+          const active = section === c.id;
           return (
             <button
               key={c.id}
               type="button"
-              onClick={() => setCategory(c.id)}
+              onClick={() => setSection(c.id)}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors lg:gap-2.5",
@@ -115,16 +139,135 @@ export function SuivreView({ initialCategory = "actualite" }: { initialCategory?
             </button>
           );
         })}
+        <div className="hidden border-t border-border/60 lg:my-2 lg:block" />
+        {SECTION_LINKS.map((l) => {
+          const Icon = l.icon;
+          return (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-foreground/70 transition-colors hover:bg-surface-soft hover:text-foreground lg:gap-2.5"
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {l.label}
+            </Link>
+          );
+        })}
       </nav>
 
-      {/* Contenu par catégorie */}
-      {category === "actualite" && <ActualiteView />}
-      {category === "presse" && <PresseLocaleView />}
-      {category === "sondages" && <SondagesView />}
-      {category === "barometre" && <BarometreView />}
-      {category === "votes" && <VotesView />}
-      {category === "lois" && <LoisView />}
-      {category === "agenda" && <AgendaView />}
+      {/* Contenu par section */}
+      {section === "briefing" && <BriefingView onOpen={setSection} />}
+      {section === "medias" && <MediasView />}
+      {section === "opinion" && <OpinionView />}
+      {section === "parlement" && <ParlementView />}
+      {section === "echeances" && <SectionBody><AgendaView /></SectionBody>}
+    </div>
+  );
+}
+
+// ─── Sections groupées (sous-onglets) ─────────────────────────────────────────
+
+function SubTabs<T extends string>({
+  tabs, value, onChange,
+}: {
+  tabs: { id: T; label: string }[]; value: T; onChange: (t: T) => void;
+}) {
+  return (
+    <div className="flex shrink-0 gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => onChange(t.id)}
+          aria-current={value === t.id ? "page" : undefined}
+          className={cn(
+            "shrink-0 whitespace-nowrap rounded-pill px-3.5 py-1.5 text-[12.5px] font-medium transition-colors",
+            value === t.id
+              ? "bg-primary text-primary-foreground"
+              : "bg-surface text-foreground/70 shadow-card hover:text-foreground",
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Conteneur des colonnes d'une section (reprend le layout du conteneur racine). */
+function SectionBody({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:overflow-hidden">
+      {children}
+    </div>
+  );
+}
+
+function MediasView() {
+  const campaign = useCampaign();
+  const territory = useMemo(() => territoryFrom(campaign?.target), [campaign?.target]);
+  const [tab, setTab] = useState<"territoire" | "national" | null>(null);
+  // Par défaut : la presse du territoire quand un QG est configuré.
+  const active = tab ?? (territory?.newsQuery ? "territoire" : "national");
+
+  const suggestions = useMemo(() => {
+    if (!territory) return [];
+    return [...new Set([territory.communeName, territory.deptName, territory.newsQuery].filter(
+      (s): s is string => !!s,
+    ))];
+  }, [territory]);
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <SubTabs
+        tabs={[
+          { id: "territoire" as const, label: territory ? `Mon territoire · ${territory.newsQuery}` : "Presse locale" },
+          { id: "national" as const, label: "Actualité nationale" },
+        ]}
+        value={active}
+        onChange={setTab}
+      />
+      <SectionBody>
+        {active === "territoire" ? (
+          <PresseLocaleView key={territory?.newsQuery ?? "none"} initialQuery={territory?.newsQuery ?? undefined} suggestions={suggestions} />
+        ) : (
+          <ActualiteView />
+        )}
+      </SectionBody>
+    </div>
+  );
+}
+
+function OpinionView() {
+  const [tab, setTab] = useState<"sondages" | "barometre">("sondages");
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <SubTabs
+        tabs={[
+          { id: "sondages" as const, label: "Sondages (CNCS)" },
+          { id: "barometre" as const, label: "Baromètre 2027" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      <SectionBody>{tab === "sondages" ? <SondagesView /> : <BarometreView />}</SectionBody>
+    </div>
+  );
+}
+
+function ParlementView() {
+  const [tab, setTab] = useState<"votes" | "lois">("votes");
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <SubTabs
+        tabs={[
+          { id: "votes" as const, label: "Votes AN" },
+          { id: "lois" as const, label: "Lois & PPL" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      <SectionBody>{tab === "votes" ? <VotesView /> : <LoisView />}</SectionBody>
     </div>
   );
 }
@@ -141,9 +284,10 @@ const fmtNewsDate = (d: string | null) => {
     : date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 };
 
-function PresseLocaleView() {
-  const [input, setInput] = useState("");
-  const [q, setQ] = useState("");
+function PresseLocaleView({ initialQuery, suggestions = [] }: { initialQuery?: string; suggestions?: string[] }) {
+  // Pré-câblé sur le territoire du QG : la recherche part dès l'arrivée.
+  const [input, setInput] = useState(initialQuery ?? "");
+  const [q, setQ] = useState(initialQuery ?? "");
 
   const { data, isLoading, isFetching, error } = useQuery({
     enabled: q.length >= 2,
@@ -194,9 +338,17 @@ function PresseLocaleView() {
       </form>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] text-muted-foreground">Exemples :</span>
-        {["Élections législatives", "Conseil municipal", "Mobilisation locale"].map((ex) => (
-          <button key={ex} type="button" onClick={() => quick(ex)} className="rounded-pill bg-foreground/[0.04] px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-foreground/[0.08]">
+        <span className="text-[11px] text-muted-foreground">{suggestions.length > 0 ? "Votre territoire :" : "Exemples :"}</span>
+        {(suggestions.length > 0 ? suggestions : ["Élections législatives", "Conseil municipal", "Mobilisation locale"]).map((ex) => (
+          <button
+            key={ex}
+            type="button"
+            onClick={() => quick(ex)}
+            className={cn(
+              "rounded-pill px-2.5 py-1 text-[11.5px] transition-colors",
+              q === ex ? "bg-warm/15 font-medium text-warm" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
+            )}
+          >
             {ex}
           </button>
         ))}
@@ -590,7 +742,7 @@ function SondagesOverview({ items, generatedAt }: { items: Notice[]; generatedAt
       )}
 
       <p className="mt-auto text-[10.5px] text-muted-foreground/70">
-        Source · Commission des sondages{generatedAt ? ` — généré ${relativeFr(generatedAt)}` : ""}. Sélectionne une notice pour le détail.
+        Source · Commission des sondages{generatedAt ? ` — généré ${relativeFr(generatedAt)}` : ""}. Sélectionnez une notice pour le détail.
       </p>
     </div>
   );
@@ -1233,10 +1385,6 @@ function FeedItem({
           active ? "bg-surface-soft/70" : "hover:bg-surface-soft/40",
         )}
       >
-        {/* Accent latéral quand actif */}
-        {active && (
-          <span className="absolute inset-y-0 left-0 w-[3px] rounded-r" style={{ background: iconColor }} />
-        )}
         <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md" style={{ background: `${iconColor}1a`, color: iconColor }}>
           <Icon className="h-3.5 w-3.5" />
         </span>
@@ -1268,7 +1416,7 @@ function EmptyRow() {
 }
 
 function DetailEmpty({ label }: { label: string }) {
-  return <div className="grid h-full place-items-center text-[12px] text-muted-foreground">Sélectionne {label} pour ouvrir le détail.</div>;
+  return <div className="grid h-full place-items-center text-[12px] text-muted-foreground">Sélectionnez {label} pour ouvrir le détail.</div>;
 }
 
 function Breadcrumb({ parts }: { parts: string[] }) {

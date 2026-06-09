@@ -1,5 +1,6 @@
-import { SuivreView } from "@/app/suivre/suivre-view";
+import { redirect } from "next/navigation";
 
+// Route héritée : l'agenda vit dans la section « Échéances » de Suivre.
 export default function AgendaPage() {
-  return <SuivreView initialCategory="agenda" />;
+  redirect("/suivre?s=echeances");
 }

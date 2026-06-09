@@ -1,5 +1,6 @@
-import { SuivreView } from "@/app/suivre/suivre-view";
+import { redirect } from "next/navigation";
 
+// Route héritée : les sondages vivent dans la section « Opinion » de Suivre.
 export default function SondagesPage() {
-  return <SuivreView initialCategory="sondages" />;
+  redirect("/suivre?s=opinion");
 }
