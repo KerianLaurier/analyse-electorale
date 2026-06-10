@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 import { ErrorState } from "@/components/error-state";
 
 /**
@@ -16,7 +17,8 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Trace côté client pour le diagnostic (visible dans la console navigateur).
+    // Remontée Sentry (no-op sans DSN) + trace console pour le diagnostic local.
+    Sentry.captureException(error);
     console.error(error);
   }, [error]);
 

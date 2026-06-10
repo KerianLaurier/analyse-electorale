@@ -1,6 +1,25 @@
 // Route handler : presse locale via Google Actualités (RSS), récupéré côté
 // serveur pour contourner le CORS. Pas de clé requise.
 
+// Limite de débit best-effort (mémoire d'instance) : protège le quota Google
+// News et empêche d'utiliser cette route comme relais ouvert. 60 req / 10 min
+// / IP — large pour un briefing (≤ 9 requêtes, mises en cache 10 min).
+const RATE_LIMIT = 60;
+const RATE_WINDOW_MS = 10 * 60_000;
+const hits = new Map<string, { n: number; reset: number }>();
+
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const h = hits.get(ip);
+  if (!h || h.reset < now) {
+    if (hits.size > 5000) hits.clear(); // borne mémoire
+    hits.set(ip, { n: 1, reset: now + RATE_WINDOW_MS });
+    return false;
+  }
+  h.n += 1;
+  return h.n > RATE_LIMIT;
+}
+
 export type NewsArticle = {
   title: string;
   url: string;
@@ -57,6 +76,14 @@ function parseRss(xml: string, limit: number): NewsArticle[] {
 }
 
 export async function GET(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonyme";
+  if (rateLimited(ip)) {
+    return Response.json(
+      { articles: [] as NewsArticle[], error: "Trop de requêtes — réessayez dans quelques minutes." },
+      { status: 429 },
+    );
+  }
+
   const q = (new URL(request.url).searchParams.get("q") ?? "").trim().slice(0, 120);
   if (q.length < 2) {
     return Response.json({ articles: [] as NewsArticle[] });
