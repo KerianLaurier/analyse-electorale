@@ -143,6 +143,22 @@ Itération indépendante : modifier la vitrine n'affecte pas le runtime de l'app
 (code splitté), et les Deploy Previews Netlify (par branche/PR) permettent de
 prévisualiser sans risque.
 
+## Observabilité & tests
+
+- **Sentry** (erreurs client, serveur, edge) : définir `NEXT_PUBLIC_SENTRY_DSN`
+  dans l'environnement Netlify pour activer la remontée — sans la variable,
+  tout est no-op (dev, previews). Optionnel : `SENTRY_AUTH_TOKEN` au build pour
+  uploader les source maps (init runtime : `src/instrumentation*.ts`).
+- **Tests unitaires** : `npm test` (Vitest, logique pure de `src/lib`).
+- **Tests E2E** : `npm run test:e2e` (Playwright). La suite publique (landing,
+  gating, erreurs d'auth en français) tourne sans configuration ; la suite
+  authentifiée (Explorer, Briefing, QG) nécessite `E2E_EMAIL` / `E2E_PASSWORD`
+  (compte de test avec abonnement) + les `NEXT_PUBLIC_SUPABASE_*` réelles.
+- **CI** (`.github/workflows/ci.yml`) : lint + types + Vitest + Playwright sur
+  chaque PR.
+- **Migrations Supabase** : versionnées dans `supabase/migrations/` —
+  appliquées manuellement (voir l'en-tête de chaque fichier).
+
 ## Conformité
 
 - RGPD : pas de données personnelles d'électeurs (uniquement agrégats publics).

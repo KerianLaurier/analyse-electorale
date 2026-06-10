@@ -47,6 +47,10 @@ next-env.d.ts
 # scripts/copy-duckdb.mjs (lancé automatiquement avant dev/build).
 /public/duckdb/
 
+# Playwright (artefacts de tests E2E)
+/test-results/
+/playwright-report/
+
 # Les données servies (public/tiles, public/electoral, public/insee,
 # public/sondages/notices.json, public/search-index.json) SONT commitées
 # pour que le déploiement fonctionne sans relancer le pipeline lourd
