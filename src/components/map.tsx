@@ -10,6 +10,7 @@ import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { type Maille, MAILLE_ORDER, TILES, communeTileIds, communeCityCode } from "@/lib/map-config";
+import { dataUrl } from "@/lib/data-url";
 
 const FRANCE_CENTER: [number, number] = [2.4, 46.6];
 const FRANCE_ZOOM = 5;
@@ -34,7 +35,7 @@ function registerPmtilesProtocol() {
   protocolRegistered = true;
 }
 
-function buildStyle(origin: string): StyleSpecification {
+function buildStyle(): StyleSpecification {
   const sources: StyleSpecification["sources"] = {
     // Fond raster CARTO Positron — basemap sobre, peu d'infos, labels FR discrets.
     "basemap": {
@@ -53,8 +54,9 @@ function buildStyle(origin: string): StyleSpecification {
 
   for (const maille of MAILLE_ORDER) {
     const cfg = TILES[maille];
-    // `path` peut être relatif (servi par Next) ou absolu (PMTiles distant officiel).
-    const tilesUrl = cfg.path.startsWith("http") ? cfg.path : `${origin}${cfg.path}`;
+    // `path` : URL externe absolue (PMTiles officiel) → telle quelle ; sinon
+    // résolue via `dataUrl` (object store si configuré, sinon origine courante).
+    const tilesUrl = cfg.path.startsWith("http") ? cfg.path : dataUrl(cfg.path);
     sources[maille] = {
       type: "vector",
       url: `pmtiles://${tilesUrl}`,
@@ -191,11 +193,9 @@ export function Map({
     if (!containerRef.current) return;
     registerPmtilesProtocol();
 
-    const origin = typeof window === "undefined" ? "" : window.location.origin;
-
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: buildStyle(origin),
+      style: buildStyle(),
       center: FRANCE_CENTER,
       zoom: FRANCE_ZOOM,
       attributionControl: { compact: true },

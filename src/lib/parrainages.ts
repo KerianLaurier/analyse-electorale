@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 
 export const SEUIL = 500; // parrainages requis pour se présenter
 
@@ -102,7 +103,7 @@ export function useParrainages() {
     staleTime: 30 * 60 * 1000,
     queryFn: async (): Promise<ParrainagesData> => {
       try {
-        const res = await fetch("/parrainages/2027.json");
+        const res = await fetch(dataUrl("/parrainages/2027.json"));
         if (res.ok) {
           const real = (await res.json()) as ParrainagesData;
           return { ...real, demo: false };

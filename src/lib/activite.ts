@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 
 export type ActiviteScrutin = {
   numero: string | null;
@@ -57,7 +58,7 @@ export function useDeputesActivite(enabled = true) {
     enabled,
     queryKey: ["deputes-activite"],
     queryFn: async (): Promise<ActivitePayload> => {
-      const res = await fetch("/an/deputes-activite.json");
+      const res = await fetch(dataUrl("/an/deputes-activite.json"));
       if (!res.ok) throw new Error("Activité parlementaire introuvable");
       return (await res.json()) as ActivitePayload;
     },

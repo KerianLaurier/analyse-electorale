@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 
 // ─── Votes AN ───────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ export function useVotesAN() {
   return useQuery({
     queryKey: ["suivi", "votes-an"],
     queryFn: async (): Promise<VotesANData> => {
-      const res = await fetch("/suivi/votes-an.json");
+      const res = await fetch(dataUrl("/suivi/votes-an.json"));
       if (!res.ok) throw new Error("Votes AN introuvables");
       return (await res.json()) as VotesANData;
     },
@@ -79,7 +80,7 @@ export function useLois() {
   return useQuery({
     queryKey: ["suivi", "lois"],
     queryFn: async (): Promise<LoisData> => {
-      const res = await fetch("/suivi/lois.json");
+      const res = await fetch(dataUrl("/suivi/lois.json"));
       if (!res.ok) throw new Error("Lois introuvables");
       return (await res.json()) as LoisData;
     },
@@ -109,7 +110,7 @@ export function useAgenda() {
   return useQuery({
     queryKey: ["suivi", "agenda"],
     queryFn: async (): Promise<AgendaData> => {
-      const res = await fetch("/suivi/agenda.json");
+      const res = await fetch(dataUrl("/suivi/agenda.json"));
       if (!res.ok) throw new Error("Agenda introuvable");
       return (await res.json()) as AgendaData;
     },
@@ -138,7 +139,7 @@ export function useVeille() {
   return useQuery({
     queryKey: ["suivi", "veille"],
     queryFn: async (): Promise<VeilleData> => {
-      const res = await fetch("/suivi/veille.json");
+      const res = await fetch(dataUrl("/suivi/veille.json"));
       if (!res.ok) throw new Error("Veille introuvable");
       return (await res.json()) as VeilleData;
     },

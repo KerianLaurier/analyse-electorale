@@ -1,6 +1,7 @@
 "use client";
 
 import * as duckdb from "@duckdb/duckdb-wasm";
+import { dataUrl } from "@/lib/data-url";
 
 let dbPromise: Promise<duckdb.AsyncDuckDB> | null = null;
 
@@ -60,16 +61,15 @@ export async function query<T extends Record<string, unknown> = Record<string, u
 }
 
 /**
- * Construit l'URL absolue d'un Parquet servi depuis /public/electoral.
- * DuckDB-WASM utilise httpfs pour streamer en HTTP range request.
+ * Construit l'URL d'un Parquet électoral (object store si configuré, sinon
+ * /public/electoral). DuckDB-WASM utilise httpfs pour streamer en HTTP range
+ * request — d'où l'URL absolue côté navigateur (cf. `dataUrl`).
  */
 export function parquetUrl(filename: string): string {
-  if (typeof window === "undefined") return `/electoral/${filename}`;
-  return `${window.location.origin}/electoral/${filename}`;
+  return dataUrl(`/electoral/${filename}`);
 }
 
-/** Variante pour les Parquet sociologie (servis depuis /public/insee). */
+/** Variante pour les Parquet sociologie (servis depuis /insee). */
 export function inseeUrl(filename: string): string {
-  if (typeof window === "undefined") return `/insee/${filename}`;
-  return `${window.location.origin}/insee/${filename}`;
+  return dataUrl(`/insee/${filename}`);
 }

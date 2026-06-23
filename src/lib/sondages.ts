@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 
 export type ScrutinCode =
   | "presidentielle"
@@ -57,7 +58,7 @@ export function useNotices() {
   return useQuery({
     queryKey: ["cncs-notices"],
     queryFn: async (): Promise<NoticesData> => {
-      const res = await fetch("/sondages/notices.json");
+      const res = await fetch(dataUrl("/sondages/notices.json"));
       if (!res.ok) throw new Error("Notices CNCS introuvables");
       return (await res.json()) as NoticesData;
     },
