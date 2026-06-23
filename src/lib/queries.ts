@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 import { inseeUrl, parquetUrl, query } from "@/lib/duckdb";
 import type { Maille } from "@/lib/map-config";
 import { SCRUTIN_META, isElection, type Scrutin } from "@/lib/url-state";
@@ -225,7 +226,7 @@ export async function fetchTerritoryBureaux(target: {
   if (target.type === "commune") {
     filter = `split_part(code, '_', 1) = '${sanitizeCode(target.id)}'`;
   } else if (target.type === "circo") {
-    const res = await fetch("/electoral/commune_circo.json");
+    const res = await fetch(dataUrl("/electoral/commune_circo.json"));
     if (!res.ok) return { bureaux: [], splitCommunes: 0 };
     const map = (await res.json()) as Record<string, string[]>;
     const communes: string[] = [];
@@ -298,7 +299,7 @@ export type TargetBureau = {
 
 /** Liste des communes appartenant à une SEULE circo (attribuables sans ambiguïté). */
 async function communesOfCirco(circo: string): Promise<string[]> {
-  const res = await fetch("/electoral/commune_circo.json");
+  const res = await fetch(dataUrl("/electoral/commune_circo.json"));
   if (!res.ok) return [];
   const map = (await res.json()) as Record<string, string[]>;
   const communes: string[] = [];
@@ -634,7 +635,7 @@ export function useCommuneCircoMap(enabled = true) {
     enabled,
     queryKey: ["commune-circo-map"],
     queryFn: async (): Promise<Record<string, string[]>> => {
-      const res = await fetch("/electoral/commune_circo.json");
+      const res = await fetch(dataUrl("/electoral/commune_circo.json"));
       if (!res.ok) throw new Error("Table commune↔circo introuvable");
       return (await res.json()) as Record<string, string[]>;
     },
@@ -1020,7 +1021,7 @@ export function usePotentielMeta() {
   return useQuery({
     queryKey: ["potentiel-meta"],
     queryFn: async (): Promise<PotentielMeta> => {
-      const res = await fetch("/electoral/potentiel_meta.json");
+      const res = await fetch(dataUrl("/electoral/potentiel_meta.json"));
       if (!res.ok) throw new Error("meta potentiel introuvable");
       const j = (await res.json()) as { blocs: PotentielMeta };
       return j.blocs;

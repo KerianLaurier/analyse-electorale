@@ -58,3 +58,26 @@ jobs:
           else
             echo "= aucun changement"
           fi
+
+      # Si la donnée est servie depuis l'object store (cf. docs/object-store.md),
+      # on y pousse aussi les flux rafraîchis. Sans le secret, l'étape est ignorée
+      # (tant que le storage n'est pas activé, rien à faire).
+      - name: Setup Node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Push refreshed data to Supabase Storage
+        if: always()
+        env:
+          SUPABASE_URL: https://fdfghtrxczauvrbmdxlq.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ONLY: sondages,suivi
+        run: |
+          if [[ -z "$SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            echo "= SUPABASE_SERVICE_ROLE_KEY absent → upload storage ignoré"
+            exit 0
+          fi
+          npm ci
+          node scripts/pipeline/upload-storage.mjs

@@ -1,0 +1,33 @@
+name: Upload data → Supabase Storage
+
+# Pousse les données statiques (Parquet, PMTiles, JSON pré-calculés) de public/
+# vers le bucket Supabase Storage `data`, pour les servir hors du dépôt git.
+# Déclenchement manuel (un clic). Prérequis : secret SUPABASE_SERVICE_ROLE_KEY
+# (dashboard Supabase → Project Settings → API → service_role). cf. docs/object-store.md
+#
+# N'altère rien tant que NEXT_PUBLIC_DATA_URL n'est pas définie côté déploiement.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Upload to Supabase Storage
+        env:
+          SUPABASE_URL: https://fdfghtrxczauvrbmdxlq.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/pipeline/upload-storage.mjs

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 
 export type SearchEntryType = "region" | "departement" | "circo" | "commune" | "depute";
 
@@ -35,8 +36,8 @@ export function useSearchIndex(enabled: boolean) {
     queryKey: ["search-index"],
     queryFn: async (): Promise<SearchEntry[]> => {
       const [territoiresRes, deputesRes] = await Promise.all([
-        fetch("/search-index.json"),
-        fetch("/an/deputes.json"),
+        fetch(dataUrl("/search-index.json")),
+        fetch(dataUrl("/an/deputes.json")),
       ]);
       if (!territoiresRes.ok) throw new Error("Search index introuvable");
       const territoires = (await territoiresRes.json()) as SearchEntry[];
