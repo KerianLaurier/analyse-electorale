@@ -86,10 +86,58 @@ function routeBySubdomain(request: NextRequest): NextResponse | null {
  * accès accordés — un refus (pas d'abonnement) est re-vérifié à chaque requête
  * pour que l'accès soit immédiat après souscription. Cache par isolat (perdu
  * au cold start, ce qui revient au comportement précédent).
+ *
+ * N'est plus utilisé que comme REPLI : si le Custom Access Token Hook est actif
+ * (cf. supabase/migrations/20260623_jwt_subscription_claims.sql), le gating est
+ * lu directement depuis les claims du JWT — zéro requête DB, valable sur tous
+ * les isolats. Le cache ne sert que pour les tokens antérieurs au hook.
  */
 type GateEntry = { isSuperAdmin: boolean; expires: number };
 const gateCache = new Map<string, GateEntry>();
 const GATE_TTL_MS = 5 * 60_000;
+
+type ProxyClient = Awaited<ReturnType<typeof updateSession>>["supabase"];
+
+/** Abonnement valide : actif, ou essai non expiré, ou super-admin. */
+function computeAccess(
+  status: string | null,
+  trialEndsAt: string | null,
+  isSuperAdmin: boolean,
+): boolean {
+  return (
+    isSuperAdmin ||
+    status === "active" ||
+    (status === "trial" && (!trialEndsAt || new Date(trialEndsAt) > new Date()))
+  );
+}
+
+/**
+ * Lit le statut d'abonnement depuis les claims `app_metadata` du JWT
+ * (`getClaims()` = vérification locale, pas de round-trip DB). Renvoie `null`
+ * si les claims ne sont pas présents (hook non activé, token antérieur) ou en
+ * cas d'erreur → le middleware retombe alors sur le cache + `profiles`.
+ */
+async function readSubscriptionClaims(supabase: ProxyClient): Promise<{
+  subscriptionStatus: string;
+  trialEndsAt: string | null;
+  isSuperAdmin: boolean;
+} | null> {
+  try {
+    const { data } = await supabase.auth.getClaims();
+    const claims = data?.claims as Record<string, unknown> | undefined;
+    const meta = claims?.app_metadata as Record<string, unknown> | undefined;
+    if (meta && typeof meta.subscription_status === "string") {
+      return {
+        subscriptionStatus: meta.subscription_status,
+        trialEndsAt: typeof meta.trial_ends_at === "string" ? meta.trial_ends_at : null,
+        isSuperAdmin: meta.is_super_admin === true,
+      };
+    }
+  } catch {
+    // claims indisponibles → repli
+  }
+  return null;
+}
 
 /**
  * Gating d'accès : seules les personnes connectées disposant d'un abonnement
@@ -113,25 +161,38 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const cached = gateCache.get(user.id);
-  if (cached && cached.expires > Date.now()) {
-    if ((pathname === "/admin" || pathname.startsWith("/admin/")) && !cached.isSuperAdmin) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/explorer";
-      url.search = "";
-      return NextResponse.redirect(url);
+  // Fast path : claims JWT (zéro requête DB, valable sur tous les isolats).
+  let isSuperAdmin: boolean;
+  let hasAccess: boolean;
+
+  const claims = await readSubscriptionClaims(supabase);
+  if (claims) {
+    isSuperAdmin = claims.isSuperAdmin;
+    hasAccess = computeAccess(claims.subscriptionStatus, claims.trialEndsAt, isSuperAdmin);
+  } else {
+    // Repli (hook non activé / token antérieur) : cache mémoire puis `profiles`.
+    const cached = gateCache.get(user.id);
+    if (cached && cached.expires > Date.now()) {
+      isSuperAdmin = cached.isSuperAdmin;
+      hasAccess = true; // seuls les accès accordés sont mis en cache
+    } else {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("subscription_status, trial_ends_at, is_super_admin")
+        .eq("id", user.id)
+        .single();
+      isSuperAdmin = profile?.is_super_admin === true;
+      hasAccess = computeAccess(
+        (profile?.subscription_status as string | null) ?? null,
+        (profile?.trial_ends_at as string | null) ?? null,
+        isSuperAdmin,
+      );
+      if (hasAccess) {
+        if (gateCache.size > 1000) gateCache.clear(); // borne mémoire, reconstruction lazy
+        gateCache.set(user.id, { isSuperAdmin, expires: Date.now() + GATE_TTL_MS });
+      }
     }
-    return response;
   }
-
-  // Connecté → profil (abonnement + statut super-admin).
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("subscription_status, trial_ends_at, is_super_admin")
-    .eq("id", user.id)
-    .single();
-
-  const isSuperAdmin = profile?.is_super_admin === true;
 
   // Back-office : réservé aux super-admins.
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
@@ -142,19 +203,6 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     return response;
-  }
-
-  // Le super-admin a toujours accès ; sinon abonnement actif ou essai en cours.
-  const hasAccess =
-    isSuperAdmin ||
-    (!!profile &&
-      (profile.subscription_status === "active" ||
-        (profile.subscription_status === "trial" &&
-          (!profile.trial_ends_at || new Date(profile.trial_ends_at as string) > new Date()))));
-
-  if (hasAccess) {
-    if (gateCache.size > 1000) gateCache.clear(); // borne mémoire, reconstruction lazy
-    gateCache.set(user.id, { isSuperAdmin, expires: Date.now() + GATE_TTL_MS });
   }
 
   if (!hasAccess && pathname !== "/auth/abonnement") {
