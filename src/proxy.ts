@@ -79,6 +79,53 @@ function routeBySubdomain(request: NextRequest): NextResponse | null {
   return NextResponse.next();
 }
 
+type Access = {
+  subscriptionStatus: string | null;
+  trialEndsAt: string | null;
+  isSuperAdmin: boolean;
+};
+
+type ProxyClient = Awaited<ReturnType<typeof updateSession>>["supabase"];
+
+/**
+ * Droits d'accès de l'utilisateur, SANS round-trip DB quand c'est possible.
+ *
+ * Chemin rapide : claims `app_metadata` du JWT (injectés par le Custom Access
+ * Token Hook — cf. supabase/migrations/20260623_jwt_subscription_claims.sql),
+ * lus via `getClaims()` (vérification locale de signature).
+ *
+ * Repli : si le hook n'est pas (encore) activé, si le token est antérieur, ou
+ * si `getClaims` échoue → requête `profiles` (comportement historique). Le repli
+ * rend ce code sûr à déployer AVANT l'activation du hook.
+ */
+async function resolveAccess(supabase: ProxyClient, userId: string): Promise<Access> {
+  try {
+    const { data } = await supabase.auth.getClaims();
+    const claims = data?.claims as Record<string, unknown> | undefined;
+    const meta = claims?.app_metadata as Record<string, unknown> | undefined;
+    if (meta && typeof meta.subscription_status === "string") {
+      return {
+        subscriptionStatus: meta.subscription_status,
+        trialEndsAt: typeof meta.trial_ends_at === "string" ? meta.trial_ends_at : null,
+        isSuperAdmin: meta.is_super_admin === true,
+      };
+    }
+  } catch {
+    // getClaims indisponible / token sans claims → on tombe en repli.
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("subscription_status, trial_ends_at, is_super_admin")
+    .eq("id", userId)
+    .single();
+  return {
+    subscriptionStatus: (profile?.subscription_status as string | null) ?? null,
+    trialEndsAt: (profile?.trial_ends_at as string | null) ?? null,
+    isSuperAdmin: profile?.is_super_admin === true,
+  };
+}
+
 /**
  * Gating d'accès : seules les personnes connectées disposant d'un abonnement
  * valide (actif ou essai en cours) accèdent à l'application.
@@ -101,14 +148,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Connecté → profil (abonnement + statut super-admin).
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("subscription_status, trial_ends_at, is_super_admin")
-    .eq("id", user.id)
-    .single();
-
-  const isSuperAdmin = profile?.is_super_admin === true;
+  // Connecté → droits d'accès (abonnement + statut super-admin).
+  const access = await resolveAccess(supabase, user.id);
+  const isSuperAdmin = access.isSuperAdmin;
 
   // Back-office : réservé aux super-admins.
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
@@ -124,10 +166,9 @@ export async function proxy(request: NextRequest) {
   // Le super-admin a toujours accès ; sinon abonnement actif ou essai en cours.
   const hasAccess =
     isSuperAdmin ||
-    (!!profile &&
-      (profile.subscription_status === "active" ||
-        (profile.subscription_status === "trial" &&
-          (!profile.trial_ends_at || new Date(profile.trial_ends_at as string) > new Date()))));
+    access.subscriptionStatus === "active" ||
+    (access.subscriptionStatus === "trial" &&
+      (!access.trialEndsAt || new Date(access.trialEndsAt) > new Date()));
 
   if (!hasAccess && pathname !== "/auth/abonnement") {
     const url = request.nextUrl.clone();
