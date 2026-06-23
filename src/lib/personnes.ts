@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 import { normalize } from "@/lib/search";
 
 export type Personne = {
@@ -17,7 +18,7 @@ export function usePersonnesIndex(enabled = true) {
     enabled,
     queryKey: ["personnes-2024"],
     queryFn: async (): Promise<PersonnesIndex> => {
-      const res = await fetch("/electoral/personnes-2024.json");
+      const res = await fetch(dataUrl("/electoral/personnes-2024.json"));
       if (!res.ok) throw new Error("Index personnes introuvable");
       return (await res.json()) as PersonnesIndex;
     },

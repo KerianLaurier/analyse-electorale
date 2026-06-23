@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 
 export type Depute = {
   circo: string;
@@ -30,7 +31,7 @@ export function useDeputes(enabled = true) {
     enabled,
     queryKey: ["deputes-an"],
     queryFn: async (): Promise<Map<string, Depute>> => {
-      const res = await fetch("/an/deputes.json");
+      const res = await fetch(dataUrl("/an/deputes.json"));
       if (!res.ok) throw new Error("Référentiel députés introuvable");
       const payload = (await res.json()) as DeputesPayload;
       return new Map(payload.deputes.map((d) => [d.circo, d]));

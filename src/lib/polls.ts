@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { dataUrl } from "@/lib/data-url";
 
 export type Poll = {
   sondeur: string;
@@ -23,7 +24,7 @@ export function usePolls2027() {
   return useQuery({
     queryKey: ["polls-2027"],
     queryFn: async (): Promise<PollsData> => {
-      const res = await fetch("/sondages/polls-2027.json");
+      const res = await fetch(dataUrl("/sondages/polls-2027.json"));
       if (!res.ok) throw new Error("Sondages 2027 introuvables");
       return (await res.json()) as PollsData;
     },
