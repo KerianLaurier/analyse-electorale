@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
+import { env } from "@/lib/env";
 
 // Routes publiques (pas de compte requis) : landing + écrans d'authentification.
 // /auth/team (réglages in-app) reste protégé.
@@ -49,7 +50,7 @@ function isAppPath(pathname: string): boolean {
  * Renvoie une réponse si la requête est gérée ici, sinon `null` (on poursuit).
  */
 function routeBySubdomain(request: NextRequest): NextResponse | null {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const appUrl = env.APP_URL;
   if (!appUrl) return null;
 
   let appHost: string;
