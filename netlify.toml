@@ -11,6 +11,12 @@
 #   2. DNS : CNAME `app` → la cible Netlify du site.
 #   3. Vérifier que les variables Supabase sont bien définies (build + runtime).
 
+# Données statiques (Parquet, PMTiles, JSON) servies depuis Supabase Storage,
+# pour les sortir du dépôt git (cf. docs/object-store.md). Tous contextes (prod +
+# Deploy Previews) → cohérent une fois les fichiers retirés de /public.
+[build.environment]
+  NEXT_PUBLIC_DATA_URL = "https://fdfghtrxczauvrbmdxlq.supabase.co/storage/v1/object/public/data"
+
 [context.production.environment]
   NEXT_PUBLIC_APP_URL = "https://app.mouvancia.fr"
 
