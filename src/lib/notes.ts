@@ -1,13 +1,17 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { getQueryClient } from "@/providers/query-provider";
 
 /**
  * Notes de terrain — persistées côté serveur (table `notes`). Personnelles
  * ou partagées avec l'équipe (visibles par tous les membres via RLS, éditables
  * par leur auteur).
+ *
+ * Adossé à TanStack Query (cf. migration des stores, pilote `pins`). API publique
+ * inchangée ; mutations optimistes via le cache + invalidation sur erreur.
  */
 
 export type NoteContext = { type: string; id: string; label: string; href: string };
@@ -39,19 +43,16 @@ type Row = {
   updated_at: string;
 };
 
-let myUserId: string | null = null;
-let myTeamId: string | null = null;
-let notes: Note[] = [];
-let loadStarted = false;
-let loaded = false;
-const listeners = new Set<() => void>();
+const NOTES_KEY = ["notes"] as const;
 const EMPTY: Note[] = [];
 
-function emit() {
-  listeners.forEach((l) => l());
-}
+const notesQuery = {
+  queryKey: NOTES_KEY,
+  queryFn: fetchNotes,
+  staleTime: 5 * 60 * 1000,
+};
 
-function mapRow(r: Row): Note {
+function mapRow(r: Row, myUserId: string | null): Note {
   return {
     id: r.id,
     authorId: r.user_id,
@@ -73,34 +74,28 @@ function mapRow(r: Row): Note {
   };
 }
 
-async function load() {
-  const { userId, teamId } = await getIdentity();
-  myUserId = userId;
-  if (!userId) {
-    myTeamId = null;
-    notes = [];
-    emit();
-    return;
-  }
-  myTeamId = teamId;
+async function fetchNotes(): Promise<Note[]> {
+  const { userId } = await getIdentity();
+  if (!userId) return [];
   const supabase = createClient();
   const { data } = await supabase
     .from("notes")
     .select("*")
     .order("updated_at", { ascending: false });
-  notes = (data ?? []).map((r) => mapRow(r as Row));
-  emit();
+  return (data ?? []).map((r) => mapRow(r as Row, userId));
 }
 
-function ensureLoaded() {
-  if (loadStarted) return;
-  loadStarted = true;
-  void load().finally(() => { loaded = true; emit(); });
-  onIdentityChange(() => void load());
+let identityWired = false;
+function ensureIdentityWired() {
+  if (identityWired || typeof window === "undefined") return;
+  identityWired = true;
+  onIdentityChange(() => {
+    void getQueryClient().invalidateQueries({ queryKey: NOTES_KEY });
+  });
 }
 
 export async function reloadNotes(): Promise<void> {
-  await load();
+  await getQueryClient().refetchQueries({ queryKey: NOTES_KEY, type: "all" });
 }
 
 export type NewNote = {
@@ -111,11 +106,10 @@ export type NewNote = {
 };
 
 export async function addNote(input: NewNote): Promise<void> {
-  const { userId } = await getIdentity();
+  const { userId, teamId } = await getIdentity();
   if (!userId) return;
-  myUserId = userId;
   const supabase = createClient();
-  const team_id = input.shared && myTeamId ? myTeamId : null;
+  const team_id = input.shared && teamId ? teamId : null;
   const { data } = await supabase
     .from("notes")
     .insert({
@@ -131,57 +125,63 @@ export async function addNote(input: NewNote): Promise<void> {
     .select("*")
     .single();
   if (data) {
-    notes = [mapRow(data as Row), ...notes];
-    emit();
+    getQueryClient().setQueryData<Note[]>(NOTES_KEY, (old) => [
+      mapRow(data as Row, userId),
+      ...(old ?? []),
+    ]);
   }
 }
 
 export type NotePatch = { title?: string | null; body?: string; shared?: boolean };
 
 export async function updateNote(id: string, patch: NotePatch): Promise<void> {
-  const idx = notes.findIndex((n) => n.id === id);
+  const qc = getQueryClient();
+  const { teamId } = await getIdentity();
+  const current = qc.getQueryData<Note[]>(NOTES_KEY) ?? [];
+  const idx = current.findIndex((n) => n.id === id);
   if (idx < 0) return;
-  const prev = notes[idx];
+  const prev = current[idx];
   const next: Note = { ...prev, updatedAt: Date.now() };
   if (patch.title !== undefined) next.title = patch.title;
   if (patch.body !== undefined) next.body = patch.body;
   if (patch.shared !== undefined) {
-    next.teamId = patch.shared && myTeamId ? myTeamId : null;
+    next.teamId = patch.shared && teamId ? teamId : null;
     next.shared = next.teamId != null;
   }
-  notes = [next, ...notes.slice(0, idx), ...notes.slice(idx + 1)];
-  emit();
+  // Tri par updated_at desc : la note éditée remonte en tête.
+  qc.setQueryData<Note[]>(NOTES_KEY, [
+    next,
+    ...current.slice(0, idx),
+    ...current.slice(idx + 1),
+  ]);
 
   const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.title !== undefined) dbPatch.title = patch.title;
   if (patch.body !== undefined) dbPatch.body = patch.body;
-  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && myTeamId ? myTeamId : null;
+  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && teamId ? teamId : null;
 
   const supabase = createClient();
   const { error } = await supabase.from("notes").update(dbPatch).eq("id", id);
-  if (error) await load();
+  if (error) void qc.invalidateQueries({ queryKey: NOTES_KEY });
 }
 
 export async function deleteNote(id: string): Promise<void> {
-  notes = notes.filter((n) => n.id !== id);
-  emit();
+  const qc = getQueryClient();
+  qc.setQueryData<Note[]>(NOTES_KEY, (old) => (old ?? []).filter((n) => n.id !== id));
   const supabase = createClient();
   await supabase.from("notes").delete().eq("id", id);
 }
 
-function subscribe(l: () => void): () => void {
-  listeners.add(l);
-  ensureLoaded();
-  return () => {
-    listeners.delete(l);
-  };
+function useNotesQuery() {
+  ensureIdentityWired();
+  return useQuery(notesQuery);
 }
 
 export function useNotes(): Note[] {
-  return useSyncExternalStore(subscribe, () => notes, () => EMPTY);
+  return useNotesQuery().data ?? EMPTY;
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => loaded, () => false);
+  return useNotesQuery().isSuccess;
 }

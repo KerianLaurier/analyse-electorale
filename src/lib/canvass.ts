@@ -1,14 +1,18 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { getQueryClient } from "@/providers/query-provider";
 
 /**
  * Comptes-rendus de porte-à-porte (table `canvass_reports`) — partagés avec
  * l'équipe (RLS). Chaque CR consigne, pour une action : portes frappées,
  * personnes rencontrées et la ventilation favorable / neutre / défavorable.
  * La synthèse en dérive un « sondage terrain » (déclaratif).
+ *
+ * Adossé à TanStack Query (cf. migration des stores, pilote `pins`). API publique
+ * inchangée ; mutations optimistes via le cache.
  */
 
 /** Canal de contact : porte-à-porte ou phoning. */
@@ -52,19 +56,16 @@ type Row = {
   created_at: string;
 };
 
-let myUserId: string | null = null;
-let myTeamId: string | null = null;
-let reports: CanvassReport[] = [];
-let loadStarted = false;
-let loaded = false;
-const listeners = new Set<() => void>();
+const REPORTS_KEY = ["canvass-reports"] as const;
 const EMPTY: CanvassReport[] = [];
 
-function emit() {
-  listeners.forEach((l) => l());
-}
+const reportsQuery = {
+  queryKey: REPORTS_KEY,
+  queryFn: fetchReports,
+  staleTime: 5 * 60 * 1000,
+};
 
-function mapRow(r: Row): CanvassReport {
+function mapRow(r: Row, myUserId: string | null): CanvassReport {
   return {
     id: r.id,
     authorId: r.user_id,
@@ -86,27 +87,21 @@ function mapRow(r: Row): CanvassReport {
   };
 }
 
-async function load() {
-  const { userId, teamId } = await getIdentity();
-  myUserId = userId;
-  if (!userId) {
-    myTeamId = null;
-    reports = [];
-    emit();
-    return;
-  }
-  myTeamId = teamId;
+async function fetchReports(): Promise<CanvassReport[]> {
+  const { userId } = await getIdentity();
+  if (!userId) return [];
   const supabase = createClient();
   const { data } = await supabase.from("canvass_reports").select("*").order("date", { ascending: false });
-  reports = (data ?? []).map((r) => mapRow(r as Row));
-  emit();
+  return (data ?? []).map((r) => mapRow(r as Row, userId));
 }
 
-function ensureLoaded() {
-  if (loadStarted) return;
-  loadStarted = true;
-  void load().finally(() => { loaded = true; emit(); });
-  onIdentityChange(() => void load());
+let identityWired = false;
+function ensureIdentityWired() {
+  if (identityWired || typeof window === "undefined") return;
+  identityWired = true;
+  onIdentityChange(() => {
+    void getQueryClient().invalidateQueries({ queryKey: REPORTS_KEY });
+  });
 }
 
 export type NewReport = {
@@ -125,11 +120,10 @@ export type NewReport = {
 };
 
 export async function addReport(input: NewReport): Promise<void> {
-  const { userId } = await getIdentity();
+  const { userId, teamId } = await getIdentity();
   if (!userId) return;
-  myUserId = userId;
   const supabase = createClient();
-  const team_id = input.shared && myTeamId ? myTeamId : null;
+  const team_id = input.shared && teamId ? teamId : null;
   const { data } = await supabase
     .from("canvass_reports")
     .insert({
@@ -150,28 +144,26 @@ export async function addReport(input: NewReport): Promise<void> {
     .select("*")
     .single();
   if (data) {
-    reports = [mapRow(data as Row), ...reports].sort((a, b) => (a.date < b.date ? 1 : -1));
-    emit();
+    getQueryClient().setQueryData<CanvassReport[]>(REPORTS_KEY, (old) =>
+      [mapRow(data as Row, userId), ...(old ?? [])].sort((a, b) => (a.date < b.date ? 1 : -1)),
+    );
   }
 }
 
 export async function deleteReport(id: string): Promise<void> {
-  reports = reports.filter((r) => r.id !== id);
-  emit();
+  const qc = getQueryClient();
+  qc.setQueryData<CanvassReport[]>(REPORTS_KEY, (old) => (old ?? []).filter((r) => r.id !== id));
   const supabase = createClient();
   await supabase.from("canvass_reports").delete().eq("id", id);
 }
 
-function subscribe(l: () => void): () => void {
-  listeners.add(l);
-  ensureLoaded();
-  return () => {
-    listeners.delete(l);
-  };
+function useReportsQuery() {
+  ensureIdentityWired();
+  return useQuery(reportsQuery);
 }
 
 export function useReports(): CanvassReport[] {
-  return useSyncExternalStore(subscribe, () => reports, () => EMPTY);
+  return useReportsQuery().data ?? EMPTY;
 }
 
 // ── Synthèse ────────────────────────────────────────────────────────────────
@@ -293,5 +285,5 @@ export function weeklyTrend(reports: CanvassReport[]): WeekPoint[] {
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => loaded, () => false);
+  return useReportsQuery().isSuccess;
 }

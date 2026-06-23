@@ -1,14 +1,19 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { getQueryClient } from "@/providers/query-provider";
 
 /**
  * Phoning d'équipe — modèle « listes d'appels + résultat par numéro ».
  * Le·la responsable crée des listes (phone_lists) et y importe des numéros
  * (phone_contacts) ; chaque appelant déroule la file et consigne le résultat
  * détaillé de chaque appel (statut, opinion, notes). Team-scoped via RLS.
+ *
+ * Adossé à TanStack Query (cf. migration des stores, pilote `pins`). Les deux
+ * collections (listes + numéros) partagent une même entrée de cache. API publique
+ * inchangée.
  */
 
 export type CallStatus = "todo" | "joint" | "repondeur" | "occupe" | "faux" | "refus" | "rappeler";
@@ -69,18 +74,18 @@ type ContactRow = {
   created_at: string;
 };
 
-let myUserId: string | null = null;
-let lists: PhoneList[] = [];
-let contacts: PhoneContact[] = [];
-let loadStarted = false;
-let loaded = false;
-const listeners = new Set<() => void>();
+type PhoningData = { lists: PhoneList[]; contacts: PhoneContact[] };
+
+const PHONING_KEY = ["phoning"] as const;
 const EMPTY_LISTS: PhoneList[] = [];
 const EMPTY_CONTACTS: PhoneContact[] = [];
+const EMPTY_DATA: PhoningData = { lists: EMPTY_LISTS, contacts: EMPTY_CONTACTS };
 
-function emit() {
-  listeners.forEach((l) => l());
-}
+const phoningQuery = {
+  queryKey: PHONING_KEY,
+  queryFn: fetchPhoning,
+  staleTime: 5 * 60 * 1000,
+};
 
 function mapList(r: ListRow): PhoneList {
   return { id: r.id, name: r.name, description: r.description, createdBy: r.created_by, createdAt: new Date(r.created_at).getTime() };
@@ -100,30 +105,31 @@ function mapContact(r: ContactRow): PhoneContact {
   };
 }
 
-async function load() {
+async function fetchPhoning(): Promise<PhoningData> {
   const { userId, teamId } = await getIdentity();
-  myUserId = userId;
-  if (!userId || !teamId) {
-    lists = [];
-    contacts = [];
-    emit();
-    return;
-  }
+  if (!userId || !teamId) return { lists: [], contacts: [] };
   const supabase = createClient();
   const [{ data: l }, { data: c }] = await Promise.all([
     supabase.from("phone_lists").select("*").order("created_at", { ascending: false }),
     supabase.from("phone_contacts").select("*").order("created_at", { ascending: true }),
   ]);
-  lists = ((l ?? []) as ListRow[]).map(mapList);
-  contacts = ((c ?? []) as ContactRow[]).map(mapContact);
-  emit();
+  return {
+    lists: ((l ?? []) as ListRow[]).map(mapList),
+    contacts: ((c ?? []) as ContactRow[]).map(mapContact),
+  };
 }
 
-function ensureLoaded() {
-  if (loadStarted) return;
-  loadStarted = true;
-  void load().finally(() => { loaded = true; emit(); });
-  onIdentityChange(() => void load());
+let identityWired = false;
+function ensureIdentityWired() {
+  if (identityWired || typeof window === "undefined") return;
+  identityWired = true;
+  onIdentityChange(() => {
+    void getQueryClient().invalidateQueries({ queryKey: PHONING_KEY });
+  });
+}
+
+function patchData(fn: (d: PhoningData) => PhoningData) {
+  getQueryClient().setQueryData<PhoningData>(PHONING_KEY, (old) => fn(old ?? EMPTY_DATA));
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────
@@ -138,15 +144,15 @@ export async function createList(name: string, description?: string | null): Pro
     .select("*")
     .single();
   if (!data) return null;
-  lists = [mapList(data as ListRow), ...lists];
-  emit();
+  patchData((d) => ({ ...d, lists: [mapList(data as ListRow), ...d.lists] }));
   return (data as ListRow).id;
 }
 
 export async function deleteList(id: string): Promise<void> {
-  lists = lists.filter((l) => l.id !== id);
-  contacts = contacts.filter((c) => c.listId !== id);
-  emit();
+  patchData((d) => ({
+    lists: d.lists.filter((l) => l.id !== id),
+    contacts: d.contacts.filter((c) => c.listId !== id),
+  }));
   const supabase = createClient();
   await supabase.from("phone_lists").delete().eq("id", id);
 }
@@ -167,8 +173,7 @@ export async function addNumbers(listId: string, items: NewNumber[]): Promise<nu
   const { data } = await supabase.from("phone_contacts").insert(rows).select("*");
   const mapped = ((data ?? []) as ContactRow[]).map(mapContact);
   if (mapped.length > 0) {
-    contacts = [...contacts, ...mapped];
-    emit();
+    patchData((d) => ({ ...d, contacts: [...d.contacts, ...mapped] }));
   }
   return mapped.length;
 }
@@ -177,9 +182,12 @@ export type CallPatch = { status?: CallStatus; opinion?: CallOpinion | null; not
 
 /** Consigne le résultat d'un appel sur un numéro. */
 export async function logCall(id: string, patch: CallPatch): Promise<void> {
-  const idx = contacts.findIndex((c) => c.id === id);
+  const qc = getQueryClient();
+  const { userId } = await getIdentity();
+  const current = qc.getQueryData<PhoningData>(PHONING_KEY) ?? EMPTY_DATA;
+  const idx = current.contacts.findIndex((c) => c.id === id);
   if (idx < 0) return;
-  const prev = contacts[idx];
+  const prev = current.contacts[idx];
   const next: PhoneContact = { ...prev };
   const dbPatch: Record<string, unknown> = {};
 
@@ -188,9 +196,9 @@ export async function logCall(id: string, patch: CallPatch): Promise<void> {
     dbPatch.status = patch.status;
     // Trace de l'appel dès qu'un résultat est consigné.
     if (isHandled(patch.status)) {
-      next.calledBy = myUserId;
+      next.calledBy = userId;
       next.calledAt = Date.now();
-      dbPatch.called_by = myUserId;
+      dbPatch.called_by = userId;
       dbPatch.called_at = new Date().toISOString();
     }
     // Un statut sans contact effectif n'a pas d'opinion.
@@ -208,36 +216,34 @@ export async function logCall(id: string, patch: CallPatch): Promise<void> {
     dbPatch.notes = patch.notes;
   }
 
-  contacts = [...contacts.slice(0, idx), next, ...contacts.slice(idx + 1)];
-  emit();
+  patchData((d) => ({
+    ...d,
+    contacts: [...d.contacts.slice(0, idx), next, ...d.contacts.slice(idx + 1)],
+  }));
 
   const supabase = createClient();
   const { error } = await supabase.from("phone_contacts").update(dbPatch).eq("id", id);
-  if (error) await load();
+  if (error) void qc.invalidateQueries({ queryKey: PHONING_KEY });
 }
 
 export async function deleteContact(id: string): Promise<void> {
-  contacts = contacts.filter((c) => c.id !== id);
-  emit();
+  patchData((d) => ({ ...d, contacts: d.contacts.filter((c) => c.id !== id) }));
   const supabase = createClient();
   await supabase.from("phone_contacts").delete().eq("id", id);
 }
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 
-function subscribe(l: () => void): () => void {
-  listeners.add(l);
-  ensureLoaded();
-  return () => {
-    listeners.delete(l);
-  };
+function usePhoningQuery() {
+  ensureIdentityWired();
+  return useQuery(phoningQuery);
 }
 
 export function usePhoneLists(): PhoneList[] {
-  return useSyncExternalStore(subscribe, () => lists, () => EMPTY_LISTS);
+  return usePhoningQuery().data?.lists ?? EMPTY_LISTS;
 }
 export function usePhoneContacts(): PhoneContact[] {
-  return useSyncExternalStore(subscribe, () => contacts, () => EMPTY_CONTACTS);
+  return usePhoningQuery().data?.contacts ?? EMPTY_CONTACTS;
 }
 
 // ── Synthèse ─────────────────────────────────────────────────────────────────
@@ -290,5 +296,5 @@ export function summarizePhoning(contacts: PhoneContact[]): PhoningSummary {
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => loaded, () => false);
+  return usePhoningQuery().isSuccess;
 }

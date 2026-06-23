@@ -1,13 +1,17 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { getQueryClient } from "@/providers/query-provider";
 
 /**
  * Carnet de contacts de campagne (bénévoles, soutiens, presse, élus…) —
  * persistés côté serveur (table `contacts`). Personnels ou partagés avec
  * l'équipe (visibles & modifiables par tous les membres via RLS).
+ *
+ * Adossé à TanStack Query (cf. migration des stores, pilote `pins`). API publique
+ * inchangée ; mutations optimistes via le cache + invalidation sur erreur.
  */
 
 export type ContactKind = "benevole" | "soutien" | "electeur" | "presse" | "elu" | "partenaire" | "autre";
@@ -68,19 +72,16 @@ type Row = {
   created_at: string;
 };
 
-let myUserId: string | null = null;
-let myTeamId: string | null = null;
-let contacts: Contact[] = [];
-let loadStarted = false;
-let loaded = false;
-const listeners = new Set<() => void>();
+const CONTACTS_KEY = ["contacts"] as const;
 const EMPTY: Contact[] = [];
 
-function emit() {
-  listeners.forEach((l) => l());
-}
+const contactsQuery = {
+  queryKey: CONTACTS_KEY,
+  queryFn: fetchContacts,
+  staleTime: 5 * 60 * 1000,
+};
 
-function mapRow(r: Row): Contact {
+function mapRow(r: Row, myUserId: string | null): Contact {
   return {
     id: r.id,
     authorId: r.user_id,
@@ -102,27 +103,21 @@ function mapRow(r: Row): Contact {
   };
 }
 
-async function load() {
-  const { userId, teamId } = await getIdentity();
-  myUserId = userId;
-  if (!userId) {
-    myTeamId = null;
-    contacts = [];
-    emit();
-    return;
-  }
-  myTeamId = teamId;
+async function fetchContacts(): Promise<Contact[]> {
+  const { userId } = await getIdentity();
+  if (!userId) return [];
   const supabase = createClient();
   const { data } = await supabase.from("contacts").select("*").order("created_at", { ascending: false });
-  contacts = (data ?? []).map((r) => mapRow(r as Row));
-  emit();
+  return (data ?? []).map((r) => mapRow(r as Row, userId));
 }
 
-function ensureLoaded() {
-  if (loadStarted) return;
-  loadStarted = true;
-  void load().finally(() => { loaded = true; emit(); });
-  onIdentityChange(() => void load());
+let identityWired = false;
+function ensureIdentityWired() {
+  if (identityWired || typeof window === "undefined") return;
+  identityWired = true;
+  onIdentityChange(() => {
+    void getQueryClient().invalidateQueries({ queryKey: CONTACTS_KEY });
+  });
 }
 
 export type NewContact = {
@@ -139,11 +134,10 @@ export type NewContact = {
 };
 
 export async function addContact(input: NewContact): Promise<void> {
-  const { userId } = await getIdentity();
+  const { userId, teamId } = await getIdentity();
   if (!userId) return;
-  myUserId = userId;
   const supabase = createClient();
-  const team_id = input.shared && myTeamId ? myTeamId : null;
+  const team_id = input.shared && teamId ? teamId : null;
   const { data } = await supabase
     .from("contacts")
     .insert({
@@ -165,8 +159,10 @@ export async function addContact(input: NewContact): Promise<void> {
     .select("*")
     .single();
   if (data) {
-    contacts = [mapRow(data as Row), ...contacts];
-    emit();
+    getQueryClient().setQueryData<Contact[]>(CONTACTS_KEY, (old) => [
+      mapRow(data as Row, userId),
+      ...(old ?? []),
+    ]);
   }
 }
 
@@ -183,9 +179,12 @@ export type ContactPatch = {
 };
 
 export async function updateContact(id: string, patch: ContactPatch): Promise<void> {
-  const idx = contacts.findIndex((c) => c.id === id);
+  const qc = getQueryClient();
+  const { teamId } = await getIdentity();
+  const current = qc.getQueryData<Contact[]>(CONTACTS_KEY) ?? [];
+  const idx = current.findIndex((c) => c.id === id);
   if (idx < 0) return;
-  const next: Contact = { ...contacts[idx] };
+  const next: Contact = { ...current[idx] };
   if (patch.name !== undefined) next.name = patch.name;
   if (patch.kind !== undefined) next.kind = patch.kind;
   if (patch.role !== undefined) next.role = patch.role;
@@ -195,43 +194,43 @@ export async function updateContact(id: string, patch: ContactPatch): Promise<vo
   if (patch.locality !== undefined) next.locality = patch.locality;
   if (patch.notes !== undefined) next.notes = patch.notes;
   if (patch.shared !== undefined) {
-    next.teamId = patch.shared && myTeamId ? myTeamId : null;
+    next.teamId = patch.shared && teamId ? teamId : null;
     next.shared = next.teamId != null;
   }
-  contacts = [...contacts.slice(0, idx), next, ...contacts.slice(idx + 1)];
-  emit();
+  qc.setQueryData<Contact[]>(CONTACTS_KEY, [
+    ...current.slice(0, idx),
+    next,
+    ...current.slice(idx + 1),
+  ]);
 
   const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const k of ["name", "kind", "role", "phone", "email", "support", "locality", "notes"] as const) {
     if (patch[k] !== undefined) dbPatch[k] = patch[k];
   }
-  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && myTeamId ? myTeamId : null;
+  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && teamId ? teamId : null;
 
   const supabase = createClient();
   const { error } = await supabase.from("contacts").update(dbPatch).eq("id", id);
-  if (error) await load();
+  if (error) void qc.invalidateQueries({ queryKey: CONTACTS_KEY });
 }
 
 export async function deleteContact(id: string): Promise<void> {
-  contacts = contacts.filter((c) => c.id !== id);
-  emit();
+  const qc = getQueryClient();
+  qc.setQueryData<Contact[]>(CONTACTS_KEY, (old) => (old ?? []).filter((c) => c.id !== id));
   const supabase = createClient();
   await supabase.from("contacts").delete().eq("id", id);
 }
 
-function subscribe(l: () => void): () => void {
-  listeners.add(l);
-  ensureLoaded();
-  return () => {
-    listeners.delete(l);
-  };
+function useContactsQuery() {
+  ensureIdentityWired();
+  return useQuery(contactsQuery);
 }
 
 export function useContacts(): Contact[] {
-  return useSyncExternalStore(subscribe, () => contacts, () => EMPTY);
+  return useContactsQuery().data ?? EMPTY;
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => loaded, () => false);
+  return useContactsQuery().isSuccess;
 }
