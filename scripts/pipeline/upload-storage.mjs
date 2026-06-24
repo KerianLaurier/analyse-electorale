@@ -109,11 +109,22 @@ async function main() {
       done++;
       continue;
     }
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(key, body, { contentType, upsert: true });
-    if (error) {
-      console.error(`✗ ${key}: ${error.message}`);
+    // Retry : sur gros volumes (milliers de fichiers), Supabase Storage renvoie
+    // parfois un 400/timeout transitoire en rafale. 3 tentatives + backoff.
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { error } = await supabase.storage
+        .from(BUCKET)
+        .upload(key, body, { contentType, upsert: true });
+      if (!error) {
+        lastErr = null;
+        break;
+      }
+      lastErr = error;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 400 * attempt));
+    }
+    if (lastErr) {
+      console.error(`✗ ${key}: ${lastErr.message}`);
       process.exitCode = 1;
     } else {
       done++;
