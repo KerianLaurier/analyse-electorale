@@ -12,6 +12,11 @@ function makeClient() {
     defaultOptions: {
       queries: {
         staleTime: 60_000,
+        // L'essentiel des données est statique (agrégats électoraux/socio servis
+        // en JSON figé). Garder le cache 1 h après inactivité évite un re-fetch
+        // au retour de navigation → retours de page instantanés. gcTime ne touche
+        // pas la fraîcheur (pilotée par staleTime), seulement la rétention mémoire.
+        gcTime: 60 * 60 * 1000,
         refetchOnWindowFocus: false,
       },
     },
