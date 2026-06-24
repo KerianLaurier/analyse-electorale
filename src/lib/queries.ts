@@ -143,57 +143,52 @@ export function useScrutinMetric(
  * Fonction pure réutilisable (hors hook) — `maille`/`code` sont liés en
  * paramètres, jamais interpolés (cf. `query`).
  */
+// Détail figé d'un territoire (build-territory-detail.py). Clés courtes pour le
+// poids ; candidats = tuples [label, nuance, voix, élu(0/1)] triés voix desc.
+type DetailEntry = {
+  l: string | null;
+  i: number; v: number; e: number; a: number; b: number; n: number;
+  c: [string | null, string | null, number, number][];
+};
+type DetailFile = Record<string, DetailEntry>;
+
+const detailCache = new Map<string, Promise<DetailFile | null>>();
+
+/** Nom du fichier détail (shardé par département pour communes/bureaux). */
+function detailFileName(scrutin: Scrutin, maille: Maille, code: string): string {
+  if (maille === "communes") return `${scrutin}_communes/${code.slice(0, 2)}`;
+  if (maille === "bureaux") return `${scrutin}_bureaux/${code.split("_")[0].slice(0, 2)}`;
+  return `${scrutin}_${maille}`;
+}
+
+function loadDetailFile(name: string): Promise<DetailFile | null> {
+  let p = detailCache.get(name);
+  if (!p) {
+    p = fetch(dataUrl(`/electoral/detail/${name}.json`))
+      .then((r) => (r.ok ? (r.json() as Promise<DetailFile>) : null))
+      .catch(() => null);
+    detailCache.set(name, p);
+  }
+  return p;
+}
+
 export async function fetchScrutinDetail(
   scrutin: Scrutin,
   maille: Maille,
   code: string,
 ): Promise<ScrutinDetail | null> {
-  const terr = aggUrl(scrutin, "territoires", maille);
-  const cand = aggUrl(scrutin, "candidats", maille);
+  const data = await loadDetailFile(detailFileName(scrutin, maille, code));
+  const e = data?.[code];
+  if (!e) return null;
 
-  const headerRows = await query<{
-    libelle: string | null;
-    inscrits: number;
-    votants: number;
-    exprimes: number;
-    abstentions: number;
-    blancs: number;
-    nuls: number;
-  }>(
-    `
-        SELECT libelle, inscrits, votants, exprimes, abstentions, blancs, nuls
-        FROM read_parquet('${terr}')
-        WHERE maille = ? AND code = ?
-        LIMIT 1
-      `,
-    [maille, code],
-  );
-  if (headerRows.length === 0) return null;
-  const h = headerRows[0];
-  const exprimes = Number(h.exprimes ?? 0);
-  const inscrits = Number(h.inscrits ?? 0);
-
-  const candRows = await query<{
-    label: string | null;
-    nuance: string | null;
-    voix: number;
-    elu: boolean;
-  }>(
-    `
-        SELECT label, nuance, voix, elu
-        FROM read_parquet('${cand}')
-        WHERE maille = ? AND code = ? AND voix IS NOT NULL
-        ORDER BY voix DESC
-      `,
-    [maille, code],
-  );
-
-  const rawCandidates: ScrutinCandidate[] = candRows.map((c) => ({
-    label: c.label ?? "",
-    nuance: c.nuance ?? null,
-    voix: Number(c.voix ?? 0),
-    pct: exprimes > 0 ? Number(c.voix) / exprimes : 0,
-    elu: Boolean(c.elu),
+  const exprimes = e.e;
+  const inscrits = e.i;
+  const rawCandidates: ScrutinCandidate[] = e.c.map(([label, nuance, voix, elu]) => ({
+    label: label ?? "",
+    nuance: nuance ?? null,
+    voix,
+    pct: exprimes > 0 ? voix / exprimes : 0,
+    elu: Boolean(elu),
   }));
 
   // Législatives au niveau commune : une commune peut relever de plusieurs
@@ -206,14 +201,14 @@ export async function fetchScrutinDetail(
 
   return {
     code,
-    libelle: h.libelle ?? null,
+    libelle: e.l ?? null,
     inscrits,
-    votants: Number(h.votants ?? 0),
+    votants: e.v,
     exprimes,
-    abstentions: Number(h.abstentions ?? 0),
-    blancs: Number(h.blancs ?? 0),
-    nuls: Number(h.nuls ?? 0),
-    participation: inscrits > 0 ? Number(h.votants) / inscrits : 0,
+    abstentions: e.a,
+    blancs: e.b,
+    nuls: e.n,
+    participation: inscrits > 0 ? e.v / inscrits : 0,
     candidates,
     multiCirco,
   };
@@ -466,11 +461,9 @@ export function useCircoList() {
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     queryFn: async (): Promise<CircoListItem[]> => {
-      const url = aggUrl("legis-2024-t1", "territoires", "circonscriptions");
-      const rows = await query<{ code: string; libelle: string | null }>(
-        `SELECT code, any_value(libelle) AS libelle FROM read_parquet('${url}') WHERE maille = 'circonscriptions' GROUP BY code ORDER BY code`,
-      );
-      return rows.map((r) => ({ code: String(r.code), libelle: r.libelle ?? String(r.code) }));
+      const res = await fetch(dataUrl("/electoral/detail/circo_list.json"));
+      if (!res.ok) throw new Error("Liste des circonscriptions introuvable");
+      return (await res.json()) as CircoListItem[];
     },
   });
 }
@@ -693,14 +686,11 @@ export function useScrutinNationalParticipation(scrutin: Scrutin | null, enabled
     queryKey: ["scrutin-national-participation", scrutin],
     queryFn: async (): Promise<number | null> => {
       if (!scrutin) return null;
-      const url = aggUrl(scrutin, "territoires");
-      const rows = await query<{ value: number }>(`
-        SELECT CAST(SUM(votants) AS DOUBLE) / SUM(inscrits) AS value
-        FROM read_parquet('${url}')
-        WHERE maille = 'departements' AND inscrits > 0
-      `);
-      const v = rows[0]?.value;
-      return v != null && Number.isFinite(v) ? Number(v) : null;
+      const res = await fetch(dataUrl("/electoral/detail/national_participation.json"));
+      if (!res.ok) return null;
+      const data = (await res.json()) as Record<string, number>;
+      const v = data[scrutin];
+      return v != null && Number.isFinite(v) ? v : null;
     },
     staleTime: 60 * 60 * 1000,
   });
