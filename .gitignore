@@ -51,12 +51,15 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 
-# Les données servies (public/tiles, public/electoral, public/insee,
-# public/sondages/notices.json, public/search-index.json) SONT commitées
-# pour que le déploiement fonctionne sans relancer le pipeline lourd
-# (tippecanoe/duckdb absents sur Vercel). Le workflow GitHub Action met à jour
-# notices.json quotidiennement. À migrer vers un object store (R2/S3) si le
-# repo devient trop lourd.
+# Données lourdes servies depuis Supabase Storage (cf. docs/object-store.md) —
+# plus versionnées. Régénérables via scripts/pipeline/, (re)poussées au storage
+# par scripts/pipeline/upload-storage.mjs. public/sondages + public/suivi restent
+# commités (légers, rafraîchis quotidiennement par sondages.yml qui les uploade aussi).
+/public/electoral/
+/public/tiles/
+/public/insee/
+/public/an/
+/public/search-index.json
 
 # Maquettes design (référence, lourdes) — on garde TOKENS.md
 /design/*.html
