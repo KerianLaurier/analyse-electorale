@@ -24,6 +24,16 @@ const PUBLIC = join(ROOT, "public");
 const DATA_DIRS = ["electoral", "tiles", "insee", "sondages", "an", "suivi", "parrainages"];
 const DATA_FILES = ["search-index.json"];
 
+// Cache HTTP (Cloudflare + navigateur). Les données quotidiennes (sondages,
+// suivi, parrainages, veille) changent souvent → cache court. Le reste (agrégats
+// électoraux, socio, tuiles, choroplèthes, détail) est quasi immuable → cache
+// long, pour éviter les re-téléchargements au fil de la navigation quotidienne.
+const DAILY_DIRS = ["sondages", "suivi", "parrainages"];
+const CACHE_LONG = "86400"; // 24 h
+const CACHE_SHORT = "3600"; // 1 h
+const cacheControlFor = (key) =>
+  DAILY_DIRS.includes(key.split("/")[0]) ? CACHE_SHORT : CACHE_LONG;
+
 const CONTENT_TYPES = {
   ".parquet": "application/vnd.apache.parquet",
   ".pmtiles": "application/octet-stream",
@@ -102,10 +112,11 @@ async function main() {
   for (const full of files) {
     const key = relative(PUBLIC, full); // ex. "electoral/agg/x.parquet"
     const contentType = CONTENT_TYPES[extname(full)] ?? "application/octet-stream";
+    const cacheControl = cacheControlFor(key);
     const body = await readFile(full);
     bytes += body.length;
     if (DRY_RUN) {
-      console.log(`(dry-run) ${key} (${contentType}, ${body.length} o)`);
+      console.log(`(dry-run) ${key} (${contentType}, cache ${cacheControl}s, ${body.length} o)`);
       done++;
       continue;
     }
@@ -115,7 +126,7 @@ async function main() {
     for (let attempt = 1; attempt <= 3; attempt++) {
       const { error } = await supabase.storage
         .from(BUCKET)
-        .upload(key, body, { contentType, upsert: true });
+        .upload(key, body, { contentType, upsert: true, cacheControl });
       if (!error) {
         lastErr = null;
         break;
