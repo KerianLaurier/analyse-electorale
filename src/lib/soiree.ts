@@ -1,8 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { parquetUrl, query } from "@/lib/duckdb";
+import { dataUrl } from "@/lib/data-url";
 import type { Scrutin } from "@/lib/url-state";
+
+// Détail départemental figé (build-territory-detail.py) : candidats triés voix desc.
+type DeptDetail = { l: string | null; i: number; v: number; e: number; c: [string | null, string | null, number, number][] };
 
 export type SoireeCand = { label: string; nuance: string; voix: number };
 
@@ -33,49 +36,32 @@ export function useSoireeData(scrutin: Scrutin, enabled = true) {
     staleTime: 60 * 60 * 1000,
     queryKey: ["soiree", scrutin],
     queryFn: async (): Promise<SoireeDept[]> => {
-      const candUrl = parquetUrl(`agg/${scrutin}_candidats.parquet`);
-      const terrUrl = parquetUrl(`agg/${scrutin}_territoires.parquet`);
+      const res = await fetch(dataUrl(`/electoral/detail/${scrutin}_departements.json`));
+      if (!res.ok) return [];
+      const data = (await res.json()) as Record<string, DeptDetail>;
 
-      const terr = await query<{ code: string; libelle: string | null; inscrits: number; votants: number; exprimes: number }>(
-        `SELECT code, libelle, inscrits, votants, exprimes
-         FROM read_parquet('${terrUrl}')
-         WHERE maille = ? AND inscrits > 0`,
-        ["departements"],
-      );
-      const cand = await query<{ code: string; nuance: string | null; label: string | null; voix: number }>(
-        `SELECT code, nuance, label, SUM(voix) AS voix
-         FROM read_parquet('${candUrl}')
-         WHERE maille = ? AND nuance IS NOT NULL AND voix IS NOT NULL
-         GROUP BY code, nuance, label`,
-        ["departements"],
-      );
-
-      const byDept = new Map<string, SoireeCand[]>();
-      for (const r of cand) {
-        const code = String(r.code);
-        const arr = byDept.get(code) ?? [];
-        arr.push({ label: r.label ?? "", nuance: r.nuance ?? "", voix: Number(r.voix) });
-        byDept.set(code, arr);
-      }
-
-      const depts: SoireeDept[] = terr.map((t) => {
-        const cands = (byDept.get(String(t.code)) ?? []).sort((a, b) => b.voix - a.voix);
+      const depts: SoireeDept[] = [];
+      for (const [code, t] of Object.entries(data)) {
+        if (!(t.i > 0)) continue;
+        const cands: SoireeCand[] = t.c
+          .filter(([, nuance]) => nuance != null)
+          .map(([label, nuance, voix]) => ({ label: label ?? "", nuance: nuance ?? "", voix }))
+          .sort((a, b) => b.voix - a.voix);
         const byNuance = new Map<string, number>();
         for (const c of cands) byNuance.set(c.nuance, (byNuance.get(c.nuance) ?? 0) + c.voix);
         let winner = "";
         let best = -1;
         for (const [n, v] of byNuance) if (v > best) [best, winner] = [v, n];
-        return {
-          code: String(t.code),
-          libelle: t.libelle ?? String(t.code),
-          inscrits: Number(t.inscrits),
-          votants: Number(t.votants),
-          exprimes: Number(t.exprimes),
+        depts.push({
+          code,
+          libelle: t.l ?? code,
+          inscrits: t.i,
+          votants: t.v,
+          exprimes: t.e,
           winner,
           cands,
-        };
-      });
-
+        });
+      }
       depts.sort((a, b) => a.inscrits - b.inscrits);
       return depts;
     },

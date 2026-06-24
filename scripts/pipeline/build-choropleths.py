@@ -111,6 +111,10 @@ POTENTIEL_COLUMNS = (
 )
 # d_* = choroplèthes ; *_now servent la fiche tendances territoire.
 TREND_COLUMNS = ["d_abstention", "d_rn", "d_gauche", "abst_now", "rn_now", "gauche_now"]
+CIRCO_SOCIO_COLUMNS = [
+    "MED_SL", "PR_MD60", "IR_D9_D1_SL", "S_SOC_BEN_DI", "S_RET_PEN_DI",
+    "part65plus", "tauxChomage", "partCadres", "partOuvriers", "partDiplomeSup",
+]
 TREND_FILES = ["presid_2017_2022", "legis_2022_2024"]
 TREND_MAILLES = ["regions", "departements", "circonscriptions", "communes"]
 
@@ -188,6 +192,8 @@ def main() -> int:
         emit_columns(con, "socio_famille_communes", INSEE / "famille_2022_commune.parquet", FAMILLE_COLUMNS),
         emit_columns(con, "socio_mobilite_communes", INSEE / "mobilite_2022_commune.parquet", MOBILITE_COLUMNS),
         emit_columns(con, "potentiel_communes", ELECT / "potentiel_commune.parquet", POTENTIEL_COLUMNS),
+        # Socio agrégée par circonscription (pour les analyses à la maille circo).
+        emit_columns(con, "socio_circo", INSEE / "circo_socio.parquet", CIRCO_SOCIO_COLUMNS),
     ]
     for tfile in TREND_FILES:
         src = ELECT / "trends" / f"{tfile}.parquet"

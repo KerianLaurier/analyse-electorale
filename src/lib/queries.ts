@@ -2,17 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { dataUrl } from "@/lib/data-url";
-import { parquetUrl, query } from "@/lib/duckdb";
 import type { Maille } from "@/lib/map-config";
 import { SCRUTIN_META, isElection, type Scrutin } from "@/lib/url-state";
 import { blocById, type BlocId } from "@/lib/analysis";
-
-const aggUrl = (
-  scrutin: Scrutin,
-  kind: "territoires" | "candidats",
-  maille?: Maille,
-) =>
-  parquetUrl(`agg/${scrutin}${maille === "bureaux" ? "_bureaux" : ""}_${kind}.parquet`);
 
 // ─── Types partagés ───────────────────────────────────────────────────────────
 
@@ -250,42 +242,39 @@ export async function fetchTerritoryBureaux(target: {
   type: string;
   id: string;
 }): Promise<{ bureaux: TerritoryBureau[]; splitCommunes: number }> {
-  const url = aggUrl("legis-2024-t1", "territoires", "bureaux");
-  let filter: string;
+  let communes: Set<string>;
   let splitCommunes = 0;
+  let dept: string;
 
   if (target.type === "commune") {
-    filter = `split_part(code, '_', 1) = '${sanitizeCode(target.id)}'`;
+    communes = new Set([sanitizeCode(target.id)]);
+    dept = sanitizeCode(target.id).slice(0, 2);
   } else if (target.type === "circo") {
     const res = await fetch(dataUrl("/electoral/commune_circo.json"));
     if (!res.ok) return { bureaux: [], splitCommunes: 0 };
     const map = (await res.json()) as Record<string, string[]>;
-    const communes: string[] = [];
+    communes = new Set();
     for (const [insee, circos] of Object.entries(map)) {
       if (!circos.includes(target.id)) continue;
-      if (circos.length === 1) communes.push(insee);
+      if (circos.length === 1) communes.add(insee);
       else splitCommunes++;
     }
-    if (communes.length === 0) return { bureaux: [], splitCommunes };
-    const inList = communes.map((c) => `'${sanitizeCode(c)}'`).join(",");
-    filter = `split_part(code, '_', 1) IN (${inList})`;
+    if (communes.size === 0) return { bureaux: [], splitCommunes };
+    dept = sanitizeCode(target.id).slice(0, 2);
   } else {
     return { bureaux: [], splitCommunes: 0 };
   }
 
-  const rows = await query<{ code: string; libelle: string | null; inscrits: number }>(
-    `
-      SELECT code, libelle, inscrits
-      FROM read_parquet('${url}')
-      WHERE maille = 'bureaux' AND ${filter}
-      ORDER BY code
-    `,
-  );
-  const bureaux = rows.map((r) => ({
-    code: r.code,
-    name: r.libelle?.trim() || `Bureau ${r.code.split("_")[1] ?? r.code}`,
-    registered: Number(r.inscrits ?? 0),
-  }));
+  const data = await loadDetailFile(`legis-2024-t1_bureaux/${dept}`);
+  if (!data) return { bureaux: [], splitCommunes };
+  const bureaux = Object.entries(data)
+    .filter(([code]) => communes.has(code.split("_")[0]))
+    .map(([code, e]) => ({
+      code,
+      name: e.l?.trim() || `Bureau ${code.split("_")[1] ?? code}`,
+      registered: e.i,
+    }))
+    .sort((a, b) => a.code.localeCompare(b.code));
   return { bureaux, splitCommunes };
 }
 
@@ -346,40 +335,23 @@ async function communesOfCirco(circo: string): Promise<string[]> {
  * côté client via `scoreBureaux`, ce qui permet de re-scorer instantanément.
  */
 export async function fetchCircoBureaux(circo: string): Promise<CircoBureauRaw[]> {
-  const communes = await communesOfCirco(circo);
-  if (communes.length === 0) return [];
-  const inList = communes.map((c) => `'${sanitizeCode(c)}'`).join(",");
-  const terr = aggUrl("legis-2024-t1", "territoires", "bureaux");
-  const cand = aggUrl("legis-2024-t1", "candidats", "bureaux");
+  const communes = new Set(await communesOfCirco(circo));
+  if (communes.size === 0) return [];
+  const data = await loadDetailFile(`legis-2024-t1_bureaux/${sanitizeCode(circo).slice(0, 2)}`);
+  if (!data) return [];
 
-  const [terrRows, candRows] = await Promise.all([
-    query<{ code: string; libelle: string | null; inscrits: number; exprimes: number; abstentions: number }>(
-      `SELECT code, libelle, inscrits, exprimes, abstentions
-       FROM read_parquet('${terr}')
-       WHERE maille = 'bureaux' AND split_part(code, '_', 1) IN (${inList})`,
-    ),
-    query<{ code: string; nuance: string | null; voix: number }>(
-      `SELECT code, nuance, voix FROM read_parquet('${cand}')
-       WHERE maille = 'bureaux' AND voix IS NOT NULL AND split_part(code, '_', 1) IN (${inList})`,
-    ),
-  ]);
-
-  const candsByCode = new Map<string, BureauCand[]>();
-  for (const c of candRows) {
-    const arr = candsByCode.get(c.code) ?? [];
-    arr.push({ nuance: c.nuance ?? null, voix: Number(c.voix ?? 0) });
-    candsByCode.set(c.code, arr);
-  }
-
-  return terrRows.map((t) => ({
-    code: t.code,
-    name: t.libelle?.trim() || `Bureau ${t.code.split("_")[1] ?? t.code}`,
-    insee: t.code.split("_")[0] ?? "",
-    inscrits: Number(t.inscrits ?? 0),
-    exprimes: Number(t.exprimes ?? 0),
-    abstentions: Number(t.abstentions ?? 0),
-    cands: (candsByCode.get(t.code) ?? []).sort((a, b) => b.voix - a.voix),
-  }));
+  return Object.entries(data)
+    .filter(([code]) => communes.has(code.split("_")[0]))
+    .map(([code, e]) => ({
+      code,
+      name: e.l?.trim() || `Bureau ${code.split("_")[1] ?? code}`,
+      insee: code.split("_")[0] ?? "",
+      inscrits: e.i,
+      exprimes: e.e,
+      abstentions: e.a,
+      // Candidats triés voix desc (déjà triés à la production du détail).
+      cands: e.c.map(([, nuance, voix]) => ({ nuance: nuance ?? null, voix })),
+    }));
 }
 
 export function useCircoBureaux(circo: string | null) {

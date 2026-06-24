@@ -1,14 +1,37 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { inseeUrl, parquetUrl, query } from "@/lib/duckdb";
+import { dataUrl } from "@/lib/data-url";
 import type { Maille } from "@/lib/map-config";
 import type { Scrutin } from "@/lib/url-state";
 
-const aggUrl = (scrutin: Scrutin, kind: "territoires" | "candidats", maille?: Maille) =>
-  parquetUrl(`agg/${scrutin}${maille === "bureaux" ? "_bureaux" : ""}_${kind}.parquet`);
+// ─── Lecture des agrégats figés (JSON statique précalculé, sans DuckDB-WASM) ───
+// analysis/{scrutin}_{maille}.json (agrégat par nuance), choro/*.json (colonnes),
+// detail/{scrutin}_{maille}.json (candidats) — cf. scripts/pipeline/build-*.py.
+type AnalysisEntry = {
+  l: string | null; e: number; v: number; i: number; nu: Record<string, number>;
+};
+type AnalysisFile = Record<string, AnalysisEntry>;
+type ColumnFile = Record<string, Record<string, number>>;
+type DetailEntry = { l: string | null; e: number; c: [string | null, string | null, number, number][] };
 
-const FILOSOFI_PARQUET = "filosofi_2021_commune.parquet";
+const jsonCache = new Map<string, Promise<unknown>>();
+function loadJson<T>(path: string): Promise<T> {
+  let p = jsonCache.get(path);
+  if (!p) {
+    p = fetch(dataUrl(path)).then((r) => {
+      if (!r.ok) throw new Error(`agrégat figé introuvable: ${path} (HTTP ${r.status})`);
+      return r.json();
+    });
+    jsonCache.set(path, p);
+  }
+  return p as Promise<T>;
+}
+const loadAnalysis = (scrutin: Scrutin, maille: Maille) =>
+  loadJson<AnalysisFile>(`/electoral/analysis/${scrutin}_${maille}.json`);
+const loadColumnFile = (name: string) => loadJson<ColumnFile>(`/electoral/choro/${name}.json`);
+const loadDetailAll = (scrutin: Scrutin, maille: Maille) =>
+  loadJson<Record<string, DetailEntry>>(`/electoral/detail/${scrutin}_${maille}.json`);
 
 // ─── Blocs politiques (regroupements de nuances comparables entre scrutins) ───
 // Chaque bloc agrège les codes de nuance équivalents (présidentielle, légis. et
@@ -87,36 +110,15 @@ export function useBlocShare(
     enabled: enabled && !!codes && codes.length > 0,
     queryKey: ["bloc-share", scrutin, maille, codeKey],
     queryFn: async (): Promise<TerritoryValue[]> => {
-      const terr = aggUrl(scrutin, "territoires", maille);
-      const cand = aggUrl(scrutin, "candidats", maille);
       const blocCodes = codes ?? [];
-      const inList = blocCodes.map(() => "?").join(", ");
-      const rows = await query<{ code: string; libelle: string | null; value: number }>(
-        `
-        WITH terr AS (
-          SELECT code, any_value(libelle) AS libelle, SUM(exprimes) AS exprimes
-          FROM read_parquet('${terr}')
-          WHERE maille = ?
-          GROUP BY code
-          HAVING SUM(exprimes) > 0
-        ),
-        bloc AS (
-          SELECT code, SUM(voix) AS v
-          FROM read_parquet('${cand}')
-          WHERE maille = ? AND nuance IN (${inList})
-          GROUP BY code
-        )
-        SELECT t.code, t.libelle,
-               CAST(COALESCE(b.v, 0) AS DOUBLE) / t.exprimes AS value
-        FROM terr t LEFT JOIN bloc b USING (code)
-      `,
-        [maille, maille, ...blocCodes],
-      );
-      return rows.map((r) => ({
-        code: String(r.code),
-        libelle: r.libelle ?? null,
-        value: Number(r.value),
-      }));
+      const data = await loadAnalysis(scrutin, maille);
+      const out: TerritoryValue[] = [];
+      for (const [code, t] of Object.entries(data)) {
+        if (!(t.e > 0)) continue;
+        const v = blocCodes.reduce((s, n) => s + (t.nu[n] ?? 0), 0);
+        out.push({ code, libelle: t.l, value: v / t.e });
+      }
+      return out;
     },
     staleTime: 60 * 60 * 1000,
   });
@@ -129,23 +131,12 @@ export function useParticipationByMaille(scrutin: Scrutin, maille: Maille, enabl
     enabled,
     queryKey: ["analysis-participation", scrutin, maille],
     queryFn: async (): Promise<TerritoryValue[]> => {
-      const terr = aggUrl(scrutin, "territoires", maille);
-      const rows = await query<{ code: string; libelle: string | null; value: number }>(
-        `
-        SELECT code, any_value(libelle) AS libelle,
-               CAST(SUM(votants) AS DOUBLE) / SUM(inscrits) AS value
-        FROM read_parquet('${terr}')
-        WHERE maille = ?
-        GROUP BY code
-        HAVING SUM(inscrits) > 0
-      `,
-        [maille],
-      );
-      return rows.map((r) => ({
-        code: String(r.code),
-        libelle: r.libelle ?? null,
-        value: Number(r.value),
-      }));
+      const data = await loadAnalysis(scrutin, maille);
+      const out: TerritoryValue[] = [];
+      for (const [code, t] of Object.entries(data)) {
+        if (t.i > 0) out.push({ code, libelle: t.l, value: t.v / t.i });
+      }
+      return out;
     },
     staleTime: 60 * 60 * 1000,
   });
@@ -158,38 +149,27 @@ export function useWinnerByMaille(scrutin: Scrutin, maille: Maille, enabled = tr
     enabled,
     queryKey: ["analysis-winner", scrutin, maille],
     queryFn: async (): Promise<TerritoryWinner[]> => {
-      const terr = aggUrl(scrutin, "territoires", maille);
-      const cand = aggUrl(scrutin, "candidats", maille);
-      const rows = await query<{ code: string; libelle: string | null; nuance: string }>(
-        `
-        WITH s AS (
-          SELECT code, nuance, SUM(voix) AS v
-          FROM read_parquet('${cand}')
-          WHERE maille = ? AND nuance IS NOT NULL
-          GROUP BY code, nuance
-          QUALIFY ROW_NUMBER() OVER (PARTITION BY code ORDER BY v DESC) = 1
-        ),
-        terr AS (
-          SELECT code, any_value(libelle) AS libelle
-          FROM read_parquet('${terr}') WHERE maille = ? GROUP BY code
-        )
-        SELECT s.code, t.libelle, s.nuance
-        FROM s LEFT JOIN terr t USING (code)
-      `,
-        [maille, maille],
-      );
-      return rows
-        .filter((r) => r.code && r.nuance)
-        .map((r) => ({ code: String(r.code), libelle: r.libelle ?? null, nuance: String(r.nuance) }));
+      const data = await loadAnalysis(scrutin, maille);
+      const out: TerritoryWinner[] = [];
+      for (const [code, t] of Object.entries(data)) {
+        let best = -1;
+        let winner = "";
+        // Départage déterministe sur la nuance (à voix égales) comme la choroplèthe.
+        for (const [n, v] of Object.entries(t.nu)) {
+          if (v > best || (v === best && n < winner)) {
+            best = v;
+            winner = n;
+          }
+        }
+        if (winner) out.push({ code, libelle: t.l, nuance: winner });
+      }
+      return out;
     },
     staleTime: 60 * 60 * 1000,
   });
 }
 
 // ─── Sociologie & démographie commune (catalogue) pour la corrélation ─────────
-
-const RP_PARQUET = "rp_2022_commune.parquet";
-const CIRCO_SOCIO_PARQUET = "circo_socio.parquet";
 
 export type SocioIndicator =
   | "revenu" | "pauvrete" | "inegalites" | "prestations" | "pensions"
@@ -239,20 +219,16 @@ export function useSocioByMaille(
     queryKey: ["analysis-socio", indicator, maille],
     queryFn: async (): Promise<Map<string, number>> => {
       const meta = socioMeta(indicator);
-      const url = inseeUrl(
+      const file =
         maille === "circonscriptions"
-          ? CIRCO_SOCIO_PARQUET
+          ? "socio_circo"
           : meta.source === "rp"
-            ? RP_PARQUET
-            : FILOSOFI_PARQUET,
-      );
-      const rows = await query<{ code: string; value: number }>(`
-        SELECT code, ${meta.column} AS value
-        FROM read_parquet('${url}')
-        WHERE ${meta.column} IS NOT NULL
-      `);
+            ? "socio_rp_communes"
+            : "socio_filosofi_communes";
+      const data = await loadColumnFile(file);
+      const col = data[meta.column] ?? {};
       const m = new Map<string, number>();
-      for (const r of rows) m.set(String(r.code), Number(r.value));
+      for (const [code, value] of Object.entries(col)) m.set(code, value);
       return m;
     },
     staleTime: 24 * 60 * 60 * 1000,
@@ -276,56 +252,26 @@ export function useMarginalite(scrutin: Scrutin, maille: Maille = "circonscripti
     enabled,
     queryKey: ["marginalite", scrutin, maille],
     queryFn: async (): Promise<MarginRow[]> => {
-      const terr = aggUrl(scrutin, "territoires", maille);
-      const cand = aggUrl(scrutin, "candidats", maille);
-      const rows = await query<{
-        code: string;
-        libelle: string | null;
-        leader: string | null;
-        leaderNuance: string | null;
-        runnerNuance: string | null;
-        leaderPct: number;
-        marginPts: number;
-      }>(
-        `
-        WITH top AS (
-          SELECT code, label, nuance, voix,
-                 ROW_NUMBER() OVER (PARTITION BY code ORDER BY voix DESC) AS rn
-          FROM read_parquet('${cand}')
-          WHERE maille = ? AND voix IS NOT NULL
-          QUALIFY rn <= 2
-        ),
-        piv AS (
-          SELECT code,
-            MAX(CASE WHEN rn = 1 THEN voix END) AS v1,
-            MAX(CASE WHEN rn = 1 THEN label END) AS l1,
-            MAX(CASE WHEN rn = 1 THEN nuance END) AS n1,
-            MAX(CASE WHEN rn = 2 THEN voix END) AS v2,
-            MAX(CASE WHEN rn = 2 THEN nuance END) AS n2
-          FROM top GROUP BY code
-        ),
-        terr AS (
-          SELECT code, any_value(libelle) AS libelle, SUM(exprimes) AS exp
-          FROM read_parquet('${terr}') WHERE maille = ? GROUP BY code
-        )
-        SELECT p.code, t.libelle, p.l1 AS leader, p.n1 AS leaderNuance, p.n2 AS runnerNuance,
-               CAST(p.v1 AS DOUBLE) / t.exp AS leaderPct,
-               CAST(p.v1 - COALESCE(p.v2, 0) AS DOUBLE) / t.exp AS marginPts
-        FROM piv p JOIN terr t USING (code)
-        WHERE t.exp > 0 AND p.v1 IS NOT NULL
-        ORDER BY marginPts ASC
-      `,
-        [maille, maille],
-      );
-      return rows.map((r) => ({
-        code: String(r.code),
-        libelle: r.libelle ?? null,
-        leader: r.leader ?? "",
-        leaderNuance: r.leaderNuance ?? "",
-        runnerNuance: r.runnerNuance ?? null,
-        leaderPct: Number(r.leaderPct),
-        marginPts: Number(r.marginPts),
-      }));
+      // Niveau candidat (1er/2e) → fichier détail (candidats triés voix desc).
+      const data = await loadDetailAll(scrutin, maille);
+      const rows: MarginRow[] = [];
+      for (const [code, t] of Object.entries(data)) {
+        if (!(t.e > 0) || t.c.length === 0) continue;
+        const [l1, n1, v1] = t.c[0];
+        const top2 = t.c[1];
+        const v2 = top2 ? top2[2] : 0;
+        rows.push({
+          code,
+          libelle: t.l,
+          leader: l1 ?? "",
+          leaderNuance: n1 ?? "",
+          runnerNuance: top2 ? top2[1] : null,
+          leaderPct: v1 / t.e,
+          marginPts: (v1 - v2) / t.e,
+        });
+      }
+      rows.sort((a, b) => a.marginPts - b.marginPts);
+      return rows;
     },
     staleTime: 60 * 60 * 1000,
   });
@@ -349,40 +295,20 @@ export function useCircoBlocMatrix(scrutin: Scrutin, enabled = true) {
     enabled,
     queryKey: ["circo-bloc-matrix", scrutin],
     queryFn: async (): Promise<CircoBlocMatrix> => {
-      const terr = aggUrl(scrutin, "territoires");
-      const cand = aggUrl(scrutin, "candidats");
-      const sums = BLOCS.map((b) => {
-        const inList = b.codes.map((c) => `'${c}'`).join(", ");
-        return `SUM(CASE WHEN nuance IN (${inList}) THEN voix ELSE 0 END) AS "${b.id}"`;
-      }).join(",\n");
-      const rows = await query<Record<string, number | string | null>>(`
-        WITH bloc AS (
-          SELECT code, ${sums}
-          FROM read_parquet('${cand}')
-          WHERE maille = 'circonscriptions' AND voix IS NOT NULL
-          GROUP BY code
-        ),
-        terr AS (
-          SELECT code, any_value(libelle) AS libelle, SUM(exprimes) AS exp
-          FROM read_parquet('${terr}') WHERE maille = 'circonscriptions' GROUP BY code
-        )
-        SELECT t.code, t.libelle, t.exp, ${BLOCS.map((b) => `b."${b.id}"`).join(", ")}
-        FROM terr t JOIN bloc b USING (code)
-        WHERE t.exp > 0
-      `);
+      const data = await loadAnalysis(scrutin, "circonscriptions");
       const circos: CircoBlocRow[] = [];
       const totals: Record<string, number> = {};
       let totalExp = 0;
-      for (const r of rows) {
-        const exp = Number(r.exp);
+      for (const [code, t] of Object.entries(data)) {
+        if (!(t.e > 0)) continue;
         const shares = {} as Record<BlocId, number>;
         for (const b of BLOCS) {
-          const v = Number(r[b.id] ?? 0);
-          shares[b.id] = exp > 0 ? v / exp : 0;
+          const v = b.codes.reduce((s, n) => s + (t.nu[n] ?? 0), 0);
+          shares[b.id] = v / t.e;
           totals[b.id] = (totals[b.id] ?? 0) + v;
         }
-        totalExp += exp;
-        circos.push({ code: String(r.code), libelle: (r.libelle as string) ?? null, exp, shares });
+        totalExp += t.e;
+        circos.push({ code, libelle: t.l, exp: t.e, shares });
       }
       const national = {} as Record<BlocId, number>;
       for (const b of BLOCS) national[b.id] = totalExp > 0 ? (totals[b.id] ?? 0) / totalExp : 0;
@@ -406,14 +332,12 @@ export function useSocioFeaturesCirco(enabled = true) {
     enabled,
     queryKey: ["socio-features-circo"],
     queryFn: async (): Promise<Map<string, number[]>> => {
-      const url = inseeUrl(CIRCO_SOCIO_PARQUET);
-      const cols = SOCIO_FEATURE_COLUMNS.join(", ");
-      const rows = await query<Record<string, number | string>>(`
-        SELECT code, ${cols} FROM read_parquet('${url}')
-      `);
+      const data = await loadColumnFile("socio_circo");
+      const codes = new Set<string>();
+      for (const c of SOCIO_FEATURE_COLUMNS) for (const code in data[c] ?? {}) codes.add(code);
       const m = new Map<string, number[]>();
-      for (const r of rows) {
-        m.set(String(r.code), SOCIO_FEATURE_COLUMNS.map((c) => Number(r[c])));
+      for (const code of codes) {
+        m.set(code, SOCIO_FEATURE_COLUMNS.map((c) => data[c]?.[code] ?? 0));
       }
       return m;
     },
