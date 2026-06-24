@@ -1,9 +1,14 @@
-name: Build choroplèthes → Supabase Storage
+name: Build choroplèthes + détail → Supabase Storage
 
-# Régénère les choroplèthes figées (public/electoral/choro/*.json) et les pousse
-# au bucket Storage `data`. Auto-suffisant : télécharge les Parquet sources
-# DEPUIS le storage (ils ne sont plus dans git, cf. #47), lance le précalcul,
-# puis uploade. Pas besoin des sources brutes (data/raw) ni du pipeline complet.
+# Régénère les données figées servant la carte SANS DuckDB-WASM et les pousse au
+# bucket Storage `data` :
+#   - choroplèthes  public/electoral/choro/*.json   (coloriage)
+#   - détail        public/electoral/detail/*.json  (fiches au clic + historiques)
+# Auto-suffisant : télécharge les Parquet sources DEPUIS le storage (ils ne sont
+# plus dans git, cf. #47), lance le précalcul, puis uploade. Pas besoin des
+# sources brutes (data/raw) ni du pipeline complet.
+# NB : le détail bureaux (volumineux) n'est pas régénéré ici — ses agrégats ne
+# sont pas téléchargés ; à activer dans une phase ultérieure.
 #
 # Déclenchement manuel (un clic). À relancer après chaque mise à jour des
 # agrégats électoraux ou des données socio. Prérequis : secret
@@ -54,6 +59,9 @@ jobs:
 
       - name: Précalculer les choroplèthes
         run: python3 scripts/pipeline/build-choropleths.py
+
+      - name: Précalculer le détail par territoire
+        run: python3 scripts/pipeline/build-territory-detail.py
 
       - uses: actions/setup-node@v4
         with:
