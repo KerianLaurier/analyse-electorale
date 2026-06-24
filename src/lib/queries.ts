@@ -63,6 +63,37 @@ export type CommuneSociologie = {
 // ─── Choroplèthes électorales (génériques, lisent les agrégats) ───────────────
 
 /**
+ * Choroplèthes figées (précalculées par scripts/pipeline/build-choropleths.py)
+ * pour chaque scrutin électoral × maille fine (hors « bureaux »). Servies en
+ * JSON statique, elles court-circuitent DuckDB-WASM pour le coloriage de carte
+ * — le chemin le plus chargé de l'explorateur. Repli transparent sur DuckDB si
+ * le fichier n'est pas (encore) déployé.
+ */
+type FrozenChoro = {
+  vainqueur: Record<string, string>;
+  participation: Record<string, number>;
+  abstention: Record<string, number>;
+};
+
+// Une seule requête par scrutin×maille sert les trois colorations ; mémoïsé pour
+// éviter un fetch par coloration (les query keys diffèrent côté React Query).
+const frozenChoroCache = new Map<string, Promise<FrozenChoro | null>>();
+
+function loadFrozenChoro(scrutin: Scrutin, maille: Maille): Promise<FrozenChoro | null> {
+  // Seules les élections (hors bureaux) sont figées ; tout miss retombe sur DuckDB.
+  if (!isElection(scrutin) || maille === "bureaux") return Promise.resolve(null);
+  const key = `${scrutin}_${maille}`;
+  let p = frozenChoroCache.get(key);
+  if (!p) {
+    p = fetch(dataUrl(`/electoral/choro/${key}.json`))
+      .then((r) => (r.ok ? (r.json() as Promise<FrozenChoro>) : null))
+      .catch(() => null);
+    frozenChoroCache.set(key, p);
+  }
+  return p;
+}
+
+/**
  * Nuance gagnante par territoire pour un scrutin × maille donné.
  * On somme les voix par nuance (gère le cas où plusieurs candidats partagent
  * une nuance, ex. extrême gauche en présidentielle) puis on garde le top.
@@ -72,6 +103,10 @@ export function useScrutinWinner(scrutin: Scrutin, maille: Maille, enabled = tru
     enabled,
     queryKey: ["scrutin-winner", scrutin, maille],
     queryFn: async (): Promise<WinningNuanceRow[]> => {
+      const frozen = await loadFrozenChoro(scrutin, maille);
+      if (frozen) {
+        return Object.entries(frozen.vainqueur).map(([code, nuance]) => ({ code, nuance }));
+      }
       const url = aggUrl(scrutin, "candidats", maille);
       const rows = await query<{ code: string; nuance: string }>(
         `
@@ -82,7 +117,7 @@ export function useScrutinWinner(scrutin: Scrutin, maille: Maille, enabled = tru
           GROUP BY code, nuance
         )
         SELECT code, nuance FROM s
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY code ORDER BY v DESC) = 1
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY code ORDER BY v DESC, nuance) = 1
       `,
         [maille],
       );
@@ -103,6 +138,12 @@ export function useScrutinMetric(
     enabled,
     queryKey: ["scrutin-metric", scrutin, maille, metric],
     queryFn: async (): Promise<NumericRow[]> => {
+      const frozen = await loadFrozenChoro(scrutin, maille);
+      if (frozen) {
+        return Object.entries(frozen[metric])
+          .filter(([code, value]) => code && Number.isFinite(value))
+          .map(([code, value]) => ({ code, value }));
+      }
       const url = aggUrl(scrutin, "territoires", maille);
       const numer = metric === "participation" ? "votants" : "abstentions";
       const rows = await query<{ code: string; value: number }>(
