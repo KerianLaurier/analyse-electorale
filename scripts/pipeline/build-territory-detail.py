@@ -32,7 +32,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 AGG = ROOT / "public" / "electoral" / "agg"
+INSEE = ROOT / "public" / "insee"
 OUT = ROOT / "public" / "electoral" / "detail"
+
+# Colonnes socio portées par bureau (miroir de useSociologieBureau).
+BUREAUX_SOCIO_COLUMNS = [
+    "MED_SL", "PR_MD60", "IR_D9_D1_SL", "S_RET_PEN_DI", "S_SOC_BEN_DI",
+    "part65plus", "tauxChomage", "partCadres", "partOuvriers", "partDiplomeSup",
+]
 
 # Scrutins électoraux × mailles (miroir de SCRUTIN_META). Bureaux inclus pour les
 # scrutins qui en disposent (présidentielles + législatives).
@@ -147,6 +154,30 @@ def build_scalars(con) -> None:
         print(f"  ✓ circo_list: {len(circos)} circonscriptions")
 
 
+def build_bureaux_socio(con) -> None:
+    """Profil socio par bureau (porté par la commune), shardé par département —
+    miroir de useSociologieBureau. socio_grain reste exposé pour transparence."""
+    src = INSEE / "bureaux_socio.parquet"
+    if not src.exists():
+        print("  ⚠ bureaux_socio: source manquante, ignoré")
+        return
+    cols = ", ".join(BUREAUX_SOCIO_COLUMNS)
+    rows = con.execute(
+        f"SELECT code, insee, socio_grain, {cols} FROM read_parquet('{src.as_posix()}')"
+    ).fetchall()
+    shards: dict[str, dict] = defaultdict(dict)
+    for r in rows:
+        code, insee, grain = str(r[0]), str(r[1]), r[2]
+        entry = {"ins": insee, "g": grain}
+        for i, col in enumerate(BUREAUX_SOCIO_COLUMNS):
+            v = r[3 + i]
+            entry[col] = round(float(v), 4) if v is not None else None
+        shards[code[:2]][code] = entry
+    for dept, payload in shards.items():
+        write_json(OUT / "socio_bureaux" / f"{dept}.json", payload)
+    print(f"  ✓ socio_bureaux: {len(rows)} bureaux, {len(shards)} shards")
+
+
 def main() -> int:
     try:
         import duckdb
@@ -163,6 +194,7 @@ def main() -> int:
         for maille in mailles:
             total += build_detail(con, scrutin, maille)
     build_scalars(con)
+    build_bureaux_socio(con)
 
     print(f"\n✓ détail par territoire figé dans public/electoral/detail/ ({total} lignes)")
     return 0

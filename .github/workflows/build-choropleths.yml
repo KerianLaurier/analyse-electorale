@@ -7,8 +7,8 @@ name: Build choroplèthes + détail → Supabase Storage
 # Auto-suffisant : télécharge les Parquet sources DEPUIS le storage (ils ne sont
 # plus dans git, cf. #47), lance le précalcul, puis uploade. Pas besoin des
 # sources brutes (data/raw) ni du pipeline complet.
-# NB : le détail bureaux (volumineux) n'est pas régénéré ici — ses agrégats ne
-# sont pas téléchargés ; à activer dans une phase ultérieure.
+# Inclut le détail et la socio au niveau bureau de vote (agrégats bureaux +
+# bureaux_socio téléchargés ci-dessous).
 #
 # Déclenchement manuel (un clic). À relancer après chaque mise à jour des
 # agrégats électoraux ou des données socio. Prérequis : secret
@@ -49,8 +49,14 @@ jobs:
             dl "electoral/agg/${s}_candidats.parquet"
             dl "electoral/agg/${s}_territoires.parquet"
           done
+          # Agrégats au niveau bureau (détail bureau de vote) — scrutins WITH_BUREAUX.
+          for s in presid-2017-t1 presid-2017-t2 presid-2022-t1 presid-2022-t2 \
+                   legis-2022-t1 legis-2022-t2 legis-2024-t1 legis-2024-t2; do
+            dl "electoral/agg/${s}_bureaux_candidats.parquet"
+            dl "electoral/agg/${s}_bureaux_territoires.parquet"
+          done
           for f in filosofi_2021_commune rp_2022_commune logement_2022_commune \
-                   famille_2022_commune mobilite_2022_commune; do
+                   famille_2022_commune mobilite_2022_commune bureaux_socio; do
             dl "insee/${f}.parquet"
           done
           dl "electoral/potentiel_commune.parquet"

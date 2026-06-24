@@ -96,15 +96,21 @@ FILOSOFI_COLUMNS = [
     "MED_SL", "PR_MD60", "D1_SL", "D9_SL", "IR_D9_D1_SL",
     "S_RET_PEN_DI", "S_SOC_BEN_DI", "S_EI_DI_UNE", "S_HH_TAX",
 ]
+# `population` n'est pas une choroplèthe mais sert la fiche démographie commune.
 RP_COLUMNS = [
-    "part65plus", "partMoins15", "tauxChomage",
+    "population", "part65plus", "partMoins15", "tauxChomage",
     "partCadres", "partOuvriers", "partDiplomeSup",
 ]
 LOGEMENT_COLUMNS = ["partProprietaires", "partLocataires", "partResSecondaires", "partLogVacants"]
 FAMILLE_COLUMNS = ["partFamMono", "partPersonnesSeules"]
 MOBILITE_COLUMNS = ["partNouveauxArrivants"]
-POTENTIEL_COLUMNS = ["pot_rn", "pot_gauche", "pot_ecolo", "pot_centre", "pot_droite"]
-TREND_COLUMNS = ["d_abstention", "d_rn", "d_gauche"]
+# pot_* = choroplèthes ; aff_*/reel_* servent la fiche potentiel commune.
+_BLOCS = ["rn", "gauche", "ecolo", "centre", "droite"]
+POTENTIEL_COLUMNS = (
+    [f"pot_{b}" for b in _BLOCS] + [f"aff_{b}" for b in _BLOCS] + [f"reel_{b}" for b in _BLOCS]
+)
+# d_* = choroplèthes ; *_now servent la fiche tendances territoire.
+TREND_COLUMNS = ["d_abstention", "d_rn", "d_gauche", "abst_now", "rn_now", "gauche_now"]
 TREND_FILES = ["presid_2017_2022", "legis_2022_2024"]
 TREND_MAILLES = ["regions", "departements", "circonscriptions", "communes"]
 

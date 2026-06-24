@@ -2,13 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { dataUrl } from "@/lib/data-url";
-import { inseeUrl, parquetUrl, query } from "@/lib/duckdb";
+import { parquetUrl, query } from "@/lib/duckdb";
 import type { Maille } from "@/lib/map-config";
 import { SCRUTIN_META, isElection, type Scrutin } from "@/lib/url-state";
 import { blocById, type BlocId } from "@/lib/analysis";
-
-const FILOSOFI_PARQUET = "filosofi_2021_commune.parquet";
-const RP_PARQUET = "rp_2022_commune.parquet";
 
 const aggUrl = (
   scrutin: Scrutin,
@@ -100,6 +97,28 @@ async function fetchColumnRows(file: string, column: string): Promise<NumericRow
   const data = await loadChoroFile<ColumnChoro>(file);
   const col = data[column] ?? {};
   return Object.entries(col).map(([code, value]) => ({ code, value }));
+}
+
+/**
+ * Profil complet d'UN territoire depuis un fichier colonnes : pour chaque colonne,
+ * la valeur de `code` (sert les fiches commune socio/démo/potentiel/tendances).
+ * `null` si le code n'apparaît dans aucune colonne.
+ */
+async function fetchColumnRecord(
+  file: string,
+  code: string,
+): Promise<Record<string, number> | null> {
+  const data = await loadChoroFile<ColumnChoro>(file);
+  const out: Record<string, number> = {};
+  let found = false;
+  for (const [col, m] of Object.entries(data)) {
+    const v = m[code];
+    if (v !== undefined) {
+      out[col] = v;
+      found = true;
+    }
+  }
+  return found ? out : null;
 }
 
 /**
@@ -748,19 +767,10 @@ export function useSociologieCommune(code: string | null) {
     queryKey: ["sociologie-commune", code],
     queryFn: async (): Promise<CommuneSociologie | null> => {
       if (!code) return null;
-      const url = inseeUrl(FILOSOFI_PARQUET);
-      const rows = await query<Record<SocioColumn, number | null> & { code: string }>(
-        `
-        SELECT code, ${SOCIO_COLUMNS.join(", ")}
-        FROM read_parquet('${url}')
-        WHERE code = ?
-      `,
-        [code],
-      );
-      if (rows.length === 0) return null;
-      const r = rows[0];
+      const r = await fetchColumnRecord("socio_filosofi_communes", code);
+      if (!r) return null;
       return {
-        code: String(r.code),
+        code,
         revenuMedian: numOrNull(r.MED_SL),
         tauxPauvrete: numOrNull(r.PR_MD60),
         decile1: numOrNull(r.D1_SL),
@@ -815,17 +825,8 @@ export function useTrendsTerritoire(file: TrendFile, maille: string | null, code
     queryKey: ["trends-territoire", file, maille, code],
     queryFn: async (): Promise<TerritoireTrends | null> => {
       if (!maille || !code) return null;
-      const url = parquetUrl(`trends/${file}.parquet`);
-      const rows = await query<{
-        d_abstention: number | null; d_rn: number | null; d_gauche: number | null;
-        abst_now: number | null; rn_now: number | null; gauche_now: number | null;
-      }>(
-        `SELECT d_abstention, d_rn, d_gauche, abst_now, rn_now, gauche_now
-         FROM read_parquet('${url}') WHERE maille = ? AND code = ?`,
-        [maille, code],
-      );
-      if (rows.length === 0) return null;
-      const r = rows[0];
+      const r = await fetchColumnRecord(`trends_${file}_${maille}`, code);
+      if (!r) return null;
       return {
         dAbstention: numOrNull(r.d_abstention),
         dRn: numOrNull(r.d_rn),
@@ -844,7 +845,20 @@ export function useTrendsTerritoire(file: TrendFile, maille: string | null, code
 // est portée par la commune du bureau (1ers caractères du code = INSEE) →
 // granularité commune, exposée via `grain` pour rester transparent.
 
-const BUREAUX_SOCIO_PARQUET = "bureaux_socio.parquet";
+// Shard socio par bureau (build-territory-detail.py) : detail/socio_bureaux/{dept}.json.
+type BureauSocioEntry = { ins: string; g: string } & Record<string, number | null>;
+const bureauSocioCache = new Map<string, Promise<Record<string, BureauSocioEntry> | null>>();
+
+function loadBureauSocioShard(dept: string): Promise<Record<string, BureauSocioEntry> | null> {
+  let p = bureauSocioCache.get(dept);
+  if (!p) {
+    p = fetch(dataUrl(`/electoral/detail/socio_bureaux/${dept}.json`))
+      .then((r) => (r.ok ? (r.json() as Promise<Record<string, BureauSocioEntry>>) : null))
+      .catch(() => null);
+    bureauSocioCache.set(dept, p);
+  }
+  return p;
+}
 
 export type BureauSociologie = {
   code: string;
@@ -869,29 +883,13 @@ export function useSociologieBureau(code: string | null) {
     queryKey: ["sociologie-bureau", code],
     queryFn: async (): Promise<BureauSociologie | null> => {
       if (!code) return null;
-      const url = inseeUrl(BUREAUX_SOCIO_PARQUET);
-      const rows = await query<{
-        code: string; insee: string; socio_grain: string;
-        MED_SL: number | null; PR_MD60: number | null; IR_D9_D1_SL: number | null;
-        S_RET_PEN_DI: number | null; S_SOC_BEN_DI: number | null;
-        part65plus: number | null; tauxChomage: number | null;
-        partCadres: number | null; partOuvriers: number | null; partDiplomeSup: number | null;
-      }>(
-        `
-        SELECT code, insee, socio_grain,
-               MED_SL, PR_MD60, IR_D9_D1_SL, S_RET_PEN_DI, S_SOC_BEN_DI,
-               part65plus, tauxChomage, partCadres, partOuvriers, partDiplomeSup
-        FROM read_parquet('${url}')
-        WHERE code = ?
-      `,
-        [code],
-      );
-      if (rows.length === 0) return null;
-      const r = rows[0];
+      const shard = await loadBureauSocioShard(code.split("_")[0].slice(0, 2));
+      const r = shard?.[code];
+      if (!r) return null;
       return {
-        code: String(r.code),
-        insee: String(r.insee),
-        grain: String(r.socio_grain),
+        code,
+        insee: String(r.ins),
+        grain: String(r.g),
         revenuMedian: numOrNull(r.MED_SL),
         tauxPauvrete: numOrNull(r.PR_MD60),
         interdecile: numOrNull(r.IR_D9_D1_SL),
@@ -962,15 +960,9 @@ export function usePotentielTerritoire(code: string | null) {
     queryKey: ["potentiel-territoire", code],
     queryFn: async (): Promise<PotentielRow[] | null> => {
       if (!code) return null;
-      const url = parquetUrl("potentiel_commune.parquet");
+      const r = await fetchColumnRecord("potentiel_communes", code);
+      if (!r) return null;
       const blocs: PotentielBloc[] = ["rn", "gauche", "ecolo", "centre", "droite"];
-      const cols = blocs.flatMap((b) => [`aff_${b}`, `reel_${b}`, `pot_${b}`]).join(", ");
-      const rows = await query<Record<string, number | null>>(
-        `SELECT ${cols} FROM read_parquet('${url}') WHERE code = ?`,
-        [code],
-      );
-      if (rows.length === 0) return null;
-      const r = rows[0];
       return blocs.map((b) => ({
         bloc: b,
         affinite: numOrNull(r[`aff_${b}`]),
@@ -1052,20 +1044,10 @@ export function useDemographieCommune(code: string | null) {
     queryKey: ["demographie-commune", code],
     queryFn: async (): Promise<DemographieCommune | null> => {
       if (!code) return null;
-      const url = inseeUrl(RP_PARQUET);
-      const rows = await query<Record<string, number | null> & { code: string }>(
-        `
-        SELECT code, population, part65plus, partMoins15, tauxChomage,
-               partCadres, partOuvriers, partDiplomeSup
-        FROM read_parquet('${url}')
-        WHERE code = ?
-      `,
-        [code],
-      );
-      if (rows.length === 0) return null;
-      const r = rows[0];
+      const r = await fetchColumnRecord("socio_rp_communes", code);
+      if (!r) return null;
       return {
-        code: String(r.code),
+        code,
         population: numOrNull(r.population),
         part65plus: numOrNull(r.part65plus),
         partMoins15: numOrNull(r.partMoins15),
