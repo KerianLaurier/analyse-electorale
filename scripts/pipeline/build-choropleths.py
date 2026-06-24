@@ -30,8 +30,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-AGG = ROOT / "public" / "electoral" / "agg"
-OUT = ROOT / "public" / "electoral" / "choro"
+PUBLIC = ROOT / "public"
+AGG = PUBLIC / "electoral" / "agg"
+INSEE = PUBLIC / "insee"
+ELECT = PUBLIC / "electoral"
+OUT = PUBLIC / "electoral" / "choro"
 
 # Scrutins électoraux × mailles à figer (miroir de SCRUTIN_META côté app, hors
 # « bureaux »). Présidentielles + législatives : 4 mailles ; municipales : pas
@@ -85,6 +88,53 @@ def metric(con, terr: Path, maille: str, numer: str) -> dict[str, float]:
     return out
 
 
+# ─── Choroplèthes thématiques (socio / tendances / potentiel) ────────────────
+# Colonnes figées par dataset, miroir des listes blanches de src/lib/queries.ts.
+# Toutes au niveau commune sauf les tendances (maille portée par le parquet).
+
+FILOSOFI_COLUMNS = [
+    "MED_SL", "PR_MD60", "D1_SL", "D9_SL", "IR_D9_D1_SL",
+    "S_RET_PEN_DI", "S_SOC_BEN_DI", "S_EI_DI_UNE", "S_HH_TAX",
+]
+RP_COLUMNS = [
+    "part65plus", "partMoins15", "tauxChomage",
+    "partCadres", "partOuvriers", "partDiplomeSup",
+]
+LOGEMENT_COLUMNS = ["partProprietaires", "partLocataires", "partResSecondaires", "partLogVacants"]
+FAMILLE_COLUMNS = ["partFamMono", "partPersonnesSeules"]
+MOBILITE_COLUMNS = ["partNouveauxArrivants"]
+POTENTIEL_COLUMNS = ["pot_rn", "pot_gauche", "pot_ecolo", "pot_centre", "pot_droite"]
+TREND_COLUMNS = ["d_abstention", "d_rn", "d_gauche"]
+TREND_FILES = ["presid_2017_2022", "legis_2022_2024"]
+TREND_MAILLES = ["regions", "departements", "circonscriptions", "communes"]
+
+
+def emit_columns(con, name, src, columns, maille=None) -> str | None:
+    """Émet OUT/{name}.json = {colonne: {code: round(valeur, ROUND)}}.
+
+    `maille` filtre les parquets multi-mailles (tendances) ; None pour les
+    parquets commune (code = INSEE)."""
+    if not src.exists():
+        print(f"  ⚠ {name}: source manquante {src.name}")
+        return None
+    where = f"maille = '{maille}' AND " if maille else ""
+    payload: dict[str, dict[str, float]] = {}
+    for col in columns:
+        rows = con.execute(
+            f"SELECT code, {col} AS v FROM read_parquet('{src.as_posix()}') "
+            f"WHERE {where}{col} IS NOT NULL"
+        ).fetchall()
+        payload[col] = {
+            str(c): round(float(v), ROUND) for c, v in rows if c is not None and v is not None
+        }
+    (OUT / f"{name}.json").write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    )
+    total = sum(len(d) for d in payload.values())
+    print(f"  ✓ {name}: {len(columns)} colonnes, {total} valeurs")
+    return name
+
+
 def main() -> int:
     try:
         import duckdb
@@ -122,6 +172,22 @@ def main() -> int:
                 f"  ✓ {key}: {len(payload['vainqueur'])} vainqueurs, "
                 f"{len(payload['participation'])} territoires"
             )
+
+    # ── Choroplèthes thématiques (socio / tendances / potentiel) ──────────────
+    print("→ thématiques (socio / tendances / potentiel)")
+    thematic = [
+        emit_columns(con, "socio_filosofi_communes", INSEE / "filosofi_2021_commune.parquet", FILOSOFI_COLUMNS),
+        emit_columns(con, "socio_rp_communes", INSEE / "rp_2022_commune.parquet", RP_COLUMNS),
+        emit_columns(con, "socio_logement_communes", INSEE / "logement_2022_commune.parquet", LOGEMENT_COLUMNS),
+        emit_columns(con, "socio_famille_communes", INSEE / "famille_2022_commune.parquet", FAMILLE_COLUMNS),
+        emit_columns(con, "socio_mobilite_communes", INSEE / "mobilite_2022_commune.parquet", MOBILITE_COLUMNS),
+        emit_columns(con, "potentiel_communes", ELECT / "potentiel_commune.parquet", POTENTIEL_COLUMNS),
+    ]
+    for tfile in TREND_FILES:
+        src = ELECT / "trends" / f"{tfile}.parquet"
+        for m in TREND_MAILLES:
+            thematic.append(emit_columns(con, f"trends_{tfile}_{m}", src, TREND_COLUMNS, maille=m))
+    keys.extend(k for k in thematic if k)
 
     (OUT / "manifest.json").write_text(
         json.dumps({"keys": keys}, separators=(",", ":")), encoding="utf-8"

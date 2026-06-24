@@ -1,0 +1,70 @@
+name: Build choroplèthes → Supabase Storage
+
+# Régénère les choroplèthes figées (public/electoral/choro/*.json) et les pousse
+# au bucket Storage `data`. Auto-suffisant : télécharge les Parquet sources
+# DEPUIS le storage (ils ne sont plus dans git, cf. #47), lance le précalcul,
+# puis uploade. Pas besoin des sources brutes (data/raw) ni du pipeline complet.
+#
+# Déclenchement manuel (un clic). À relancer après chaque mise à jour des
+# agrégats électoraux ou des données socio. Prérequis : secret
+# SUPABASE_SERVICE_ROLE_KEY. cf. docs/object-store.md
+#
+# N'altère rien tant que NEXT_PUBLIC_DATA_URL n'est pas définie côté déploiement.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  DATA_BASE: https://fdfghtrxczauvrbmdxlq.supabase.co/storage/v1/object/public/data
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer duckdb
+        run: pip install duckdb
+
+      - name: Télécharger les Parquet sources depuis le storage
+        run: |
+          set -euo pipefail
+          mkdir -p public/electoral/agg public/electoral/trends public/insee
+          dl() { curl -fsS -o "public/$1" "$DATA_BASE/$1" && echo "↓ $1"; }
+          for s in presid-2017-t1 presid-2017-t2 presid-2022-t1 presid-2022-t2 \
+                   legis-2022-t1 legis-2022-t2 legis-2024-t1 legis-2024-t2 \
+                   municipales-2026-t1 municipales-2026-t2; do
+            dl "electoral/agg/${s}_candidats.parquet"
+            dl "electoral/agg/${s}_territoires.parquet"
+          done
+          for f in filosofi_2021_commune rp_2022_commune logement_2022_commune \
+                   famille_2022_commune mobilite_2022_commune; do
+            dl "insee/${f}.parquet"
+          done
+          dl "electoral/potentiel_commune.parquet"
+          dl "electoral/trends/presid_2017_2022.parquet"
+          dl "electoral/trends/legis_2022_2024.parquet"
+
+      - name: Précalculer les choroplèthes
+        run: python3 scripts/pipeline/build-choropleths.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Installer les deps
+        run: npm ci
+
+      - name: Upload vers Supabase Storage
+        env:
+          SUPABASE_URL: https://fdfghtrxczauvrbmdxlq.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ONLY: electoral
+        run: node scripts/pipeline/upload-storage.mjs
