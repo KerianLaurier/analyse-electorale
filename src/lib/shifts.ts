@@ -1,13 +1,17 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { getQueryClient } from "@/providers/query-provider";
 
 /**
  * Permanences / créneaux de terrain d'une campagne — table `shifts` + table
  * `shift_signups` (inscriptions des bénévoles). Personnels ou partagés équipe
  * (RLS). Tout membre peut s'inscrire / se désinscrire d'un créneau d'équipe.
+ *
+ * Adossé à TanStack Query (cf. migration des stores, pilote `pins`). API publique
+ * inchangée ; inscriptions optimistes, créations/éditions par refetch.
  */
 
 export type ShiftKind = "porte" | "boitage" | "collage" | "tractage" | "permanence" | "reunion" | "autre";
@@ -57,28 +61,18 @@ type ShiftRow = {
 
 type SignupRow = { shift_id: string; user_id: string };
 
-let myUserId: string | null = null;
-let myTeamId: string | null = null;
-let shifts: Shift[] = [];
-let loadStarted = false;
-let loaded = false;
-const listeners = new Set<() => void>();
+const SHIFTS_KEY = ["shifts"] as const;
 const EMPTY: Shift[] = [];
 
-function emit() {
-  listeners.forEach((l) => l());
-}
+const shiftsQuery = {
+  queryKey: SHIFTS_KEY,
+  queryFn: fetchShifts,
+  staleTime: 5 * 60 * 1000,
+};
 
-async function load() {
-  const { userId, teamId } = await getIdentity();
-  myUserId = userId;
-  if (!userId) {
-    myTeamId = null;
-    shifts = [];
-    emit();
-    return;
-  }
-  myTeamId = teamId;
+async function fetchShifts(): Promise<Shift[]> {
+  const { userId } = await getIdentity();
+  if (!userId) return [];
   const supabase = createClient();
   const [{ data: rows }, { data: signupRows }] = await Promise.all([
     supabase.from("shifts").select("*").order("date", { ascending: true }),
@@ -92,7 +86,7 @@ async function load() {
     byShift.set(s.shift_id, arr);
   }
 
-  shifts = ((rows ?? []) as ShiftRow[]).map((r) => {
+  return ((rows ?? []) as ShiftRow[]).map((r) => {
     const signups = byShift.get(r.id) ?? [];
     return {
       id: r.id,
@@ -106,20 +100,21 @@ async function load() {
       notes: r.notes,
       teamId: r.team_id,
       shared: r.team_id != null,
-      mine: r.user_id === myUserId,
+      mine: r.user_id === userId,
       signups,
-      joined: myUserId != null && signups.includes(myUserId),
+      joined: signups.includes(userId),
       createdAt: new Date(r.created_at).getTime(),
     };
   });
-  emit();
 }
 
-function ensureLoaded() {
-  if (loadStarted) return;
-  loadStarted = true;
-  void load().finally(() => { loaded = true; emit(); });
-  onIdentityChange(() => void load());
+let identityWired = false;
+function ensureIdentityWired() {
+  if (identityWired || typeof window === "undefined") return;
+  identityWired = true;
+  onIdentityChange(() => {
+    void getQueryClient().invalidateQueries({ queryKey: SHIFTS_KEY });
+  });
 }
 
 export type NewShift = {
@@ -135,11 +130,10 @@ export type NewShift = {
 };
 
 export async function addShift(input: NewShift): Promise<void> {
-  const { userId } = await getIdentity();
+  const { userId, teamId } = await getIdentity();
   if (!userId) return;
-  myUserId = userId;
   const supabase = createClient();
-  const team_id = input.shared && myTeamId ? myTeamId : null;
+  const team_id = input.shared && teamId ? teamId : null;
   const { data } = await supabase
     .from("shifts")
     .insert({
@@ -156,7 +150,7 @@ export async function addShift(input: NewShift): Promise<void> {
     })
     .select("*")
     .single();
-  if (data) await load();
+  if (data) await getQueryClient().refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
 }
 
 export type ShiftPatch = {
@@ -172,6 +166,7 @@ export type ShiftPatch = {
 };
 
 export async function updateShift(id: string, patch: ShiftPatch): Promise<void> {
+  const { teamId } = await getIdentity();
   const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.title !== undefined) dbPatch.title = patch.title;
   if (patch.kind !== undefined) dbPatch.kind = patch.kind;
@@ -181,36 +176,38 @@ export async function updateShift(id: string, patch: ShiftPatch): Promise<void> 
   if (patch.location !== undefined) dbPatch.location = patch.location;
   if (patch.capacity !== undefined) dbPatch.capacity = patch.capacity;
   if (patch.notes !== undefined) dbPatch.notes = patch.notes;
-  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && myTeamId ? myTeamId : null;
+  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && teamId ? teamId : null;
   const supabase = createClient();
   await supabase.from("shifts").update(dbPatch).eq("id", id);
-  await load();
+  await getQueryClient().refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
 }
 
 export async function deleteShift(id: string): Promise<void> {
-  shifts = shifts.filter((s) => s.id !== id);
-  emit();
+  const qc = getQueryClient();
+  qc.setQueryData<Shift[]>(SHIFTS_KEY, (old) => (old ?? []).filter((s) => s.id !== id));
   const supabase = createClient();
   await supabase.from("shifts").delete().eq("id", id);
 }
 
-function setJoinedLocal(id: string, joined: boolean) {
-  const idx = shifts.findIndex((s) => s.id === id);
-  if (idx < 0 || !myUserId) return;
-  const s = shifts[idx];
-  const signups = joined
-    ? s.signups.includes(myUserId) ? s.signups : [...s.signups, myUserId]
-    : s.signups.filter((u) => u !== myUserId);
-  shifts = [...shifts.slice(0, idx), { ...s, signups, joined }, ...shifts.slice(idx + 1)];
-  emit();
+function setJoinedLocal(id: string, joined: boolean, userId: string) {
+  const qc = getQueryClient();
+  qc.setQueryData<Shift[]>(SHIFTS_KEY, (old) => {
+    if (!old) return old;
+    const idx = old.findIndex((s) => s.id === id);
+    if (idx < 0) return old;
+    const s = old[idx];
+    const signups = joined
+      ? s.signups.includes(userId) ? s.signups : [...s.signups, userId]
+      : s.signups.filter((u) => u !== userId);
+    return [...old.slice(0, idx), { ...s, signups, joined }, ...old.slice(idx + 1)];
+  });
 }
 
 export async function joinShift(id: string): Promise<void> {
   const { userId } = await getIdentity();
   if (!userId) return;
-  myUserId = userId;
-  const shift = shifts.find((s) => s.id === id);
-  setJoinedLocal(id, true);
+  const shift = getQueryClient().getQueryData<Shift[]>(SHIFTS_KEY)?.find((s) => s.id === id);
+  setJoinedLocal(id, true, userId);
   const supabase = createClient();
   await supabase
     .from("shift_signups")
@@ -220,24 +217,21 @@ export async function joinShift(id: string): Promise<void> {
 export async function leaveShift(id: string): Promise<void> {
   const { userId } = await getIdentity();
   if (!userId) return;
-  setJoinedLocal(id, false);
+  setJoinedLocal(id, false, userId);
   const supabase = createClient();
   await supabase.from("shift_signups").delete().eq("shift_id", id).eq("user_id", userId);
 }
 
-function subscribe(l: () => void): () => void {
-  listeners.add(l);
-  ensureLoaded();
-  return () => {
-    listeners.delete(l);
-  };
+function useShiftsQuery() {
+  ensureIdentityWired();
+  return useQuery(shiftsQuery);
 }
 
 export function useShifts(): Shift[] {
-  return useSyncExternalStore(subscribe, () => shifts, () => EMPTY);
+  return useShiftsQuery().data ?? EMPTY;
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => loaded, () => false);
+  return useShiftsQuery().isSuccess;
 }

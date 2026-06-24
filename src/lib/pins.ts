@@ -1,16 +1,20 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { getQueryClient } from "@/providers/query-provider";
 import { toast } from "@/components/toaster";
 
 /**
  * Territoires & personnes épinglés — persistés côté serveur (table `pins`).
  * Une épingle peut être personnelle (team_id null) ou partagée avec l'équipe
  * (team_id = équipe du compte). La RLS renvoie les épingles perso + celles
- * partagées par les coéquipiers. Store réactif (useSyncExternalStore) avec
- * écritures optimistes.
+ * partagées par les coéquipiers.
+ *
+ * Adossé à TanStack Query. L'API publique exportée est INCHANGÉE. Écritures
+ * optimistes avec rollback + toast d'erreur.
  */
 
 export type PinType = "commune" | "circo" | "bureau" | "elu" | "candidat";
@@ -49,37 +53,50 @@ type Row = {
   team_id: string | null;
 };
 
-let myUserId: string | null = null;
-let myTeamId: string | null = null;
-let rows: Row[] = [];
-let display: Pin[] = [];
-let loadStarted = false;
-let loaded = false;
-const listeners = new Set<() => void>();
+/** Données brutes mises en cache : lignes + contexte d'identité pour le calcul. */
+type PinsData = {
+  rows: Row[];
+  userId: string | null;
+  teamId: string | null;
+};
+
+const PINS_KEY = ["pins"] as const;
 const EMPTY: Pin[] = [];
 
-function emit() {
-  listeners.forEach((l) => l());
+const pinsQuery = {
+  queryKey: PINS_KEY,
+  queryFn: fetchPins,
+  staleTime: 5 * 60 * 1000,
+};
+
+async function fetchPins(): Promise<PinsData> {
+  const { userId, teamId } = await getIdentity();
+  if (!userId) return { rows: [], userId: null, teamId: null };
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("pins")
+    .select("type,item_id,label,sublabel,href,created_at,user_id,team_id")
+    .order("created_at", { ascending: false });
+  return { rows: (data ?? []) as Row[], userId, teamId };
 }
 
 const key = (type: string, id: string) => `${type}:${id}`;
 
-/** Recalcule la liste affichée (dédupliquée par item, mes épingles prioritaires). */
-function recompute() {
+/** Liste affichée (dédupliquée par item, mes épingles prioritaires sur celles d'équipe). */
+function toDisplay(data: PinsData): Pin[] {
   const chosen = new Map<string, Row>();
-  for (const r of rows) {
+  for (const r of data.rows) {
     const k = key(r.type, r.item_id);
     const prev = chosen.get(k);
     if (!prev) {
       chosen.set(k, r);
       continue;
     }
-    // Priorité à ma propre épingle pour refléter mon scope éditable.
-    const prevMine = prev.user_id === myUserId;
-    const curMine = r.user_id === myUserId;
+    const prevMine = prev.user_id === data.userId;
+    const curMine = r.user_id === data.userId;
     if (curMine && !prevMine) chosen.set(k, r);
   }
-  display = [...chosen.values()]
+  return [...chosen.values()]
     .map((r) => ({
       type: r.type as PinType,
       id: r.item_id,
@@ -88,60 +105,40 @@ function recompute() {
       href: r.href,
       addedAt: new Date(r.created_at).getTime(),
       shared: r.team_id != null,
-      mine: r.user_id === myUserId,
+      mine: r.user_id === data.userId,
     }))
     .sort((a, b) => b.addedAt - a.addedAt);
 }
 
-async function load() {
-  const { userId, teamId } = await getIdentity();
-  myUserId = userId;
-  if (!userId) {
-    myTeamId = null;
-    rows = [];
-    recompute();
-    emit();
-    return;
-  }
-  myTeamId = teamId;
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("pins")
-    .select("type,item_id,label,sublabel,href,created_at,user_id,team_id")
-    .order("created_at", { ascending: false });
-  rows = (data ?? []) as Row[];
-  recompute();
-  emit();
-}
-
-function ensureLoaded() {
-  if (loadStarted) return;
-  loadStarted = true;
-  void load().finally(() => { loaded = true; emit(); });
-  // Recharge quand l'utilisateur change (connexion / déconnexion).
-  onIdentityChange(() => void load());
-}
-
-/** Force un rechargement (ex. après création / changement d'équipe). */
-export async function reloadPins(): Promise<void> {
-  await load();
-}
-
-/** Y a-t-il une épingle (perso ou équipe) visible pour cet item ? */
-export function isPinned(type: PinType, id: string): boolean {
-  return display.some((p) => p.type === type && p.id === id);
-}
-
 /** Scope de MA propre épingle pour cet item (ignore celles des coéquipiers). */
-function myScopeOf(type: PinType, id: string): PinScope {
-  const mine = rows.find((r) => r.type === type && r.item_id === id && r.user_id === myUserId);
+function myScopeOf(type: PinType, id: string, data: PinsData): PinScope {
+  const mine = data.rows.find(
+    (r) => r.type === type && r.item_id === id && r.user_id === data.userId,
+  );
   if (!mine) return "none";
   return mine.team_id != null ? "team" : "personal";
 }
 
-function applyOptimistic(pin: Omit<Pin, "addedAt" | "shared" | "mine">, scope: PinScope) {
-  rows = rows.filter((r) => !(r.type === pin.type && r.item_id === pin.id && r.user_id === myUserId));
-  if (scope !== "none" && myUserId) {
+let identityWired = false;
+function ensureIdentityWired() {
+  if (identityWired || typeof window === "undefined") return;
+  identityWired = true;
+  onIdentityChange(() => {
+    void getQueryClient().invalidateQueries({ queryKey: PINS_KEY });
+  });
+}
+
+/** Recalcule les lignes après une écriture optimiste (upsert / suppression). */
+function applyOptimistic(
+  data: PinsData,
+  pin: Omit<Pin, "addedAt" | "shared" | "mine">,
+  scope: PinScope,
+): PinsData {
+  const userId = data.userId;
+  let rows = data.rows.filter(
+    (r) => !(r.type === pin.type && r.item_id === pin.id && r.user_id === userId),
+  );
+  if (scope !== "none" && userId) {
     rows = [
       {
         type: pin.type,
@@ -150,14 +147,13 @@ function applyOptimistic(pin: Omit<Pin, "addedAt" | "shared" | "mine">, scope: P
         sublabel: pin.sublabel ?? null,
         href: pin.href,
         created_at: new Date().toISOString(),
-        user_id: myUserId,
-        team_id: scope === "team" ? myTeamId : null,
+        user_id: userId,
+        team_id: scope === "team" ? data.teamId : null,
       },
       ...rows,
     ];
   }
-  recompute();
-  emit();
+  return { ...data, rows };
 }
 
 /** Définit le scope de mon épingle : aucune / perso / partagée équipe. */
@@ -165,12 +161,14 @@ export async function setPinScope(
   pin: Omit<Pin, "addedAt" | "shared" | "mine">,
   scope: PinScope,
 ): Promise<void> {
-  const { userId } = await getIdentity();
+  ensureIdentityWired();
+  const { userId, teamId } = await getIdentity();
   if (!userId) return;
-  myUserId = userId;
-  if (scope === "team" && !myTeamId) scope = "personal"; // garde-fou : pas d'équipe
+  if (scope === "team" && !teamId) scope = "personal"; // garde-fou : pas d'équipe
 
-  applyOptimistic(pin, scope);
+  const qc = getQueryClient();
+  const base: PinsData = qc.getQueryData<PinsData>(PINS_KEY) ?? { rows: [], userId, teamId };
+  qc.setQueryData<PinsData>(PINS_KEY, applyOptimistic({ ...base, userId, teamId }, pin, scope));
 
   const supabase = createClient();
   if (scope === "none") {
@@ -181,7 +179,7 @@ export async function setPinScope(
       .eq("type", pin.type)
       .eq("item_id", pin.id);
     if (error) {
-      await load(); // rollback : l'épingle réapparaît
+      await qc.invalidateQueries({ queryKey: PINS_KEY }); // rollback : l'épingle réapparaît
       toast.error("Épingle non retirée — réessayez.");
     }
     return;
@@ -194,19 +192,22 @@ export async function setPinScope(
       label: pin.label,
       sublabel: pin.sublabel ?? null,
       href: pin.href,
-      team_id: scope === "team" ? myTeamId : null,
+      team_id: scope === "team" ? teamId : null,
     },
     { onConflict: "user_id,type,item_id" },
   );
   if (error) {
-    await load(); // rollback : on recharge l'état serveur
+    await qc.invalidateQueries({ queryKey: PINS_KEY }); // rollback : on recharge l'état serveur
     toast.error("Épingle non enregistrée — réessayez.");
   }
 }
 
 /** Épingle / désépingle (personnel). Renvoie le nouvel état épinglé. */
-export async function togglePin(pin: Omit<Pin, "addedAt" | "shared" | "mine">): Promise<boolean> {
-  const current = myScopeOf(pin.type, pin.id);
+export async function togglePin(
+  pin: Omit<Pin, "addedAt" | "shared" | "mine">,
+): Promise<boolean> {
+  const data = getQueryClient().getQueryData<PinsData>(PINS_KEY);
+  const current = data ? myScopeOf(pin.type, pin.id, data) : "none";
   if (current === "none") {
     await setPinScope(pin, "personal");
     return true;
@@ -216,21 +217,32 @@ export async function togglePin(pin: Omit<Pin, "addedAt" | "shared" | "mine">): 
 }
 
 export async function removePin(type: PinType, id: string): Promise<void> {
-  const p = display.find((x) => x.type === type && x.id === id && x.mine);
+  const data = getQueryClient().getQueryData<PinsData>(PINS_KEY);
+  const p = data ? toDisplay(data).find((x) => x.type === type && x.id === id && x.mine) : undefined;
   if (p) await setPinScope(p, "none");
 }
 
-function subscribe(l: () => void): () => void {
-  listeners.add(l);
-  ensureLoaded();
-  return () => {
-    listeners.delete(l);
-  };
+/** Force un rechargement (ex. après création / changement d'équipe). */
+export async function reloadPins(): Promise<void> {
+  await getQueryClient().refetchQueries({ queryKey: PINS_KEY, type: "all" });
+}
+
+/** Y a-t-il une épingle (perso ou équipe) visible pour cet item ? (synchrone) */
+export function isPinned(type: PinType, id: string): boolean {
+  const data = getQueryClient().getQueryData<PinsData>(PINS_KEY);
+  if (!data) return false;
+  return toDisplay(data).some((p) => p.type === type && p.id === id);
+}
+
+function usePinsData(): PinsData | undefined {
+  ensureIdentityWired();
+  return useQuery(pinsQuery).data;
 }
 
 /** Liste réactive des épingles visibles (perso + équipe, dédupliquées). */
 export function usePins(): Pin[] {
-  return useSyncExternalStore(subscribe, () => display, () => EMPTY);
+  const data = usePinsData();
+  return useMemo(() => (data ? toDisplay(data) : EMPTY), [data]);
 }
 
 /** État réactif : une épingle (perso ou équipe) existe-t-elle pour cet item ? */
@@ -240,17 +252,17 @@ export function useIsPinned(type: PinType, id: string): boolean {
 
 /** Scope réactif de MON épingle pour cet item. */
 export function useMyPinScope(type: PinType, id: string): PinScope {
-  usePins(); // souscription au store
-  return myScopeOf(type, id);
+  const data = usePinsData();
+  return data ? myScopeOf(type, id, data) : "none";
 }
 
 /** Identifiant réactif de l'équipe du compte (null si aucune). */
 export function useMyTeamId(): string | null {
-  usePins();
-  return myTeamId;
+  return usePinsData()?.teamId ?? null;
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => loaded, () => false);
+  ensureIdentityWired();
+  return useQuery(pinsQuery).isSuccess;
 }

@@ -1,14 +1,18 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { getQueryClient } from "@/providers/query-provider";
 import { toast } from "@/components/toaster";
 
 /**
  * Actions de terrain (tâches) d'une équipe de campagne — persistées côté
  * serveur (table `tasks`). Personnelles (team_id null) ou partagées avec
  * l'équipe (visibles & modifiables par tous les membres via RLS).
+ *
+ * Adossé à TanStack Query (cf. migration des stores, pilote `pins`). API publique
+ * inchangée ; mutations optimistes via le cache, rollback + toast d'erreur.
  */
 
 export type TaskStatus = "todo" | "doing" | "done";
@@ -71,19 +75,16 @@ type Row = {
   done_at: string | null;
 };
 
-let myUserId: string | null = null;
-let myTeamId: string | null = null;
-let tasks: Task[] = [];
-let loadStarted = false;
-let loaded = false;
-const listeners = new Set<() => void>();
+const TASKS_KEY = ["tasks"] as const;
 const EMPTY: Task[] = [];
 
-function emit() {
-  listeners.forEach((l) => l());
-}
+const tasksQuery = {
+  queryKey: TASKS_KEY,
+  queryFn: fetchTasks,
+  staleTime: 5 * 60 * 1000,
+};
 
-function mapRow(r: Row): Task {
+function mapRow(r: Row, myUserId: string | null): Task {
   return {
     id: r.id,
     title: r.title,
@@ -109,34 +110,28 @@ function mapRow(r: Row): Task {
   };
 }
 
-async function load() {
-  const { userId, teamId } = await getIdentity();
-  myUserId = userId;
-  if (!userId) {
-    myTeamId = null;
-    tasks = [];
-    emit();
-    return;
-  }
-  myTeamId = teamId;
+async function fetchTasks(): Promise<Task[]> {
+  const { userId } = await getIdentity();
+  if (!userId) return [];
   const supabase = createClient();
   const { data } = await supabase
     .from("tasks")
     .select("*")
     .order("created_at", { ascending: false });
-  tasks = (data ?? []).map((r) => mapRow(r as Row));
-  emit();
+  return (data ?? []).map((r) => mapRow(r as Row, userId));
 }
 
-function ensureLoaded() {
-  if (loadStarted) return;
-  loadStarted = true;
-  void load().finally(() => { loaded = true; emit(); });
-  onIdentityChange(() => void load());
+let identityWired = false;
+function ensureIdentityWired() {
+  if (identityWired || typeof window === "undefined") return;
+  identityWired = true;
+  onIdentityChange(() => {
+    void getQueryClient().invalidateQueries({ queryKey: TASKS_KEY });
+  });
 }
 
 export async function reloadTasks(): Promise<void> {
-  await load();
+  await getQueryClient().refetchQueries({ queryKey: TASKS_KEY, type: "all" });
 }
 
 export type NewTask = {
@@ -152,11 +147,10 @@ export type NewTask = {
 
 /** Ajoute une tâche. Renvoie false en cas d'échec (le formulaire reste rempli). */
 export async function addTask(input: NewTask): Promise<boolean> {
-  const { userId } = await getIdentity();
+  const { userId, teamId } = await getIdentity();
   if (!userId) return false;
-  myUserId = userId;
   const supabase = createClient();
-  const team_id = input.shared && myTeamId ? myTeamId : null;
+  const team_id = input.shared && teamId ? teamId : null;
   const { data, error } = await supabase
     .from("tasks")
     .insert({
@@ -179,8 +173,7 @@ export async function addTask(input: NewTask): Promise<boolean> {
     toast.error("Impossible d'ajouter la tâche — vérifiez votre connexion puis réessayez.");
     return false;
   }
-  tasks = [mapRow(data as Row), ...tasks];
-  emit();
+  getQueryClient().setQueryData<Task[]>(TASKS_KEY, (old) => [mapRow(data as Row, userId), ...(old ?? [])]);
   return true;
 }
 
@@ -196,9 +189,12 @@ export type TaskPatch = {
 };
 
 export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
-  const idx = tasks.findIndex((t) => t.id === id);
+  const qc = getQueryClient();
+  const { teamId } = await getIdentity();
+  const current = qc.getQueryData<Task[]>(TASKS_KEY) ?? [];
+  const idx = current.findIndex((t) => t.id === id);
   if (idx < 0) return;
-  const prev = tasks[idx];
+  const prev = current[idx];
   const next: Task = { ...prev };
   if (patch.status !== undefined) {
     next.status = patch.status;
@@ -211,11 +207,10 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
   if (patch.title !== undefined) next.title = patch.title;
   if (patch.details !== undefined) next.details = patch.details;
   if (patch.shared !== undefined) {
-    next.teamId = patch.shared && myTeamId ? myTeamId : null;
+    next.teamId = patch.shared && teamId ? teamId : null;
     next.shared = next.teamId != null;
   }
-  tasks = [...tasks.slice(0, idx), next, ...tasks.slice(idx + 1)];
-  emit();
+  qc.setQueryData<Task[]>(TASKS_KEY, [...current.slice(0, idx), next, ...current.slice(idx + 1)]);
 
   const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.status !== undefined) {
@@ -228,40 +223,37 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
   if (patch.assignee !== undefined) dbPatch.assignee = patch.assignee;
   if (patch.title !== undefined) dbPatch.title = patch.title;
   if (patch.details !== undefined) dbPatch.details = patch.details;
-  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && myTeamId ? myTeamId : null;
+  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && teamId ? teamId : null;
 
   const supabase = createClient();
   const { error } = await supabase.from("tasks").update(dbPatch).eq("id", id);
   if (error) {
-    await load(); // rollback : on recharge l'état serveur
+    await qc.invalidateQueries({ queryKey: TASKS_KEY }); // rollback : on recharge l'état serveur
     toast.error("Modification non enregistrée — réessayez.");
   }
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  tasks = tasks.filter((t) => t.id !== id);
-  emit();
+  const qc = getQueryClient();
+  qc.setQueryData<Task[]>(TASKS_KEY, (old) => (old ?? []).filter((t) => t.id !== id));
   const supabase = createClient();
   const { error } = await supabase.from("tasks").delete().eq("id", id);
   if (error) {
-    await load(); // rollback : la tâche réapparaît
+    await qc.invalidateQueries({ queryKey: TASKS_KEY }); // rollback : la tâche réapparaît
     toast.error("Suppression impossible — réessayez.");
   }
 }
 
-function subscribe(l: () => void): () => void {
-  listeners.add(l);
-  ensureLoaded();
-  return () => {
-    listeners.delete(l);
-  };
+function useTasksQuery() {
+  ensureIdentityWired();
+  return useQuery(tasksQuery);
 }
 
 export function useTasks(): Task[] {
-  return useSyncExternalStore(subscribe, () => tasks, () => EMPTY);
+  return useTasksQuery().data ?? EMPTY;
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => loaded, () => false);
+  return useTasksQuery().isSuccess;
 }

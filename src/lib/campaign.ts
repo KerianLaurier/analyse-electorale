@@ -1,13 +1,18 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { getQueryClient } from "@/providers/query-provider";
 
 /**
  * Campagne locale d'une équipe (1 par équipe) : territoire visé, objectif
  * électoral chiffré et découpage du terrain en secteurs. Partagé entre tous
  * les membres de l'équipe (RLS team-scoped).
+ *
+ * Adossé à TanStack Query (cf. migration des stores, pilote `pins`). Campagne,
+ * secteurs et flag équipe partagent une même entrée de cache. API publique
+ * inchangée.
  */
 
 export type CampaignTarget = { type: string; id: string; label: string; href: string };
@@ -63,6 +68,18 @@ type SectorRow = {
   address: string | null;
 };
 
+type CampaignData = { campaign: Campaign | null; sectors: Sector[]; hasTeam: boolean };
+
+const CAMPAIGN_KEY = ["campaign"] as const;
+const EMPTY_SECTORS: Sector[] = [];
+const EMPTY_DATA: CampaignData = { campaign: null, sectors: EMPTY_SECTORS, hasTeam: false };
+
+const campaignQuery = {
+  queryKey: CAMPAIGN_KEY,
+  queryFn: fetchCampaign,
+  staleTime: 5 * 60 * 1000,
+};
+
 function mapSector(r: SectorRow): Sector {
   return {
     id: r.id,
@@ -75,19 +92,6 @@ function mapSector(r: SectorRow): Sector {
     priority: r.priority ?? null,
     address: r.address ?? null,
   };
-}
-
-let myTeamId: string | null = null;
-let hasTeam = false;
-let campaign: Campaign | null = null;
-let sectors: Sector[] = [];
-let loadStarted = false;
-let loaded = false;
-const listeners = new Set<() => void>();
-const EMPTY: Sector[] = [];
-
-function emit() {
-  listeners.forEach((l) => l());
 }
 
 function mapCampaign(r: CampaignRow): Campaign {
@@ -107,43 +111,41 @@ function mapCampaign(r: CampaignRow): Campaign {
   };
 }
 
-async function load() {
+async function fetchCampaign(): Promise<CampaignData> {
   const { userId, teamId } = await getIdentity();
-  if (!userId) {
-    hasTeam = false;
-    myTeamId = null;
-    campaign = null;
-    sectors = [];
-    emit();
-    return;
+  if (!userId || !teamId) {
+    return { campaign: null, sectors: [], hasTeam: false };
   }
-  myTeamId = teamId;
-  hasTeam = myTeamId != null;
   const supabase = createClient();
-  if (!myTeamId) {
-    campaign = null;
-    sectors = [];
-    emit();
-    return;
-  }
   const [{ data: c }, { data: s }] = await Promise.all([
-    supabase.from("campaigns").select("*").eq("team_id", myTeamId).maybeSingle(),
-    supabase.from("campaign_sectors").select("*").eq("team_id", myTeamId).order("created_at", { ascending: true }),
+    supabase.from("campaigns").select("*").eq("team_id", teamId).maybeSingle(),
+    supabase.from("campaign_sectors").select("*").eq("team_id", teamId).order("created_at", { ascending: true }),
   ]);
-  campaign = c ? mapCampaign(c as CampaignRow) : null;
-  sectors = (s ?? []).map((r) => mapSector(r as SectorRow));
-  emit();
+  return {
+    campaign: c ? mapCampaign(c as CampaignRow) : null,
+    sectors: (s ?? []).map((r) => mapSector(r as SectorRow)),
+    hasTeam: true,
+  };
 }
 
-function ensureLoaded() {
-  if (loadStarted) return;
-  loadStarted = true;
-  void load().finally(() => { loaded = true; emit(); });
-  onIdentityChange(() => void load());
+let identityWired = false;
+function ensureIdentityWired() {
+  if (identityWired || typeof window === "undefined") return;
+  identityWired = true;
+  onIdentityChange(() => {
+    void getQueryClient().invalidateQueries({ queryKey: CAMPAIGN_KEY });
+  });
+}
+
+function currentData(): CampaignData {
+  return getQueryClient().getQueryData<CampaignData>(CAMPAIGN_KEY) ?? EMPTY_DATA;
+}
+function patchData(fn: (d: CampaignData) => CampaignData) {
+  getQueryClient().setQueryData<CampaignData>(CAMPAIGN_KEY, (old) => fn(old ?? EMPTY_DATA));
 }
 
 export async function reloadCampaign(): Promise<void> {
-  await load();
+  await getQueryClient().refetchQueries({ queryKey: CAMPAIGN_KEY, type: "all" });
 }
 
 export type CampaignPatch = {
@@ -155,21 +157,22 @@ export type CampaignPatch = {
 };
 
 export async function saveCampaign(patch: CampaignPatch): Promise<void> {
-  if (!myTeamId) return;
+  const { teamId } = await getIdentity();
+  if (!teamId) return;
+  const prev = currentData().campaign;
   const next: Campaign = {
-    target: patch.target !== undefined ? patch.target : campaign?.target ?? null,
-    election: patch.election !== undefined ? patch.election : campaign?.election ?? null,
-    registered: patch.registered !== undefined ? patch.registered : campaign?.registered ?? null,
-    turnoutTarget: patch.turnoutTarget !== undefined ? patch.turnoutTarget : campaign?.turnoutTarget ?? null,
-    scoreTarget: patch.scoreTarget !== undefined ? patch.scoreTarget : campaign?.scoreTarget ?? null,
+    target: patch.target !== undefined ? patch.target : prev?.target ?? null,
+    election: patch.election !== undefined ? patch.election : prev?.election ?? null,
+    registered: patch.registered !== undefined ? patch.registered : prev?.registered ?? null,
+    turnoutTarget: patch.turnoutTarget !== undefined ? patch.turnoutTarget : prev?.turnoutTarget ?? null,
+    scoreTarget: patch.scoreTarget !== undefined ? patch.scoreTarget : prev?.scoreTarget ?? null,
   };
-  campaign = next;
-  emit();
+  patchData((d) => ({ ...d, campaign: next, hasTeam: true }));
 
   const supabase = createClient();
   await supabase.from("campaigns").upsert(
     {
-      team_id: myTeamId,
+      team_id: teamId,
       target_type: next.target?.type ?? null,
       target_id: next.target?.id ?? null,
       target_label: next.target?.label ?? null,
@@ -192,23 +195,25 @@ export type NewSector = {
 };
 
 export async function addSector(input: NewSector): Promise<void> {
-  if (!myTeamId) return;
+  const { teamId } = await getIdentity();
+  if (!teamId) return;
   const supabase = createClient();
   const { data } = await supabase
     .from("campaign_sectors")
-    .insert({ team_id: myTeamId, name: input.name, registered: input.registered ?? null })
+    .insert({ team_id: teamId, name: input.name, registered: input.registered ?? null })
     .select("*")
     .single();
   if (data) {
-    sectors = [...sectors, mapSector(data as SectorRow)];
-    emit();
+    patchData((d) => ({ ...d, sectors: [...d.sectors, mapSector(data as SectorRow)] }));
   }
 }
 
 /** Ajoute plusieurs secteurs d'un coup (génération / ciblage). Dédoublonne par
  *  code bureau si présent, sinon par nom. Renvoie le nombre réellement ajouté. */
 export async function addSectorsBulk(items: NewSector[]): Promise<number> {
-  if (!myTeamId || items.length === 0) return 0;
+  const { teamId } = await getIdentity();
+  if (!teamId || items.length === 0) return 0;
+  const sectors = currentData().sectors;
   const existingCodes = new Set(sectors.map((s) => s.bureauCode).filter(Boolean));
   const existingNames = new Set(sectors.map((s) => s.name));
   const fresh = items.filter((i) =>
@@ -220,7 +225,7 @@ export async function addSectorsBulk(items: NewSector[]): Promise<number> {
     .from("campaign_sectors")
     .insert(
       fresh.map((i) => ({
-        team_id: myTeamId,
+        team_id: teamId,
         name: i.name,
         registered: i.registered ?? null,
         bureau_code: i.bureauCode ?? null,
@@ -229,8 +234,7 @@ export async function addSectorsBulk(items: NewSector[]): Promise<number> {
     )
     .select("*");
   if (data) {
-    sectors = [...sectors, ...(data as SectorRow[]).map(mapSector)];
-    emit();
+    patchData((d) => ({ ...d, sectors: [...d.sectors, ...(data as SectorRow[]).map(mapSector)] }));
   }
   return data?.length ?? 0;
 }
@@ -245,44 +249,44 @@ export type SectorPatch = {
 };
 
 export async function updateSector(id: string, patch: SectorPatch): Promise<void> {
+  const qc = getQueryClient();
+  const sectors = currentData().sectors;
   const idx = sectors.findIndex((s) => s.id === id);
   if (idx < 0) return;
   const next = { ...sectors[idx], ...patch };
-  sectors = [...sectors.slice(0, idx), next, ...sectors.slice(idx + 1)];
-  emit();
+  patchData((d) => ({
+    ...d,
+    sectors: [...d.sectors.slice(0, idx), next, ...d.sectors.slice(idx + 1)],
+  }));
   const supabase = createClient();
   const { error } = await supabase
     .from("campaign_sectors")
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq("id", id);
-  if (error) await load();
+  if (error) void qc.invalidateQueries({ queryKey: CAMPAIGN_KEY });
 }
 
 export async function deleteSector(id: string): Promise<void> {
-  sectors = sectors.filter((s) => s.id !== id);
-  emit();
+  patchData((d) => ({ ...d, sectors: d.sectors.filter((s) => s.id !== id) }));
   const supabase = createClient();
   await supabase.from("campaign_sectors").delete().eq("id", id);
 }
 
-function subscribe(l: () => void): () => void {
-  listeners.add(l);
-  ensureLoaded();
-  return () => {
-    listeners.delete(l);
-  };
+function useCampaignQuery() {
+  ensureIdentityWired();
+  return useQuery(campaignQuery);
 }
 
 export function useCampaign(): Campaign | null {
-  return useSyncExternalStore(subscribe, () => campaign, () => null);
+  return useCampaignQuery().data?.campaign ?? null;
 }
 
 export function useSectors(): Sector[] {
-  return useSyncExternalStore(subscribe, () => sectors, () => EMPTY);
+  return useCampaignQuery().data?.sectors ?? EMPTY_SECTORS;
 }
 
 export function useHasTeam(): boolean {
-  return useSyncExternalStore(subscribe, () => hasTeam, () => false);
+  return useCampaignQuery().data?.hasTeam ?? false;
 }
 
 /** Voix nécessaires = inscrits × participation cible × score cible. */
@@ -293,5 +297,5 @@ export function voteGoal(c: Campaign | null): number | null {
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => loaded, () => false);
+  return useCampaignQuery().isSuccess;
 }
