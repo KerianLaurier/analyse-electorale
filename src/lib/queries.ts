@@ -63,65 +63,56 @@ export type CommuneSociologie = {
 // ─── Choroplèthes électorales (génériques, lisent les agrégats) ───────────────
 
 /**
- * Choroplèthes figées (précalculées par scripts/pipeline/build-choropleths.py)
- * pour chaque scrutin électoral × maille fine (hors « bureaux »). Servies en
- * JSON statique, elles court-circuitent DuckDB-WASM pour le coloriage de carte
- * — le chemin le plus chargé de l'explorateur. Repli transparent sur DuckDB si
- * le fichier n'est pas (encore) déployé.
+ * Choroplèthes figées (précalculées par scripts/pipeline/build-choropleths.py),
+ * servies en JSON statique depuis l'object store. Elles remplacent entièrement
+ * DuckDB-WASM pour le coloriage de carte — DuckDB-WASM ne sait pas lire les
+ * Parquet servis en cross-origine depuis le storage (le coloriage restait bloqué
+ * en chargement). Toutes les colorations de l'explorateur passent désormais ici.
+ *
+ * Deux schémas de fichier :
+ *  - électoral  `{scrutin}_{maille}.json` = { vainqueur, participation, abstention }
+ *  - thématique `{dataset}.json`          = { colonne: { code: valeur } }
  */
 type FrozenChoro = {
   vainqueur: Record<string, string>;
   participation: Record<string, number>;
   abstention: Record<string, number>;
 };
+type ColumnChoro = Record<string, Record<string, number>>;
 
-// Une seule requête par scrutin×maille sert les trois colorations ; mémoïsé pour
-// éviter un fetch par coloration (les query keys diffèrent côté React Query).
-const frozenChoroCache = new Map<string, Promise<FrozenChoro | null>>();
+// Mémoïsé par fichier : une coloration = un fichier, partagé entre query keys.
+const choroCache = new Map<string, Promise<unknown>>();
 
-function loadFrozenChoro(scrutin: Scrutin, maille: Maille): Promise<FrozenChoro | null> {
-  // Seules les élections (hors bureaux) sont figées ; tout miss retombe sur DuckDB.
-  if (!isElection(scrutin) || maille === "bureaux") return Promise.resolve(null);
-  const key = `${scrutin}_${maille}`;
-  let p = frozenChoroCache.get(key);
+function loadChoroFile<T>(name: string): Promise<T> {
+  let p = choroCache.get(name);
   if (!p) {
-    p = fetch(dataUrl(`/electoral/choro/${key}.json`))
-      .then((r) => (r.ok ? (r.json() as Promise<FrozenChoro>) : null))
-      .catch(() => null);
-    frozenChoroCache.set(key, p);
+    p = fetch(dataUrl(`/electoral/choro/${name}.json`)).then((r) => {
+      if (!r.ok) throw new Error(`choroplèthe figée introuvable: ${name} (HTTP ${r.status})`);
+      return r.json();
+    });
+    choroCache.set(name, p);
   }
-  return p;
+  return p as Promise<T>;
+}
+
+/** Lit une colonne d'un fichier choroplèthe thématique → lignes {code, value}. */
+async function fetchColumnRows(file: string, column: string): Promise<NumericRow[]> {
+  const data = await loadChoroFile<ColumnChoro>(file);
+  const col = data[column] ?? {};
+  return Object.entries(col).map(([code, value]) => ({ code, value }));
 }
 
 /**
- * Nuance gagnante par territoire pour un scrutin × maille donné.
- * On somme les voix par nuance (gère le cas où plusieurs candidats partagent
- * une nuance, ex. extrême gauche en présidentielle) puis on garde le top.
+ * Nuance gagnante par territoire pour un scrutin × maille donné (vainqueur
+ * précalculé : somme des voix par nuance puis top, départage déterministe).
  */
 export function useScrutinWinner(scrutin: Scrutin, maille: Maille, enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["scrutin-winner", scrutin, maille],
     queryFn: async (): Promise<WinningNuanceRow[]> => {
-      const frozen = await loadFrozenChoro(scrutin, maille);
-      if (frozen) {
-        return Object.entries(frozen.vainqueur).map(([code, nuance]) => ({ code, nuance }));
-      }
-      const url = aggUrl(scrutin, "candidats", maille);
-      const rows = await query<{ code: string; nuance: string }>(
-        `
-        WITH s AS (
-          SELECT code, nuance, SUM(voix) AS v
-          FROM read_parquet('${url}')
-          WHERE maille = ? AND nuance IS NOT NULL
-          GROUP BY code, nuance
-        )
-        SELECT code, nuance FROM s
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY code ORDER BY v DESC, nuance) = 1
-      `,
-        [maille],
-      );
-      return rows.filter((r) => r.code && r.nuance);
+      const frozen = await loadChoroFile<FrozenChoro>(`${scrutin}_${maille}`);
+      return Object.entries(frozen.vainqueur).map(([code, nuance]) => ({ code, nuance }));
     },
     staleTime: 60 * 60 * 1000,
   });
@@ -138,25 +129,10 @@ export function useScrutinMetric(
     enabled,
     queryKey: ["scrutin-metric", scrutin, maille, metric],
     queryFn: async (): Promise<NumericRow[]> => {
-      const frozen = await loadFrozenChoro(scrutin, maille);
-      if (frozen) {
-        return Object.entries(frozen[metric])
-          .filter(([code, value]) => code && Number.isFinite(value))
-          .map(([code, value]) => ({ code, value }));
-      }
-      const url = aggUrl(scrutin, "territoires", maille);
-      const numer = metric === "participation" ? "votants" : "abstentions";
-      const rows = await query<{ code: string; value: number }>(
-        `
-        SELECT code, CAST(${numer} AS DOUBLE) / inscrits AS value
-        FROM read_parquet('${url}')
-        WHERE maille = ? AND inscrits > 0
-      `,
-        [maille],
-      );
-      return rows
-        .filter((r) => r.code && Number.isFinite(r.value))
-        .map((r) => ({ code: String(r.code), value: Number(r.value) }));
+      const frozen = await loadChoroFile<FrozenChoro>(`${scrutin}_${maille}`);
+      return Object.entries(frozen[metric])
+        .filter(([code, value]) => code && Number.isFinite(value))
+        .map(([code, value]) => ({ code, value }));
     },
     staleTime: 60 * 60 * 1000,
   });
@@ -737,15 +713,7 @@ export function useRevenuMedianCommune(enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "revenu-median-commune"],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = inseeUrl(FILOSOFI_PARQUET);
-      const rows = await query<{ code: string; value: number }>(`
-        SELECT code, MED_SL AS value
-        FROM read_parquet('${url}')
-        WHERE MED_SL IS NOT NULL
-      `);
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
-    },
+    queryFn: () => fetchColumnRows("socio_filosofi_communes", "MED_SL"),
     staleTime: 24 * 60 * 60 * 1000,
   });
 }
@@ -755,15 +723,7 @@ export function useTauxPauvreteCommune(enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "taux-pauvrete-commune"],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = inseeUrl(FILOSOFI_PARQUET);
-      const rows = await query<{ code: string; value: number }>(`
-        SELECT code, PR_MD60 AS value
-        FROM read_parquet('${url}')
-        WHERE PR_MD60 IS NOT NULL
-      `);
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
-    },
+    queryFn: () => fetchColumnRows("socio_filosofi_communes", "PR_MD60"),
     staleTime: 24 * 60 * 60 * 1000,
   });
 }
@@ -780,16 +740,10 @@ export function useSocioColumnCommune(column: SocioColumn, enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "socio", column],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = inseeUrl(FILOSOFI_PARQUET);
+    queryFn: () => {
       // Liste blanche : `column` est une union typée, on revérifie par sécurité.
       const col: SocioColumn = SOCIO_COLUMNS.includes(column) ? column : "MED_SL";
-      const rows = await query<{ code: string; value: number }>(`
-        SELECT code, ${col} AS value
-        FROM read_parquet('${url}')
-        WHERE ${col} IS NOT NULL
-      `);
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+      return fetchColumnRows("socio_filosofi_communes", col);
     },
     staleTime: 24 * 60 * 60 * 1000,
   });
@@ -848,14 +802,9 @@ export function useTrendColumn(file: TrendFile, column: TrendColumn, maille: str
   return useQuery({
     enabled,
     queryKey: ["choropleth", "trend", file, column, maille],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = parquetUrl(`trends/${file}.parquet`);
+    queryFn: () => {
       const col: TrendColumn = TREND_COLUMNS.includes(column) ? column : "d_abstention";
-      const rows = await query<{ code: string; value: number }>(
-        `SELECT code, ${col} AS value FROM read_parquet('${url}') WHERE maille = ? AND ${col} IS NOT NULL`,
-        [maille],
-      );
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+      return fetchColumnRows(`trends_${file}_${maille}`, col);
     },
     staleTime: 24 * 60 * 60 * 1000,
   });
@@ -994,15 +943,9 @@ export function useRpColumnCommune(column: RpColumn, enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "rp", column],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = inseeUrl(RP_PARQUET);
+    queryFn: () => {
       const col: RpColumn = RP_COLUMNS.includes(column) ? column : "part65plus";
-      const rows = await query<{ code: string; value: number }>(`
-        SELECT code, ${col} AS value
-        FROM read_parquet('${url}')
-        WHERE ${col} IS NOT NULL
-      `);
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+      return fetchColumnRows("socio_rp_communes", col);
     },
     staleTime: 24 * 60 * 60 * 1000,
   });
@@ -1016,14 +959,7 @@ export function usePotentielColumn(bloc: PotentielBloc, enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "potentiel", bloc],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = parquetUrl("potentiel_commune.parquet");
-      const col = `pot_${bloc}`;
-      const rows = await query<{ code: string; value: number }>(
-        `SELECT code, ${col} AS value FROM read_parquet('${url}') WHERE ${col} IS NOT NULL`,
-      );
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
-    },
+    queryFn: () => fetchColumnRows("potentiel_communes", `pot_${bloc}`),
     staleTime: 24 * 60 * 60 * 1000,
   });
 }
@@ -1072,7 +1008,6 @@ export function usePotentielMeta() {
 }
 
 // ─── Logement par commune (Palier 3 — base Comparateur de territoires) ────────
-const LOGEMENT_PARQUET = "logement_2022_commune.parquet";
 const LOGEMENT_COLUMNS = [
   "partProprietaires", "partLocataires", "partResSecondaires", "partLogVacants",
 ] as const;
@@ -1083,22 +1018,15 @@ export function useLogementColumnCommune(column: LogementColumn, enabled = true)
   return useQuery({
     enabled,
     queryKey: ["choropleth", "logement", column],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = inseeUrl(LOGEMENT_PARQUET);
+    queryFn: () => {
       const col: LogementColumn = LOGEMENT_COLUMNS.includes(column) ? column : "partProprietaires";
-      const rows = await query<{ code: string; value: number }>(`
-        SELECT code, ${col} AS value
-        FROM read_parquet('${url}')
-        WHERE ${col} IS NOT NULL
-      `);
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+      return fetchColumnRows("socio_logement_communes", col);
     },
     staleTime: 24 * 60 * 60 * 1000,
   });
 }
 
 // ─── Familles & ménages par commune (Palier 3 — base Couples-Familles) ────────
-const FAMILLE_PARQUET = "famille_2022_commune.parquet";
 const FAMILLE_COLUMNS = ["partFamMono", "partPersonnesSeules"] as const;
 export type FamilleColumn = (typeof FAMILLE_COLUMNS)[number];
 
@@ -1107,37 +1035,22 @@ export function useFamilleColumnCommune(column: FamilleColumn, enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "famille", column],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = inseeUrl(FAMILLE_PARQUET);
+    queryFn: () => {
       const col: FamilleColumn = FAMILLE_COLUMNS.includes(column) ? column : "partFamMono";
-      const rows = await query<{ code: string; value: number }>(`
-        SELECT code, ${col} AS value
-        FROM read_parquet('${url}')
-        WHERE ${col} IS NOT NULL
-      `);
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
+      return fetchColumnRows("socio_famille_communes", col);
     },
     staleTime: 24 * 60 * 60 * 1000,
   });
 }
 
 // ─── Mobilité résidentielle par commune (Palier 3 — évol-struct-pop) ──────────
-const MOBILITE_PARQUET = "mobilite_2022_commune.parquet";
 
 /** Choroplèthe du renouvellement résidentiel (part de nouveaux arrivants). */
 export function useMobiliteColumnCommune(enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "mobilite"],
-    queryFn: async (): Promise<CommuneNumericRow[]> => {
-      const url = inseeUrl(MOBILITE_PARQUET);
-      const rows = await query<{ code: string; value: number }>(`
-        SELECT code, partNouveauxArrivants AS value
-        FROM read_parquet('${url}')
-        WHERE partNouveauxArrivants IS NOT NULL
-      `);
-      return rows.map((r) => ({ code: String(r.code), value: Number(r.value) }));
-    },
+    queryFn: () => fetchColumnRows("socio_mobilite_communes", "partNouveauxArrivants"),
     staleTime: 24 * 60 * 60 * 1000,
   });
 }
