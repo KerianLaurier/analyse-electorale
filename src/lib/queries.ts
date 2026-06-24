@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { dataUrl } from "@/lib/data-url";
 import type { Maille } from "@/lib/map-config";
 import { SCRUTIN_META, isElection, type Scrutin } from "@/lib/url-state";
@@ -580,12 +580,10 @@ export type CircoTimelinePoint = ScrutinDetail & { scrutin: Scrutin };
  * disponible à la maille circonscriptions (présidentielles + législatives),
  * en parallèle. Sert la fiche /circo/[code].
  */
-export function useCircoHistory(code: string | null) {
-  return useQuery({
-    enabled: !!code,
+export const circoHistoryOptions = (code: string) =>
+  queryOptions({
     queryKey: ["circo-history", code],
     queryFn: async (): Promise<CircoTimelinePoint[]> => {
-      if (!code) return [];
       const scrutins = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(
         (s) => isElection(s) && SCRUTIN_META[s].mailles.includes("circonscriptions"),
       );
@@ -599,6 +597,9 @@ export function useCircoHistory(code: string | null) {
     },
     staleTime: 30 * 60 * 1000,
   });
+
+export function useCircoHistory(code: string | null) {
+  return useQuery({ ...circoHistoryOptions(code ?? ""), enabled: !!code });
 }
 
 /**
@@ -606,12 +607,11 @@ export function useCircoHistory(code: string | null) {
  * (présidentielles + législatives + municipales), lectures en parallèle.
  * Sert la fiche /commune/[insee].
  */
-export function useCommuneHistory(insee: string | null) {
-  return useQuery({
-    enabled: !!insee,
+/** Options partagées (hook client + préfetch serveur via HydrationBoundary). */
+export const communeHistoryOptions = (insee: string) =>
+  queryOptions({
     queryKey: ["commune-history", insee],
     queryFn: async (): Promise<CircoTimelinePoint[]> => {
-      if (!insee) return [];
       const scrutins = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(
         (s) => isElection(s) && SCRUTIN_META[s].mailles.includes("communes"),
       );
@@ -625,15 +625,17 @@ export function useCommuneHistory(insee: string | null) {
     },
     staleTime: 30 * 60 * 1000,
   });
+
+export function useCommuneHistory(insee: string | null) {
+  return useQuery({ ...communeHistoryOptions(insee ?? ""), enabled: !!insee });
 }
 
 /**
  * Table commune → circonscription(s) législative(s) (MinInt, découpage 2010).
  * Permet d'afficher/lier les circonscriptions d'une commune (multi-circo inclus).
  */
-export function useCommuneCircoMap(enabled = true) {
-  return useQuery({
-    enabled,
+export const communeCircoMapOptions = () =>
+  queryOptions({
     queryKey: ["commune-circo-map"],
     queryFn: async (): Promise<Record<string, string[]>> => {
       const res = await fetch(dataUrl("/electoral/commune_circo.json"));
@@ -643,18 +645,19 @@ export function useCommuneCircoMap(enabled = true) {
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
   });
+
+export function useCommuneCircoMap(enabled = true) {
+  return useQuery({ ...communeCircoMapOptions(), enabled });
 }
 
 /**
  * Historique d'un bureau de vote : chaque scrutin disponible à la maille
  * bureaux (présidentielles 2017/2022, législatives 2022/2024). Sert /bureau/[code].
  */
-export function useBureauHistory(code: string | null) {
-  return useQuery({
-    enabled: !!code,
+export const bureauHistoryOptions = (code: string) =>
+  queryOptions({
     queryKey: ["bureau-history", code],
     queryFn: async (): Promise<CircoTimelinePoint[]> => {
-      if (!code) return [];
       const scrutins = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(
         (s) => isElection(s) && SCRUTIN_META[s].mailles.includes("bureaux"),
       );
@@ -668,6 +671,9 @@ export function useBureauHistory(code: string | null) {
     },
     staleTime: 30 * 60 * 1000,
   });
+
+export function useBureauHistory(code: string | null) {
+  return useQuery({ ...bureauHistoryOptions(code ?? ""), enabled: !!code });
 }
 
 /** Participation nationale (métropole) d'un scrutin — pour les comparaisons. */
@@ -733,12 +739,10 @@ export function useSocioColumnCommune(column: SocioColumn, enabled = true) {
 const numOrNull = (v: number | null | undefined) => (v != null ? Number(v) : null);
 
 /** Indicateurs sociologie pour une commune (pour la fiche). */
-export function useSociologieCommune(code: string | null) {
-  return useQuery({
-    enabled: !!code,
+export const sociologieCommuneOptions = (code: string) =>
+  queryOptions({
     queryKey: ["sociologie-commune", code],
     queryFn: async (): Promise<CommuneSociologie | null> => {
-      if (!code) return null;
       const r = await fetchColumnRecord("socio_filosofi_communes", code);
       if (!r) return null;
       return {
@@ -756,6 +760,9 @@ export function useSociologieCommune(code: string | null) {
     },
     staleTime: 60 * 60 * 1000,
   });
+
+export function useSociologieCommune(code: string | null) {
+  return useQuery({ ...sociologieCommuneOptions(code ?? ""), enabled: !!code });
 }
 
 // ─── Dynamiques électorales (Palier 5 — métriques dérivées 2017→2022) ─────────
@@ -849,12 +856,10 @@ export type BureauSociologie = {
 };
 
 /** Profil socio-démo d'un bureau de vote (porté par sa commune). */
-export function useSociologieBureau(code: string | null) {
-  return useQuery({
-    enabled: !!code,
+export const sociologieBureauOptions = (code: string) =>
+  queryOptions({
     queryKey: ["sociologie-bureau", code],
     queryFn: async (): Promise<BureauSociologie | null> => {
-      if (!code) return null;
       const shard = await loadBureauSocioShard(code.split("_")[0].slice(0, 2));
       const r = shard?.[code];
       if (!r) return null;
@@ -876,6 +881,9 @@ export function useSociologieBureau(code: string | null) {
     },
     staleTime: 60 * 60 * 1000,
   });
+
+export function useSociologieBureau(code: string | null) {
+  return useQuery({ ...sociologieBureauOptions(code ?? ""), enabled: !!code });
 }
 
 // ─── Démographie INSEE (Recensement RP 2022, niveau commune) ──────────────────
@@ -1010,12 +1018,10 @@ export function useMobiliteColumnCommune(enabled = true) {
 }
 
 /** Indicateurs démographiques RP pour une commune (pour la fiche). */
-export function useDemographieCommune(code: string | null) {
-  return useQuery({
-    enabled: !!code,
+export const demographieCommuneOptions = (code: string) =>
+  queryOptions({
     queryKey: ["demographie-commune", code],
     queryFn: async (): Promise<DemographieCommune | null> => {
-      if (!code) return null;
       const r = await fetchColumnRecord("socio_rp_communes", code);
       if (!r) return null;
       return {
@@ -1031,4 +1037,7 @@ export function useDemographieCommune(code: string | null) {
     },
     staleTime: 60 * 60 * 1000,
   });
+
+export function useDemographieCommune(code: string | null) {
+  return useQuery({ ...demographieCommuneOptions(code ?? ""), enabled: !!code });
 }
