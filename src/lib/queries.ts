@@ -580,12 +580,10 @@ export type CircoTimelinePoint = ScrutinDetail & { scrutin: Scrutin };
  * disponible à la maille circonscriptions (présidentielles + législatives),
  * en parallèle. Sert la fiche /circo/[code].
  */
-export function useCircoHistory(code: string | null) {
-  return useQuery({
-    enabled: !!code,
+export const circoHistoryOptions = (code: string) =>
+  queryOptions({
     queryKey: ["circo-history", code],
     queryFn: async (): Promise<CircoTimelinePoint[]> => {
-      if (!code) return [];
       const scrutins = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(
         (s) => isElection(s) && SCRUTIN_META[s].mailles.includes("circonscriptions"),
       );
@@ -599,6 +597,9 @@ export function useCircoHistory(code: string | null) {
     },
     staleTime: 30 * 60 * 1000,
   });
+
+export function useCircoHistory(code: string | null) {
+  return useQuery({ ...circoHistoryOptions(code ?? ""), enabled: !!code });
 }
 
 /**
@@ -653,12 +654,10 @@ export function useCommuneCircoMap(enabled = true) {
  * Historique d'un bureau de vote : chaque scrutin disponible à la maille
  * bureaux (présidentielles 2017/2022, législatives 2022/2024). Sert /bureau/[code].
  */
-export function useBureauHistory(code: string | null) {
-  return useQuery({
-    enabled: !!code,
+export const bureauHistoryOptions = (code: string) =>
+  queryOptions({
     queryKey: ["bureau-history", code],
     queryFn: async (): Promise<CircoTimelinePoint[]> => {
-      if (!code) return [];
       const scrutins = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(
         (s) => isElection(s) && SCRUTIN_META[s].mailles.includes("bureaux"),
       );
@@ -672,6 +671,9 @@ export function useBureauHistory(code: string | null) {
     },
     staleTime: 30 * 60 * 1000,
   });
+
+export function useBureauHistory(code: string | null) {
+  return useQuery({ ...bureauHistoryOptions(code ?? ""), enabled: !!code });
 }
 
 /** Participation nationale (métropole) d'un scrutin — pour les comparaisons. */
@@ -854,12 +856,10 @@ export type BureauSociologie = {
 };
 
 /** Profil socio-démo d'un bureau de vote (porté par sa commune). */
-export function useSociologieBureau(code: string | null) {
-  return useQuery({
-    enabled: !!code,
+export const sociologieBureauOptions = (code: string) =>
+  queryOptions({
     queryKey: ["sociologie-bureau", code],
     queryFn: async (): Promise<BureauSociologie | null> => {
-      if (!code) return null;
       const shard = await loadBureauSocioShard(code.split("_")[0].slice(0, 2));
       const r = shard?.[code];
       if (!r) return null;
@@ -881,6 +881,9 @@ export function useSociologieBureau(code: string | null) {
     },
     staleTime: 60 * 60 * 1000,
   });
+
+export function useSociologieBureau(code: string | null) {
+  return useQuery({ ...sociologieBureauOptions(code ?? ""), enabled: !!code });
 }
 
 // ─── Démographie INSEE (Recensement RP 2022, niveau commune) ──────────────────
