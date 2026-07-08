@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand-mark";
 import { createClient } from "@/lib/supabase/client";
@@ -196,6 +196,10 @@ export function AppHeader() {
               <DropdownMenuItem onClick={() => router.push("/auth/team")}>
                 <Users className="h-4 w-4" />
                 Équipe & abonnement
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/bienvenue")}>
+                <Sparkles className="h-4 w-4" />
+                Prise en main
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/auth/reset")}>
                 <KeyRound className="h-4 w-4" />

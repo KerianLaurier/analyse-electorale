@@ -25,6 +25,8 @@ export type AdminAccount = {
   status: "trial" | "active" | "inactive";
   tier: string;
   trialEndsAt: string | null;
+  billingCycle: "monthly" | "yearly" | null;
+  cancelAt: string | null;
   isSuperAdmin: boolean;
   teamName: string | null;
   createdAt: string | null;
@@ -135,6 +137,8 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
         status: payload.status,
         tier: payload.tier,
         trialEndsAt: payload.trialEndsAt ? new Date(payload.trialEndsAt + "T00:00:00").toISOString() : null,
+        billingCycle: null,
+        cancelAt: null,
         isSuperAdmin: payload.isSuperAdmin,
         teamName: null,
         createdAt: new Date().toISOString(),
@@ -259,11 +263,19 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
                     >
                       {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                     </select>
+                    {a.status === "active" && a.cancelAt && (
+                      <div className="mt-1 text-[10.5px] text-warm">↳ résilié, fin le {fmtDate(a.cancelAt)}</div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <select value={a.tier} onChange={(e) => setSubscription(a, { tier: e.target.value })} className={field}>
                       {TIERS.map((t) => <option key={t} value={t}>{TIER_LABELS[t]}</option>)}
                     </select>
+                    {a.billingCycle && (
+                      <div className="mt-1 text-[10.5px] text-muted-foreground">
+                        {a.billingCycle === "yearly" ? "Annuel" : "Mensuel"}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <input

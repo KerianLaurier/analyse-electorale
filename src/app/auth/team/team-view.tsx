@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Info, UserPlus, Mail, Building2, Copy, LogOut, Users, Loader2, Pencil, Plus, X, Tag, Crown } from "lucide-react";
+import { Check, Info, UserPlus, Mail, Building2, Copy, LogOut, Users, Loader2, Pencil, Plus, X, Tag, Crown, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { reloadPins } from "@/lib/pins";
 import { SignOutButton } from "@/components/sign-out-button";
-import { PLANS, ROLE_LABELS, ROLE_SUGGESTIONS, ROLE_COLORS, initials, type Role, type PlanId, type TeamRole } from "@/lib/team";
+import { PLANS, ROLE_LABELS, ROLE_SUGGESTIONS, ROLE_COLORS, initials, planForTier, planPrice, type Role, type TeamRole } from "@/lib/team";
+import { billingPhase, daysLeft, formatDateFr, nextRenewal, type BillingPhase, type Cycle } from "@/lib/billing";
 import { RoleChip } from "@/components/role-chip";
 
 export type Account = {
@@ -19,6 +21,9 @@ export type Account = {
   status: "trial" | "active" | "inactive";
   tier: string;
   trialEndsAt: string | null;
+  cancelAt: string | null;
+  billingCycle: Cycle | null;
+  startedAt: string | null;
   teamId: string | null;
 };
 
@@ -26,23 +31,16 @@ export type Team = { id: string; name: string; joinCode: string; createdBy: stri
 export type Member = { id: string; fullName: string | null; email: string; role: string };
 export type MemberRole = { memberId: string; roleId: string };
 
-const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+const fmtDate = formatDateFr;
 
-const TIER_TO_PLAN: Record<string, PlanId> = { candidat: "solo", equipe: "equipe", parti: "cabinet" };
-
-const STATUS_META: Record<Account["status"], { label: string; className: string }> = {
+const PHASE_META: Record<BillingPhase, { label: string; className: string }> = {
   active: { label: "Abonnement actif", className: "bg-emerald-100 text-emerald-700" },
-  trial: { label: "Période d’essai", className: "bg-warm/15 text-warm" },
+  canceling: { label: "Résiliation en cours", className: "bg-warm/15 text-warm" },
+  ended: { label: "Abonnement terminé", className: "bg-surface-soft text-muted-foreground" },
+  trialing: { label: "Période d’essai", className: "bg-warm/15 text-warm" },
+  trial_over: { label: "Essai terminé", className: "bg-surface-soft text-muted-foreground" },
   inactive: { label: "Inactif", className: "bg-surface-soft text-muted-foreground" },
 };
-
-function daysLeft(iso: string | null): number | null {
-  if (!iso) return null;
-  const ms = new Date(iso).getTime() - Date.now();
-  if (Number.isNaN(ms)) return null;
-  return Math.max(0, Math.ceil(ms / 86_400_000));
-}
 
 const roleLabel = (r: string) => ROLE_LABELS[(r as Role)] ?? ROLE_LABELS.member;
 
@@ -65,8 +63,9 @@ export function TeamView({
   const [teamName, setTeamName] = useState("");
   const [joinCode, setJoinCode] = useState("");
 
-  const status = STATUS_META[account.status];
-  const currentPlanId = TIER_TO_PLAN[account.tier] ?? "solo";
+  const phase = billingPhase(account.status, account.trialEndsAt, account.cancelAt);
+  const status = PHASE_META[phase];
+  const currentPlan = planForTier(account.tier);
   const trialDays = account.status === "trial" ? daysLeft(account.trialEndsAt) : null;
   const displayName = account.fullName?.trim() || account.email;
   const isOwner = !!team && team.createdBy === account.id;
@@ -268,9 +267,14 @@ export function TeamView({
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Abonnement actuel</p>
               <p className="mt-1 text-[18px] font-semibold tracking-tight">
-                Formule {PLANS.find((p) => p.id === currentPlanId)?.name ?? "Solo"}
+                Formule {currentPlan.name}
+                {(phase === "active" || phase === "canceling") && account.billingCycle && (
+                  <span className="ml-2 align-middle text-[12px] font-normal text-muted-foreground">
+                    {planPrice(currentPlan, account.billingCycle)} € {account.billingCycle === "yearly" ? "/ an" : "/ mois"}
+                  </span>
+                )}
               </p>
-              {account.status === "trial" ? (
+              {phase === "trialing" ? (
                 <p className="mt-0.5 text-[12px] text-muted-foreground">
                   {trialDays != null
                     ? trialDays > 0
@@ -279,24 +283,39 @@ export function TeamView({
                     : "Essai gratuit en cours"}
                   {account.trialEndsAt && ` · expire le ${fmtDate(account.trialEndsAt)}`}
                 </p>
-              ) : account.status === "active" ? (
-                <p className="mt-0.5 text-[12px] text-muted-foreground">Accès complet à l’espace d’analyse 2027.</p>
+              ) : phase === "trial_over" ? (
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  Essai terminé{account.trialEndsAt && ` le ${fmtDate(account.trialEndsAt)}`} — choisissez une formule pour continuer.
+                </p>
+              ) : phase === "active" ? (
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  Accès complet · prochaine échéance le {fmtDate(nextRenewal(account.startedAt, account.billingCycle))} (facture à réception).
+                </p>
+              ) : phase === "canceling" ? (
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  Résiliation enregistrée — accès jusqu&apos;au {account.cancelAt ? fmtDate(account.cancelAt) : "terme"}.
+                </p>
+              ) : phase === "ended" ? (
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  Abonnement terminé{account.cancelAt && ` le ${fmtDate(account.cancelAt)}`} — réactivable à tout moment.
+                </p>
               ) : (
                 <p className="mt-0.5 text-[12px] text-muted-foreground">Aucun abonnement actif — accès restreint.</p>
               )}
             </div>
-            <a
-              href="mailto:contact@mouvancia.fr?subject=Abonnement%20Analyse%20%C3%A9lectorale"
+            <Link
+              href="/auth/abonnement"
               className="inline-flex items-center justify-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 sm:self-center"
             >
-              {account.status === "active" ? "Gérer l’abonnement" : "Activer un abonnement"}
-            </a>
+              {phase === "active" || phase === "canceling" ? "Gérer l’abonnement" : "Choisir une formule"}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
 
           {/* Formules */}
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             {PLANS.map((p) => {
-              const current = p.id === currentPlanId;
+              const current = p.id === currentPlan.id && (phase === "active" || phase === "canceling");
               return (
                 <div
                   key={p.id}
@@ -307,12 +326,15 @@ export function TeamView({
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-[14px] font-semibold">{p.name}</p>
-                    {current && <span className="rounded-pill bg-warm px-2 py-0.5 text-[10px] font-semibold text-[#0A0A0C]">Actuel</span>}
+                    {current && <span className="rounded-pill bg-warm px-2 py-0.5 text-[10px] font-semibold text-[#0A0A0C]">Actuelle</span>}
                   </div>
                   <p className="mt-1 text-[20px] font-semibold tracking-tight">
                     {p.price}<span className="text-[12px] font-normal text-muted-foreground">{p.period}</span>
                   </p>
-                  <p className="text-[11px] text-muted-foreground">{p.seats}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {p.seats}
+                    {p.yearly != null && <> · {p.yearly} € / an</>}
+                  </p>
                   <p className="mt-2 text-[12px] text-muted-foreground">{p.tagline}</p>
                   <ul className="mt-3 flex flex-1 flex-col gap-1.5">
                     {p.features.map((f) => (
@@ -322,17 +344,25 @@ export function TeamView({
                       </li>
                     ))}
                   </ul>
-                  <button
-                    type="button"
-                    disabled={current}
-                    onClick={() => flash(`Changement vers la formule ${p.name} — facturation bientôt disponible.`)}
-                    className={cn(
-                      "mt-4 rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-                      current ? "cursor-default bg-surface-soft text-muted-foreground" : "bg-primary text-primary-foreground hover:opacity-90",
-                    )}
-                  >
-                    {current ? "Formule actuelle" : "Choisir"}
-                  </button>
+                  {current ? (
+                    <span className="mt-4 rounded-pill bg-surface-soft px-3 py-1.5 text-center text-[12px] font-medium text-muted-foreground">
+                      Formule actuelle
+                    </span>
+                  ) : p.monthly == null ? (
+                    <a
+                      href="mailto:contact@mouvancia.fr?subject=Formule%20Cabinet%20%E2%80%94%20MOUVANCIA"
+                      className="mt-4 rounded-pill border border-border bg-surface px-3 py-1.5 text-center text-[12px] font-medium text-foreground/80 transition-colors hover:bg-surface-soft"
+                    >
+                      Demander un devis
+                    </a>
+                  ) : (
+                    <Link
+                      href={`/auth/abonnement?plan=${p.id}`}
+                      className="mt-4 rounded-pill bg-primary px-3 py-1.5 text-center text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                    >
+                      Choisir
+                    </Link>
+                  )}
                 </div>
               );
             })}
@@ -541,7 +571,8 @@ export function TeamView({
           )}
 
           <p className="mt-4 text-[10.5px] text-muted-foreground/70">
-            Le partage fonctionne au niveau de l’équipe (épingles, plan de terrain, porte-à-porte, phoning). La facturation Stripe arrivera ultérieurement.
+            Le partage fonctionne au niveau de l’équipe (épingles, plan de terrain, porte-à-porte, phoning).
+            Souscription en ligne avec activation immédiate — facture adressée à votre organisation, payable à réception.
           </p>
         </section>
       </div>

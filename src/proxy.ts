@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
+import { computeAccess } from "@/lib/billing";
 import { env } from "@/lib/env";
 
 // Routes publiques (pas de compte requis) : landing + écrans d'authentification.
@@ -11,6 +12,8 @@ const PUBLIC_PATHS = new Set([
   "/auth/abonnement",
   "/auth/forgot",
   "/auth/reset",
+  // Retour du lien de confirmation e-mail : doit passer avant toute session.
+  "/auth/callback",
   // Ressources PWA (sans extension statique → sinon bloquées par le gating).
   "/manifest.webmanifest",
   "/apple-icon",
@@ -25,6 +28,7 @@ const APP_PREFIXES = [
   "/analyser",
   "/suivre",
   "/espace",
+  "/bienvenue",
   "/circo",
   "/commune",
   "/bureau",
@@ -98,28 +102,21 @@ const GATE_TTL_MS = 5 * 60_000;
 
 type ProxyClient = Awaited<ReturnType<typeof updateSession>>["supabase"];
 
-/** Abonnement valide : actif, ou essai non expiré, ou super-admin. */
-function computeAccess(
-  status: string | null,
-  trialEndsAt: string | null,
-  isSuperAdmin: boolean,
-): boolean {
-  return (
-    isSuperAdmin ||
-    status === "active" ||
-    (status === "trial" && (!trialEndsAt || new Date(trialEndsAt) > new Date()))
-  );
-}
+// Abonnement valide (actif sans résiliation échue, essai en cours, ou
+// super-admin) : règle partagée `computeAccess` de src/lib/billing.ts.
 
 /**
  * Lit le statut d'abonnement depuis les claims `app_metadata` du JWT
  * (`getClaims()` = vérification locale, pas de round-trip DB). Renvoie `null`
  * si les claims ne sont pas présents (hook non activé, token antérieur) ou en
  * cas d'erreur → le middleware retombe alors sur le cache + `profiles`.
+ * `cancel_at` peut manquer sur les tokens émis avant la migration billing :
+ * absence = pas de résiliation programmée.
  */
 async function readSubscriptionClaims(supabase: ProxyClient): Promise<{
   subscriptionStatus: string;
   trialEndsAt: string | null;
+  cancelAt: string | null;
   isSuperAdmin: boolean;
 } | null> {
   try {
@@ -130,6 +127,7 @@ async function readSubscriptionClaims(supabase: ProxyClient): Promise<{
       return {
         subscriptionStatus: meta.subscription_status,
         trialEndsAt: typeof meta.trial_ends_at === "string" ? meta.trial_ends_at : null,
+        cancelAt: typeof meta.cancel_at === "string" ? meta.cancel_at : null,
         isSuperAdmin: meta.is_super_admin === true,
       };
     }
@@ -168,7 +166,7 @@ export async function proxy(request: NextRequest) {
   const claims = await readSubscriptionClaims(supabase);
   if (claims) {
     isSuperAdmin = claims.isSuperAdmin;
-    hasAccess = computeAccess(claims.subscriptionStatus, claims.trialEndsAt, isSuperAdmin);
+    hasAccess = computeAccess(claims.subscriptionStatus, claims.trialEndsAt, claims.cancelAt, isSuperAdmin);
   } else {
     // Repli (hook non activé / token antérieur) : cache mémoire puis `profiles`.
     const cached = gateCache.get(user.id);
@@ -178,13 +176,14 @@ export async function proxy(request: NextRequest) {
     } else {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("subscription_status, trial_ends_at, is_super_admin")
+        .select("subscription_status, trial_ends_at, cancel_at, is_super_admin")
         .eq("id", user.id)
         .single();
       isSuperAdmin = profile?.is_super_admin === true;
       hasAccess = computeAccess(
         (profile?.subscription_status as string | null) ?? null,
         (profile?.trial_ends_at as string | null) ?? null,
+        (profile?.cancel_at as string | null) ?? null,
         isSuperAdmin,
       );
       if (hasAccess) {

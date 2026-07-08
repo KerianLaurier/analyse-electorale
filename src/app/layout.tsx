@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { AppHeader } from "@/components/app-header";
+import { SubscriptionBanner } from "@/components/subscription-banner";
 import { CommandPalette } from "@/components/command-palette";
 import { RouteProgress } from "@/components/route-progress";
 import { Toaster } from "@/components/toaster";
@@ -81,6 +82,8 @@ export default function RootLayout({
               <RouteProgress />
             </Suspense>
             <AppHeader />
+            {/* Parcours d'abonnement : essai en cours / résiliation programmée. */}
+            <SubscriptionBanner />
             {/* pb réservé à la nav basse mobile (--bottom-nav = 0 en desktop). */}
             <main className="flex-1 flex flex-col pb-[var(--bottom-nav)]">{children}</main>
             <CommandPalette />

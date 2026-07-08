@@ -25,15 +25,34 @@ import { createClient } from "@/lib/supabase/client";
  * à chaque requête indépendamment de ce que le client croit être.
  */
 
+import type { Cycle, SubscriptionStatus, Tier } from "@/lib/billing";
+
+export type IdentitySubscription = {
+  status: SubscriptionStatus;
+  tier: Tier;
+  trialEndsAt: string | null;
+  cancelAt: string | null;
+  billingCycle: Cycle | null;
+};
+
 export type Identity = {
   userId: string | null;
   email: string | null;
   fullName: string | null;
   teamId: string | null;
   isSuperAdmin: boolean;
+  /** Abonnement du compte (null tant que non connecté). */
+  subscription: IdentitySubscription | null;
 };
 
-const ANON: Identity = { userId: null, email: null, fullName: null, teamId: null, isSuperAdmin: false };
+const ANON: Identity = {
+  userId: null,
+  email: null,
+  fullName: null,
+  teamId: null,
+  isSuperAdmin: false,
+  subscription: null,
+};
 
 let cached: Identity | null = null;
 let inflight: Promise<Identity> | null = null;
@@ -52,8 +71,10 @@ async function resolve(): Promise<Identity> {
   }
   const email = session?.user?.email ?? null;
   const { data: prof } = await supabase
+    // `*` à dessein (1 ligne, self) : tolère un front déployé avant/après la
+    // migration billing (un select nommant une colonne absente échouerait).
     .from("profiles")
-    .select("team_id, is_super_admin, full_name")
+    .select("*")
     .eq("id", userId)
     .single();
   cached = {
@@ -62,8 +83,31 @@ async function resolve(): Promise<Identity> {
     fullName: (prof?.full_name as string | null) ?? null,
     teamId: (prof?.team_id as string | null) ?? null,
     isSuperAdmin: prof?.is_super_admin === true,
+    subscription: prof
+      ? {
+          status: (prof.subscription_status ?? "inactive") as IdentitySubscription["status"],
+          tier: (prof.subscription_tier ?? "candidat") as IdentitySubscription["tier"],
+          trialEndsAt: (prof.trial_ends_at as string | null) ?? null,
+          cancelAt: (prof.cancel_at as string | null) ?? null,
+          billingCycle: (prof.billing_cycle as IdentitySubscription["billingCycle"]) ?? null,
+        }
+      : null,
   };
   return cached;
+}
+
+/**
+ * Force un rechargement de l'identité (et notifie les abonnés). À appeler
+ * après une mutation du compte qui ne change pas d'utilisateur — ex. une
+ * souscription/résiliation (onAuthStateChange ignore volontairement les
+ * rafraîchissements de token du même utilisateur).
+ */
+export async function refreshIdentity(): Promise<Identity> {
+  cached = null;
+  inflight = null;
+  const id = await getIdentity();
+  listeners.forEach((l) => l());
+  return id;
 }
 
 function wireAuth() {

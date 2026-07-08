@@ -7,20 +7,9 @@ import { ArrowLeft, Loader2, Info, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { waitForSessionCookie } from "@/lib/session-cookie";
 
 type Mode = "login" | "signup";
-
-/**
- * Attend que le client @supabase/ssr ait écrit les cookies de session avant la
- * navigation complète (l'écriture est asynchrone après signIn — un délai fixe
- * créait une course sur les appareils lents). Repli au bout de ~1 s.
- */
-async function waitForSessionCookie(): Promise<void> {
-  for (let i = 0; i < 40; i++) {
-    if (document.cookie.includes("-auth-token")) return;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-}
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const isLogin = mode === "login";
@@ -58,6 +47,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
           full_name: String(form.get("name") || ""),
           organisation: String(form.get("org") || ""),
         },
+        // Lien de confirmation e-mail → échange du code côté serveur, puis
+        // accueil du parcours (essai démarré) sur /bienvenue.
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/bienvenue")}`,
       },
     });
     if (error) {
@@ -65,10 +57,23 @@ export function AuthForm({ mode }: { mode: Mode }) {
       setStatus("error");
       return;
     }
+    // L'essai de 14 jours démarre automatiquement (trigger `handle_new_user`) :
+    // accueil sur /bienvenue, sauf destination explicite demandée avant l'inscription.
+    const landing = next === "/explorer" ? "/bienvenue" : next;
+
     // Session immédiate (confirmation e-mail désactivée) → on entre directement.
     if (data.session) {
       await waitForSessionCookie();
-      window.location.assign(next);
+      window.location.assign(landing);
+      return;
+    }
+    // Pas de session au signUp, mais certaines configs autorisent quand même la
+    // connexion par mot de passe : on tente, pour un parcours sans couture.
+    // Sinon (confirmation obligatoire), écran « vérifiez vos e-mails ».
+    const { data: login } = await supabase.auth.signInWithPassword({ email, password });
+    if (login.session) {
+      await waitForSessionCookie();
+      window.location.assign(landing);
       return;
     }
     setStatus("check-email");
@@ -93,12 +98,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
           </div>
 
           <h1 className="text-[24px] font-semibold tracking-tight">
-            {isLogin ? "Connexion" : "Créer un compte"}
+            {isLogin ? "Connexion" : "Démarrer l'essai gratuit"}
           </h1>
           <p className="mt-1.5 text-[13px] text-muted-foreground">
             {isLogin
               ? "Accédez à vos analyses électorales."
-              : "Demandez un accès à l'espace d'analyse 2027."}
+              : "14 jours d'accès complet à l'analyse électorale 2027 — sans carte bancaire, sans engagement."}
           </p>
 
           <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3.5">
@@ -122,7 +127,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
             {status === "check-email" && (
               <div className="flex items-start gap-2 rounded-md bg-warm/12 px-3 py-2.5 text-[12px] text-foreground/80">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
-                <span>Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse, puis connectez-vous.</span>
+                <span>
+                  Compte créé — votre essai gratuit de 14 jours est réservé. Ouvrez le lien de
+                  confirmation envoyé par e-mail pour accéder à votre espace.
+                </span>
               </div>
             )}
             {status === "error" && error && (
@@ -140,7 +148,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               )}
             >
               {status === "pending" && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLogin ? "Se connecter" : "Créer mon compte"}
+              {isLogin ? "Se connecter" : "Démarrer mon essai gratuit"}
             </button>
           </form>
 
@@ -162,7 +170,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
           <p className="mt-6 text-center text-[12.5px] text-muted-foreground">
             {isLogin ? (
-              <>Pas encore de compte ? <Link href="/auth/signup" className="font-medium text-foreground hover:underline">Demander un accès</Link></>
+              <>Pas encore de compte ? <Link href="/auth/signup" className="font-medium text-foreground hover:underline">Démarrer l&apos;essai gratuit</Link></>
             ) : (
               <>Déjà inscrit ? <Link href="/auth/login" className="font-medium text-foreground hover:underline">Se connecter</Link></>
             )}

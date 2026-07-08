@@ -13,11 +13,10 @@ export default async function AdminPage() {
   const { data: me } = await supabase.from("profiles").select("is_super_admin").eq("id", user.id).single();
   if (!me?.is_super_admin) redirect("/explorer");
 
+  // `*` à dessein : tolère un déploiement où la migration billing n'est pas
+  // encore appliquée (colonnes cycle/cancel_at absentes).
   const [{ data: rows }, { data: teams }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, email, full_name, organisation, role, subscription_status, subscription_tier, trial_ends_at, is_super_admin, team_id, created_at")
-      .order("created_at", { ascending: false }),
+    supabase.from("profiles").select("*").order("created_at", { ascending: false }),
     supabase.from("teams").select("id, name"),
   ]);
 
@@ -32,6 +31,8 @@ export default async function AdminPage() {
     status: (r.subscription_status ?? "inactive") as AdminAccount["status"],
     tier: r.subscription_tier ?? "candidat",
     trialEndsAt: r.trial_ends_at ?? null,
+    billingCycle: (r.billing_cycle as AdminAccount["billingCycle"]) ?? null,
+    cancelAt: (r.cancel_at as string | null) ?? null,
     isSuperAdmin: r.is_super_admin === true,
     teamName: r.team_id ? teamNames.get(r.team_id as string) ?? null : null,
     createdAt: r.created_at ?? null,
