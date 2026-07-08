@@ -55,13 +55,42 @@ Implémentée à l'identique de la section 5 du brief :
 /commune/[insee]
 /candidat/[id]
 /elu/[id]
+/bienvenue                  Accueil post-inscription (essai démarré, premiers pas)
 /auth
   /login
-  /signup
+  /signup                   Démarrage de l'essai gratuit (14 jours)
+  /callback                 Retour du lien de confirmation e-mail (échange PKCE)
+  /abonnement               Tarifs publics + checkout + gestion (résilier/reprendre)
   /team
 ```
 
 Les fiches territoire `/circo/[code]` et `/commune/[insee]` et les fiches personne `/candidat/[id]` et `/elu/[id]` sont implémentées (historique multi-scrutins, sociologie INSEE, classement, enrichissement nominatif). Les sous-pages `Suivre` restantes (`/parrainages`, `/soiree`) existent encore en squelette (`<PagePlaceholder />`).
+
+## Comptes & abonnement
+
+Parcours self-service complet : **inscription → essai 14 jours** (démarré
+automatiquement par le trigger `handle_new_user`, sans carte bancaire) →
+**accueil `/bienvenue`** (découverte des 4 piliers) → **bandeau d'essai**
+global (jours restants, pressant à ≤ 3 jours) → **souscription
+`/auth/abonnement`** (Solo 49 €/mois ou 490 €/an, Équipe 199 €/mois ou
+1 990 €/an, Cabinet sur devis) → **changement de formule/cycle, résiliation à
+l'échéance, reprise**.
+
+Modèle de facturation pré-Stripe : « activation immédiate, facture à réception »
+(cible B2B payant par virement). Chaque commande/changement est tracé dans
+`billing_events` (montant figé) — c'est la « boîte de réception » facturation du
+back-office. Le branchement Stripe ultérieur ne remplacera que l'implémentation
+des RPC `self_*`.
+
+- Gating : `src/proxy.ts` lit les claims JWT (`subscription_status`,
+  `trial_ends_at`, `cancel_at`) — règle partagée `computeAccess` de
+  `src/lib/billing.ts` (testée par Vitest).
+- Grille tarifaire : `src/lib/team.ts` (affichage) **et**
+  `billing_price_eur()` côté SQL (montants facturés) — à modifier ensemble.
+- Migration : `supabase/migrations/20260708_self_service_billing.sql` — **à
+  appliquer avant de déployer** (colonnes + RPC + hook JWT). Tant qu'elle
+  n'est pas appliquée, le checkout affiche « souscription pas encore ouverte »
+  et le reste du parcours (essai, découverte) fonctionne à l'identique.
 
 > Fiches personne — l'`id` est déterministe : `/candidat/{scrutin}__{circo}__{slug-nom}` et `/elu/{circo}` (ou `/elu/{scrutin}__{circo}`). Le prénom et le sexe proviennent des PV par bureau de vote (législatives 2024), précalculés dans `public/electoral/personnes-2024.json` via `scripts/pipeline/build-personnes.py`.
 

@@ -40,7 +40,24 @@ test("les écrans inscription et mot de passe oublié s'affichent", async ({ pag
   await expect(page.getByRole("heading", { name: "Mot de passe oublié" })).toBeVisible();
 
   await page.goto("/auth/login");
-  await page.getByRole("link", { name: "Demander un accès" }).click();
-  await expect(page.getByRole("heading", { name: "Créer un compte" })).toBeVisible();
+  await page.getByRole("link", { name: /essai gratuit/i }).click();
+  await expect(page.getByRole("heading", { name: "Démarrer l'essai gratuit" })).toBeVisible();
   await expect(page.getByLabel("Organisation")).toBeVisible();
+  await expect(page.getByText(/sans carte bancaire/i)).toBeVisible();
+});
+
+test("la page abonnement expose les formules au public", async ({ page }) => {
+  await page.goto("/auth/abonnement");
+  await expect(page.getByRole("heading", { name: /une formule pour chaque campagne/i })).toBeVisible();
+  // Les trois formules et le sélecteur de cycle sont rendus.
+  await expect(page.getByText("Solo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Équipe", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cabinet", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /annuel/i })).toBeVisible();
+  // Annuel par défaut → bascule mensuel : le prix Solo suit la grille.
+  await expect(page.getByText("490 €")).toBeVisible();
+  await page.getByRole("button", { name: "Mensuel", exact: true }).click();
+  await expect(page.getByText("49 €", { exact: false }).first()).toBeVisible();
+  // Visiteur non connecté : le CTA mène à l'inscription (essai), pas au paiement.
+  await expect(page.getByRole("link", { name: /démarrer l'essai gratuit/i }).first()).toBeVisible();
 });

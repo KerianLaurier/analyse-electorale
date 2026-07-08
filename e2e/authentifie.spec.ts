@@ -31,7 +31,8 @@ test("l'explorateur charge la carte et ses contrôles", async ({ page }) => {
 test("le briefing Suivre s'affiche avec ses cartes", async ({ page }) => {
   await login(page);
   await page.goto("/suivre");
-  await expect(page.getByText("Briefing", { exact: true })).toBeVisible();
+  // « Briefing » existe en double (onglet + label de section) : cibler le label.
+  await expect(page.getByRole("paragraph").filter({ hasText: /^Briefing$/ })).toBeVisible();
   await expect(page.getByText("Dernier sondage")).toBeVisible();
   await expect(page.getByText("Prochaine échéance")).toBeVisible();
 });

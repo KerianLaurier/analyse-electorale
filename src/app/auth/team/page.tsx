@@ -10,9 +10,11 @@ export default async function TeamPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login?next=/auth/team");
 
+  // `*` à dessein (1 ligne, self) : tolère un déploiement où la migration
+  // billing n'est pas encore appliquée (colonnes cycle/cancel_at absentes).
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, organisation, role, subscription_status, subscription_tier, trial_ends_at, team_id")
+    .select("*")
     .eq("id", user.id)
     .single();
 
@@ -25,6 +27,9 @@ export default async function TeamPage() {
     status: (profile?.subscription_status ?? "inactive") as Account["status"],
     tier: profile?.subscription_tier ?? "candidat",
     trialEndsAt: profile?.trial_ends_at ?? null,
+    cancelAt: (profile?.cancel_at as string | null) ?? null,
+    billingCycle: (profile?.billing_cycle as Account["billingCycle"]) ?? null,
+    startedAt: (profile?.subscription_started_at as string | null) ?? null,
     teamId: (profile?.team_id as string | null) ?? null,
   };
 

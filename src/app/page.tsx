@@ -421,11 +421,11 @@ export default async function HomePage() {
         <div className="mt-10 grid gap-4 lg:grid-cols-3">
           {PLANS.map((p) => {
             const featured = p.id === "equipe";
-            const quote = /devis/i.test(p.price);
+            const quote = p.monthly == null;
             const href = quote
               ? "mailto:contact@mouvancia.fr?subject=Formule%20Cabinet"
               : authed
-                ? "/auth/team"
+                ? `/auth/abonnement?plan=${p.id}`
                 : "/auth/signup";
             const cta = quote ? "Nous contacter" : authed ? "Gérer l'abonnement" : "Démarrer l'essai gratuit";
             return (

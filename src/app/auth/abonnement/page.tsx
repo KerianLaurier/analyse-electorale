@@ -1,56 +1,50 @@
-import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
-import { SignOutButton } from "@/components/sign-out-button";
+import { PLANS } from "@/lib/team";
+import type { Cycle } from "@/lib/billing";
+import { SubscriptionFlow, type FlowAccount } from "@/app/auth/abonnement/subscription-flow";
 
-const TIERS = [
-  { name: "Candidat", desc: "1 circonscription suivie, fiches & analyses, export." },
-  { name: "Équipe", desc: "Plusieurs territoires, partage en équipe, ciblage." },
-  { name: "Parti", desc: "National, API, intégrations & support dédié." },
-];
+export const metadata: Metadata = { title: "Abonnement — MOUVANCIA" };
 
-export default async function AbonnementPage() {
+/**
+ * Page unique du parcours d'abonnement :
+ * - tarifs publics (visiteur non connecté) ;
+ * - conversion de l'essai (en cours ou expiré — c'est ici que le middleware
+ *   redirige un compte sans accès) ;
+ * - gestion de l'abonnement actif : changement de formule/cycle, résiliation,
+ *   reprise.
+ */
+export default async function AbonnementPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string; cycle?: string }>;
+}) {
+  const { plan, cycle } = await searchParams;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-6 py-12">
-      <div className="w-full max-w-[520px]">
-        <span className="grid h-11 w-11 place-items-center rounded-xl bg-warm/15 text-warm">
-          <ShieldCheck className="h-5 w-5" />
-        </span>
-        <h1 className="mt-4 text-[24px] font-semibold tracking-tight">Abonnement requis</h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-          {user?.email ? (
-            <>Le compte <span className="font-medium text-foreground">{user.email}</span> n&apos;a pas (ou plus) d&apos;abonnement actif.</>
-          ) : (
-            <>Cet espace est réservé aux abonnés.</>
-          )}{" "}
-          L&apos;accès à l&apos;analyse électorale 2027 nécessite un abonnement actif.
-        </p>
+  let account: FlowAccount | null = null;
+  if (user) {
+    // `*` à dessein (1 ligne, self) : tolère un déploiement où la migration
+    // billing n'est pas encore appliquée (colonnes cycle/cancel_at absentes).
+    const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    account = {
+      email: user.email ?? "",
+      fullName: (p?.full_name as string | null) ?? null,
+      organisation: (p?.organisation as string | null) ?? null,
+      status: (p?.subscription_status as FlowAccount["status"]) ?? "inactive",
+      tier: (p?.subscription_tier as FlowAccount["tier"]) ?? "candidat",
+      trialEndsAt: (p?.trial_ends_at as string | null) ?? null,
+      cancelAt: (p?.cancel_at as string | null) ?? null,
+      billingCycle: (p?.billing_cycle as FlowAccount["billingCycle"]) ?? null,
+      startedAt: (p?.subscription_started_at as string | null) ?? null,
+    };
+  }
 
-        <div className="mt-6 flex flex-col gap-2">
-          {TIERS.map((t) => (
-            <div key={t.name} className="rounded-xl border border-foreground/5 bg-surface/60 p-4">
-              <p className="text-[14px] font-semibold">{t.name}</p>
-              <p className="mt-0.5 text-[12px] text-muted-foreground">{t.desc}</p>
-            </div>
-          ))}
-        </div>
+  const initialPlanId = PLANS.some((p) => p.id === plan) ? (plan as (typeof PLANS)[number]["id"]) : null;
+  const initialCycle: Cycle | null = cycle === "monthly" || cycle === "yearly" ? cycle : null;
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <a
-            href="mailto:contact@mouvancia.fr?subject=Abonnement%20Analyse%20%C3%A9lectorale"
-            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            Demander un accès
-          </a>
-          <SignOutButton />
-          <Link href="/" className="text-[12px] text-muted-foreground hover:text-foreground">
-            Accueil
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
+  return <SubscriptionFlow account={account} initialPlanId={initialPlanId} initialCycle={initialCycle} />;
 }
