@@ -42,7 +42,12 @@ export type FlowAccount = {
   cancelAt: string | null;
   billingCycle: Cycle | null;
   startedAt: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
 };
+
+export type BillingProvider = "stripe" | "invoice";
+export type CheckoutResult = "success" | "cancelled" | null;
 
 const CONTACT_MAILTO = "mailto:contact@mouvancia.fr?subject=Formule%20Cabinet%20%E2%80%94%20MOUVANCIA";
 
@@ -53,6 +58,20 @@ function rpcErrorMessage(err: { code?: string; message?: string } | null): strin
     return "La souscription en ligne n'est pas encore ouverte sur cet environnement — contactez contact@mouvancia.fr.";
   }
   return err?.message || "Une erreur est survenue — réessayez.";
+}
+
+/** POST JSON vers nos routes Stripe ; renvoie l'URL de redirection ou lève l'erreur serveur. */
+async function fetchStripeUrl(path: string, body: Record<string, unknown>): Promise<{ url?: string; portal?: boolean; error?: string }> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as { url?: string; portal?: boolean; error?: string };
+  if (!res.ok || !data.url) {
+    return { portal: data.portal, error: data.error || "Le service de paiement est indisponible — réessayez." };
+  }
+  return data;
 }
 
 /**
@@ -70,17 +89,25 @@ async function syncSessionAfterBillingChange(): Promise<void> {
 
 export function SubscriptionFlow({
   account,
+  provider,
   initialPlanId,
   initialCycle,
+  checkoutResult,
 }: {
   account: FlowAccount | null;
+  provider: BillingProvider;
   initialPlanId: PlanId | null;
   initialCycle: Cycle | null;
+  checkoutResult: CheckoutResult;
 }) {
   const router = useRouter();
   const phase = account ? billingPhase(account.status, account.trialEndsAt, account.cancelAt) : null;
   const hasOpenAccess = phase === "trialing" || phase === "active" || phase === "canceling";
   const currentPlan = account ? planForTier(account.tier) : null;
+  // Abonné par carte : formule/résiliation/factures se gèrent chez Stripe
+  // (Billing Portal) ; l'état revient dans profiles par le webhook.
+  const isStripeSubscriber =
+    provider === "stripe" && !!account?.stripeSubscriptionId && (phase === "active" || phase === "canceling");
 
   const [cycle, setCycle] = useState<Cycle>(initialCycle ?? account?.billingCycle ?? "yearly");
   const [confirming, setConfirming] = useState<Plan | null>(() => {
@@ -91,13 +118,90 @@ export function SubscriptionFlow({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ plan: Plan; cycle: Cycle; kind: "subscribe" | "change" } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [done, setDone] = useState<{ plan: Plan; cycle: Cycle; kind: "subscribe" | "change" } | null>(() => {
+    // Retour de Checkout avec webhook déjà passé : succès immédiat.
+    if (checkoutResult === "success" && account?.status === "active") {
+      return { plan: planForTier(account.tier), cycle: account.billingCycle ?? "yearly", kind: "subscribe" };
+    }
+    return null;
+  });
+  const [notice, setNotice] = useState<string | null>(
+    checkoutResult === "cancelled" ? "Paiement annulé — aucune facturation n'a eu lieu." : null,
+  );
+  // Retour de Checkout avant le webhook : courte attente d'activation.
+  const [awaitingActivation, setAwaitingActivation] = useState(
+    checkoutResult === "success" && account?.status !== "active",
+  );
+
+  useEffect(() => {
+    if (!awaitingActivation) return;
+    let stopped = false;
+    let tries = 0;
+    async function poll() {
+      if (stopped) return;
+      tries += 1;
+      const id = await refreshIdentity();
+      const sub = id.subscription;
+      if (stopped) return;
+      if (sub?.status === "active") {
+        await syncSessionAfterBillingChange();
+        if (stopped) return;
+        setDone({ plan: planForTier(sub.tier), cycle: sub.billingCycle ?? "yearly", kind: "subscribe" });
+        setAwaitingActivation(false);
+        router.refresh();
+        return;
+      }
+      if (tries < 8) {
+        setTimeout(() => void poll(), 1500);
+      } else {
+        setAwaitingActivation(false);
+        setNotice(
+          "Paiement confirmé — l'activation peut prendre quelques instants. Rechargez la page d'ici une minute.",
+        );
+      }
+    }
+    void poll();
+    return () => {
+      stopped = true;
+    };
+  }, [awaitingActivation, router]);
+
+  async function openPortal(flow?: "subscription_update") {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const res = await fetchStripeUrl("/api/stripe/portal", flow ? { flow } : {});
+    if (res.url) {
+      window.location.assign(res.url);
+      return; // navigation en cours — on ne réactive pas les boutons
+    }
+    setError(res.error ?? null);
+    setBusy(false);
+  }
 
   async function subscribe(plan: Plan) {
     if (busy || !account) return;
     setBusy(true);
     setError(null);
+
+    // Paiement carte : redirection vers Stripe Checkout — l'activation arrive
+    // par webhook, confirmée au retour sur ?checkout=success.
+    if (provider === "stripe") {
+      const res = await fetchStripeUrl("/api/stripe/checkout", { tier: plan.tier, cycle });
+      if (res.url) {
+        window.location.assign(res.url);
+        return;
+      }
+      if (res.portal) {
+        // Déjà abonné par carte : le changement passe par le portail.
+        await openPortal("subscription_update");
+        return;
+      }
+      setError(res.error ?? null);
+      setBusy(false);
+      return;
+    }
+
     const supabase = createClient();
     const { error: err } = await supabase.rpc("self_set_plan", { p_tier: plan.tier, p_cycle: cycle });
     if (err) {
@@ -166,8 +270,10 @@ export function SubscriptionFlow({
 
       <div className="flex flex-1 justify-center px-6 py-10">
         <div className="w-full max-w-4xl">
-          {done ? (
-            <SuccessPanel done={done} account={account} />
+          {awaitingActivation ? (
+            <AwaitingActivationPanel />
+          ) : done ? (
+            <SuccessPanel done={done} account={account} provider={provider} />
           ) : (
             <>
               <FlowHeader account={account} phase={phase} currentPlan={currentPlan} />
@@ -197,6 +303,7 @@ export function SubscriptionFlow({
                   onCloseCancel={() => setCancelOpen(false)}
                   onCancel={cancelSubscription}
                   onResume={resumeSubscription}
+                  onPortal={isStripeSubscriber ? () => void openPortal() : null}
                 />
               )}
 
@@ -220,16 +327,29 @@ export function SubscriptionFlow({
                     busy={busy}
                     onChoose={() => {
                       setError(null);
-                      setConfirming(p);
+                      // Abonné par carte : changement de formule via le portail
+                      // Stripe (proration gérée là-bas), pas un second checkout.
+                      if (isStripeSubscriber) void openPortal("subscription_update");
+                      else setConfirming(p);
                     }}
                   />
                 ))}
               </div>
 
               <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground/80">
-                Essai gratuit de 14 jours sans carte bancaire. Souscription avec activation immédiate —
-                facture émise à votre organisation, payable à réception (virement). Sans engagement de durée :
-                résiliation à tout moment, effective à l&apos;échéance en cours. Formule Cabinet sur devis.
+                {provider === "stripe" ? (
+                  <>
+                    Essai gratuit de 14 jours sans carte bancaire. Paiement sécurisé par carte (Stripe),
+                    activation immédiate. Sans engagement de durée : résiliation à tout moment depuis votre
+                    espace de facturation, effective à l&apos;échéance en cours. Formule Cabinet sur devis.
+                  </>
+                ) : (
+                  <>
+                    Essai gratuit de 14 jours sans carte bancaire. Souscription avec activation immédiate —
+                    facture émise à votre organisation, payable à réception (virement). Sans engagement de durée :
+                    résiliation à tout moment, effective à l&apos;échéance en cours. Formule Cabinet sur devis.
+                  </>
+                )}
               </p>
             </>
           )}
@@ -237,12 +357,13 @@ export function SubscriptionFlow({
       </div>
 
       {/* Panneau de confirmation (checkout) */}
-      {confirming && account && !done && (
+      {confirming && account && !done && !awaitingActivation && (
         <CheckoutPanel
           plan={confirming}
           cycle={cycle}
           account={account}
           phase={phase}
+          provider={provider}
           busy={busy}
           error={error}
           onCycle={setCycle}
@@ -398,6 +519,7 @@ function CurrentSubscription({
   onCloseCancel,
   onCancel,
   onResume,
+  onPortal,
 }: {
   account: FlowAccount;
   phase: "active" | "canceling";
@@ -408,6 +530,8 @@ function CurrentSubscription({
   onCloseCancel: () => void;
   onCancel: () => void;
   onResume: () => void;
+  /** Abonné par carte : toutes les actions passent par le Billing Portal Stripe. */
+  onPortal: (() => void) | null;
 }) {
   const renewal = nextRenewal(account.startedAt, account.billingCycle);
   const price = account.billingCycle ? planPrice(plan, account.billingCycle) : plan.monthly;
@@ -432,13 +556,30 @@ function CurrentSubscription({
           <p className="mt-0.5 text-[12px] text-muted-foreground">
             {phase === "canceling" && account.cancelAt ? (
               <>Prend fin le {formatDateFr(account.cancelAt)} — plus aucune facture ensuite.</>
+            ) : onPortal ? (
+              <>Prochaine échéance le {formatDateFr(renewal)} (reconduction tacite, paiement par carte).</>
             ) : (
               <>Prochaine échéance le {formatDateFr(renewal)} (reconduction tacite, facture à réception).</>
             )}
           </p>
         </div>
 
-        {phase === "canceling" ? (
+        {onPortal ? (
+          <div className="flex flex-col items-end gap-1.5">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onPortal}
+              className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}
+              {phase === "canceling" ? "Reprendre mon abonnement" : "Gérer mon abonnement"}
+            </button>
+            <span className="text-[10.5px] text-muted-foreground/80">
+              Carte, factures, formule et résiliation — portail sécurisé Stripe.
+            </span>
+          </div>
+        ) : phase === "canceling" ? (
           <button
             type="button"
             disabled={busy}
@@ -460,7 +601,7 @@ function CurrentSubscription({
         )}
       </div>
 
-      {phase === "active" && cancelOpen && (
+      {phase === "active" && cancelOpen && !onPortal && (
         <div className="mt-4 rounded-lg border border-warm/30 bg-warm/[0.06] p-4">
           <p className="text-[13px] font-medium">Confirmer la résiliation ?</p>
           <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
@@ -659,6 +800,7 @@ function CheckoutPanel({
   cycle,
   account,
   phase,
+  provider,
   busy,
   error,
   onCycle,
@@ -669,6 +811,7 @@ function CheckoutPanel({
   cycle: Cycle;
   account: FlowAccount;
   phase: ReturnType<typeof billingPhase> | null;
+  provider: BillingProvider;
   busy: boolean;
   error: string | null;
   onCycle: (c: Cycle) => void;
@@ -727,13 +870,27 @@ function CheckoutPanel({
         </dl>
 
         <p className="mt-3 flex items-start gap-2 text-[11.5px] leading-relaxed text-muted-foreground">
-          <ReceiptText className="mt-0.5 h-4 w-4 shrink-0 text-warm" />
-          <span>
-            Activation immédiate. La facture est adressée à{" "}
-            <span className="font-medium text-foreground/80">{account.organisation || account.email}</span>,
-            payable à réception par virement. Sans engagement : résiliable à tout moment, effet à l&apos;échéance
-            en cours.
-          </span>
+          {provider === "stripe" ? (
+            <>
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-warm" />
+              <span>
+                Paiement sécurisé par carte — vous allez être redirigé vers Stripe. Activation immédiate
+                après paiement, reçu envoyé à{" "}
+                <span className="font-medium text-foreground/80">{account.email}</span>. Sans engagement :
+                résiliable à tout moment, effet à l&apos;échéance en cours.
+              </span>
+            </>
+          ) : (
+            <>
+              <ReceiptText className="mt-0.5 h-4 w-4 shrink-0 text-warm" />
+              <span>
+                Activation immédiate. La facture est adressée à{" "}
+                <span className="font-medium text-foreground/80">{account.organisation || account.email}</span>,
+                payable à réception par virement. Sans engagement : résiliable à tout moment, effet à l&apos;échéance
+                en cours.
+              </span>
+            </>
+          )}
         </p>
 
         {error && (
@@ -751,7 +908,11 @@ function CheckoutPanel({
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[13.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isChange ? "Confirmer le changement" : "Confirmer la souscription"}
+            {provider === "stripe"
+              ? "Continuer vers le paiement"
+              : isChange
+                ? "Confirmer le changement"
+                : "Confirmer la souscription"}
           </button>
           <button
             type="button"
@@ -767,14 +928,32 @@ function CheckoutPanel({
   );
 }
 
+/* ── Retour de Stripe Checkout : activation par webhook en cours ────────────── */
+
+function AwaitingActivationPanel() {
+  return (
+    <div className="mx-auto max-w-[520px] py-16 text-center" role="status" aria-live="polite">
+      <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-warm/15 text-warm">
+        <Loader2 className="h-7 w-7 animate-spin" />
+      </span>
+      <h1 className="mt-5 text-[24px] font-semibold tracking-tight">Paiement confirmé</h1>
+      <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
+        Activation de votre espace en cours — quelques secondes…
+      </p>
+    </div>
+  );
+}
+
 /* ── Écran de confirmation post-souscription ────────────────────────────────── */
 
 function SuccessPanel({
   done,
   account,
+  provider,
 }: {
   done: { plan: Plan; cycle: Cycle; kind: "subscribe" | "change" };
   account: FlowAccount | null;
+  provider: BillingProvider;
 }) {
   const price = planPrice(done.plan, done.cycle);
   return (
@@ -794,9 +973,16 @@ function SuccessPanel({
             ({price} € {done.cycle === "yearly" ? "/ an" : "/ mois"} HT)
           </>
         )}
-        . La facture sera adressée à{" "}
-        <span className="font-medium text-foreground">{account?.organisation || account?.email}</span>, payable à
-        réception.
+        .{" "}
+        {provider === "stripe" ? (
+          <>Reçu envoyé par e-mail — factures et moyen de paiement disponibles dans votre espace de facturation.</>
+        ) : (
+          <>
+            La facture sera adressée à{" "}
+            <span className="font-medium text-foreground">{account?.organisation || account?.email}</span>, payable
+            à réception.
+          </>
+        )}
       </p>
       <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
         <button
