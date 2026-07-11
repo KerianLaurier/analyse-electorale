@@ -76,21 +76,32 @@ global (jours restants, pressant à ≤ 3 jours) → **souscription
 1 990 €/an, Cabinet sur devis) → **changement de formule/cycle, résiliation à
 l'échéance, reprise**.
 
-Modèle de facturation pré-Stripe : « activation immédiate, facture à réception »
-(cible B2B payant par virement). Chaque commande/changement est tracé dans
-`billing_events` (montant figé) — c'est la « boîte de réception » facturation du
-back-office. Le branchement Stripe ultérieur ne remplacera que l'implémentation
-des RPC `self_*`.
+Deux moteurs de facturation, choisis automatiquement (voir
+[`docs/stripe.md`](docs/stripe.md)) :
+
+- **Stripe** (carte) quand `STRIPE_SECRET_KEY` + `SUPABASE_SERVICE_ROLE_KEY`
+  sont configurées : souscription via Stripe Checkout, gestion (formule,
+  résiliation, factures, moyen de paiement) via le Billing Portal, état
+  synchronisé dans `profiles` par le webhook `/api/stripe/webhook`
+  (idempotent, table `stripe_events`).
+- **« Activation immédiate, facture à réception »** en repli (dev/preview,
+  clients par virement) : RPC `self_set_plan`/`self_cancel`/`self_resume`.
+
+Chaque commande/changement est tracé dans `billing_events` (montant figé) —
+c'est la « boîte de réception » facturation du back-office, quel que soit le
+moteur.
 
 - Gating : `src/proxy.ts` lit les claims JWT (`subscription_status`,
   `trial_ends_at`, `cancel_at`) — règle partagée `computeAccess` de
   `src/lib/billing.ts` (testée par Vitest).
-- Grille tarifaire : `src/lib/team.ts` (affichage) **et**
-  `billing_price_eur()` côté SQL (montants facturés) — à modifier ensemble.
-- Migration : `supabase/migrations/20260708_self_service_billing.sql` — **à
-  appliquer avant de déployer** (colonnes + RPC + hook JWT). Tant qu'elle
-  n'est pas appliquée, le checkout affiche « souscription pas encore ouverte »
-  et le reste du parcours (essai, découverte) fonctionne à l'identique.
+- Grille tarifaire : `src/lib/team.ts` (affichage), `billing_price_eur()`
+  côté SQL (mode facture) **et** les prix Stripe (relancer
+  `scripts/stripe/bootstrap-products.mjs`) — à modifier ensemble.
+- Migrations : `20260708_self_service_billing.sql` (appliquée en prod le
+  2026-07-09) puis `20260709_stripe_billing.sql` — **à appliquer avant de
+  déployer** le paiement carte. Sans elles, le checkout affiche proprement
+  « pas encore ouvert » et le reste du parcours (essai, découverte) fonctionne
+  à l'identique.
 
 > Fiches personne — l'`id` est déterministe : `/candidat/{scrutin}__{circo}__{slug-nom}` et `/elu/{circo}` (ou `/elu/{scrutin}__{circo}`). Le prénom et le sexe proviennent des PV par bureau de vote (législatives 2024), précalculés dans `public/electoral/personnes-2024.json` via `scripts/pipeline/build-personnes.py`.
 

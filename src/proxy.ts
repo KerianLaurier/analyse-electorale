@@ -14,6 +14,8 @@ const PUBLIC_PATHS = new Set([
   "/auth/reset",
   // Retour du lien de confirmation e-mail : doit passer avant toute session.
   "/auth/callback",
+  // Webhook Stripe : pas de session — authentifié par sa signature.
+  "/api/stripe/webhook",
   // Ressources PWA (sans extension statique → sinon bloquées par le gating).
   "/manifest.webmanifest",
   "/apple-icon",

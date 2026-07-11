@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/team";
 import type { Cycle } from "@/lib/billing";
-import { SubscriptionFlow, type FlowAccount } from "@/app/auth/abonnement/subscription-flow";
+import {
+  SubscriptionFlow,
+  type BillingProvider,
+  type CheckoutResult,
+  type FlowAccount,
+} from "@/app/auth/abonnement/subscription-flow";
 
 export const metadata: Metadata = { title: "Abonnement — MOUVANCIA" };
 
@@ -13,13 +18,16 @@ export const metadata: Metadata = { title: "Abonnement — MOUVANCIA" };
  *   redirige un compte sans accès) ;
  * - gestion de l'abonnement actif : changement de formule/cycle, résiliation,
  *   reprise.
+ *
+ * Deux moteurs de paiement : Stripe (carte, si configuré côté serveur) ou le
+ * repli « facture à réception » (RPC self_*) — même UI, wording adapté.
  */
 export default async function AbonnementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ plan?: string; cycle?: string }>;
+  searchParams: Promise<{ plan?: string; cycle?: string; checkout?: string }>;
 }) {
-  const { plan, cycle } = await searchParams;
+  const { plan, cycle, checkout } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -27,8 +35,8 @@ export default async function AbonnementPage({
 
   let account: FlowAccount | null = null;
   if (user) {
-    // `*` à dessein (1 ligne, self) : tolère un déploiement où la migration
-    // billing n'est pas encore appliquée (colonnes cycle/cancel_at absentes).
+    // `*` à dessein (1 ligne, self) : tolère un déploiement où les migrations
+    // billing/stripe ne sont pas encore appliquées (colonnes absentes).
     const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
     account = {
       email: user.email ?? "",
@@ -40,11 +48,27 @@ export default async function AbonnementPage({
       cancelAt: (p?.cancel_at as string | null) ?? null,
       billingCycle: (p?.billing_cycle as FlowAccount["billingCycle"]) ?? null,
       startedAt: (p?.subscription_started_at as string | null) ?? null,
+      stripeCustomerId: (p?.stripe_customer_id as string | null) ?? null,
+      stripeSubscriptionId: (p?.stripe_subscription_id as string | null) ?? null,
     };
   }
 
+  // Paiement carte actif seulement si la chaîne serveur est complète (clé
+  // Stripe + service role pour la synchro webhook) — sinon repli facture.
+  const provider: BillingProvider =
+    process.env.STRIPE_SECRET_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY ? "stripe" : "invoice";
+
   const initialPlanId = PLANS.some((p) => p.id === plan) ? (plan as (typeof PLANS)[number]["id"]) : null;
   const initialCycle: Cycle | null = cycle === "monthly" || cycle === "yearly" ? cycle : null;
+  const checkoutResult: CheckoutResult = checkout === "success" || checkout === "cancelled" ? checkout : null;
 
-  return <SubscriptionFlow account={account} initialPlanId={initialPlanId} initialCycle={initialCycle} />;
+  return (
+    <SubscriptionFlow
+      account={account}
+      provider={provider}
+      initialPlanId={initialPlanId}
+      initialCycle={initialCycle}
+      checkoutResult={checkoutResult}
+    />
+  );
 }
