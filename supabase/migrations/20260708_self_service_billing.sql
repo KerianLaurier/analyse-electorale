@@ -1,7 +1,9 @@
 -- Parcours d'abonnement self-service (essai → souscription → changement → résiliation).
 --
--- ⚠️ NON APPLIQUÉE EN PROD — à appliquer via MCP `apply_migration` sur
--- fdfghtrxczauvrbmdxlq UNIQUEMENT sur accord explicite de Kerian.
+-- ⚠️ APPLIQUÉE EN PROD le 2026-07-09 (via MCP apply_migration sur
+-- fdfghtrxczauvrbmdxlq, sur accord explicite de Kerian ; + patch
+-- billing_price_eur_search_path le même jour). Ce fichier versionne le SQL.
+-- Hook JWT vérifié post-application : sortie non-NULL, cancel_at en JSON null.
 --
 -- Modèle de facturation (pré-Stripe) : « activation immédiate, facture à
 -- réception ». La cible (candidats, partis, cabinets) paie par virement sur
@@ -76,6 +78,7 @@ create or replace function public.billing_price_eur(p_tier text, p_cycle text)
 returns integer
 language sql
 immutable
+set search_path = ''
 as $$
   select case
     when p_tier = 'candidat' and p_cycle = 'monthly' then 49
