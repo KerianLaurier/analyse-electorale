@@ -25,6 +25,7 @@ const stripe = new Stripe(KEY);
 const url = `${baseUrl}/api/stripe/webhook`;
 const ENABLED_EVENTS = [
   "checkout.session.completed",
+  "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
   "invoice.paid",
@@ -35,7 +36,14 @@ const { data: endpoints } = await stripe.webhookEndpoints.list({ limit: 100 });
 const existing = endpoints.find((e) => e.url === url);
 
 if (existing && !recreate) {
-  console.log(`= endpoint existant  ${existing.id}  ${url}`);
+  // Aligne la liste d'événements si elle a évolué (le secret ne change pas).
+  const current = [...(existing.enabled_events ?? [])].sort().join(",");
+  if (current !== [...ENABLED_EVENTS].sort().join(",")) {
+    await stripe.webhookEndpoints.update(existing.id, { enabled_events: ENABLED_EVENTS });
+    console.log(`~ endpoint mis à jour  ${existing.id}  ${url} (événements alignés)`);
+  } else {
+    console.log(`= endpoint existant  ${existing.id}  ${url}`);
+  }
   console.log("  (secret non récupérable après création — --recreate pour le régénérer)");
   process.exit(0);
 }
