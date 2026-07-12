@@ -1,7 +1,9 @@
 -- Paiement par carte via Stripe (Checkout + webhooks + Billing Portal).
 --
--- ⚠️ NON APPLIQUÉE EN PROD — à appliquer via MCP `apply_migration` sur
--- fdfghtrxczauvrbmdxlq UNIQUEMENT sur accord explicite de Kerian.
+-- ⚠️ APPLIQUÉE EN PROD le 2026-07-12 (via MCP apply_migration sur
+-- fdfghtrxczauvrbmdxlq, sur accord explicite de Kerian). Ce fichier versionne
+-- le SQL. Vérifié post-application : colonnes stripe_*, index unique, RLS
+-- stripe_events, CHECK billing_events à 8 types. Le hook JWT n'est pas touché.
 --
 -- Complète 20260708_self_service_billing.sql : la vérité de l'abonnement d'un
 -- client Stripe vit chez Stripe et est SYNCHRONISÉE dans `profiles` par le

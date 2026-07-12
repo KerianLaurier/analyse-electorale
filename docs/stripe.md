@@ -34,26 +34,29 @@ clés, **aucun price_id à configurer**. Montants HT.
 
 ### 2. Webhook
 
-Dashboard → Developers → Webhooks → **Add endpoint** :
+```bash
+STRIPE_SECRET_KEY=sk_test_… node scripts/stripe/bootstrap-webhook.mjs https://app.mouvancia.fr
+```
 
-- URL : `https://app.mouvancia.fr/api/stripe/webhook`
-- Événements : `checkout.session.completed`,
-  `customer.subscription.updated`, `customer.subscription.deleted`,
-  `invoice.paid`, `invoice.payment_failed`
-- Copier le **signing secret** (`whsec_…`).
+Déclare l'endpoint `/api/stripe/webhook` avec les 5 événements suivis
+(`checkout.session.completed`, `customer.subscription.updated/deleted`,
+`invoice.paid`, `invoice.payment_failed`) et **affiche le signing secret**
+(`whsec_…`) → à copier dans `STRIPE_WEBHOOK_SECRET`. Le secret n'est montré
+qu'à la création ; `--recreate` pour le régénérer.
 
 En local : `stripe listen --forward-to localhost:3000/api/stripe/webhook`
 (affiche un `whsec_…` de session à mettre dans `.env.local`).
 
 ### 3. Billing Portal
 
-Dashboard → Settings → **Billing → Customer portal** :
+```bash
+STRIPE_SECRET_KEY=sk_test_… node scripts/stripe/bootstrap-portal.mjs
+```
 
-- Activer **Cancel subscriptions** (« at end of billing period »).
-- Activer **Update subscriptions** et cocher les produits Solo & Équipe
-  (les 4 prix) — c'est ce qui permet le changement de formule/cycle avec
-  proration.
-- Activer l'historique des factures et la mise à jour du moyen de paiement.
+Configure (idempotent) le portail client : résiliation à l'échéance,
+changement de formule entre les 4 prix (avec proration), historique des
+factures, mise à jour du moyen de paiement. Aucune configuration manuelle au
+dashboard.
 
 ### 4. Variables d'environnement (Netlify → Environment)
 
