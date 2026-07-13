@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
-# Télécharge tous les fichiers sources (géo + électoral) listés dans sources.json.
-# Idempotent : ne re-télécharge pas un fichier déjà présent (utiliser --force pour forcer).
+# Télécharge tous les fichiers sources (géo + électoral + INSEE) listés dans
+# sources.json. Idempotent : ne re-télécharge pas un fichier déjà présent
+# (--force pour forcer). --only-electoral saute le géo et l'INSEE — utilisé par
+# le workflow build-aggregates (les URLs melodi INSEE expirent régulièrement et
+# ne servent qu'aux builds socio, pas aux agrégats électoraux).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
 FORCE=0
-if [[ "${1:-}" == "--force" ]]; then FORCE=1; fi
+ONLY_ELECTORAL=0
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=1 ;;
+    --only-electoral) ONLY_ELECTORAL=1 ;;
+  esac
+done
 
 mkdir -p data/raw/geo data/raw/electoral data/raw/insee
 
@@ -22,10 +31,12 @@ fetch() {
 }
 
 # Géo
+if [[ $ONLY_ELECTORAL -eq 0 ]]; then
 for key in regions departements circonscriptions communes; do
   url=$(python3 -c "import json,sys;print(json.load(open('scripts/pipeline/sources.json'))['geo']['$key']['url'])")
   fetch "$url" "data/raw/geo/${key}.geojson"
 done
+fi
 
 # Électoral
 for key in presidentielle_2017_t1 presidentielle_2017_t2 \
@@ -41,6 +52,12 @@ for key in presidentielle_2017_t1 presidentielle_2017_t2 \
   url=$(python3 -c "import json;print(json.load(open('scripts/pipeline/sources.json'))['electoral']['$key']['url'])")
   fetch "$url" "data/raw/electoral/${key}.${ext}"
 done
+
+if [[ $ONLY_ELECTORAL -eq 1 ]]; then
+  echo
+  echo "✓ Sources électorales téléchargées dans data/raw/electoral (--only-electoral)"
+  exit 0
+fi
 
 # INSEE (Filosofi, …)
 for key in filosofi_2021; do
