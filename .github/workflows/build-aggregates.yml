@@ -30,8 +30,10 @@ jobs:
       - name: Installer duckdb
         run: pip install duckdb
 
-      - name: Télécharger les sources brutes (data.gouv)
-        run: bash scripts/pipeline/download.sh
+      - name: Télécharger les sources brutes (data.gouv, électoral uniquement)
+        # --only-electoral : le géo et l'INSEE ne servent pas aux agrégats, et
+        # les URLs melodi INSEE expirent régulièrement (source d'échecs).
+        run: bash scripts/pipeline/download.sh --only-electoral
 
       - name: Agrégats par maille (régions → communes)
         run: python3 scripts/pipeline/build-aggregates.py
