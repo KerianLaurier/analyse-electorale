@@ -46,6 +46,24 @@ test("les écrans inscription et mot de passe oublié s'affichent", async ({ pag
   await expect(page.getByText(/sans carte bancaire/i)).toBeVisible();
 });
 
+test("la page de secours hors-ligne et le manifest PWA sont servis", async ({ page, request }) => {
+  // Publique (précachée par le service worker, avec ou sans session).
+  await page.goto("/offline");
+  await expect(page.getByRole("heading", { name: "Vous êtes hors ligne" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Réessayer" })).toBeVisible();
+
+  const manifest = await request.get("/manifest.webmanifest");
+  expect(manifest.ok()).toBe(true);
+  const json = await manifest.json();
+  expect(json.display).toBe("standalone");
+  expect(json.icons.some((i: { purpose?: string }) => i.purpose === "maskable")).toBe(true);
+  expect(json.shortcuts?.length).toBeGreaterThan(0);
+
+  const sw = await request.get("/sw.js");
+  expect(sw.ok()).toBe(true);
+  expect(await sw.text()).toContain("mvc-sw-");
+});
+
 test("la page abonnement expose les formules au public", async ({ page }) => {
   await page.goto("/auth/abonnement");
   await expect(page.getByRole("heading", { name: /une formule pour chaque campagne/i })).toBeVisible();

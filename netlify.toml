@@ -69,3 +69,10 @@
   for = "/suivi/*"
   [headers.values]
     Cache-Control = "public, max-age=900, stale-while-revalidate=3600"
+
+# Service worker : toujours revalidé (une version périmée bloquerait les mises
+# à jour de l'app shell hors-ligne).
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

@@ -9,6 +9,7 @@ import { SubscriptionBanner } from "@/components/subscription-banner";
 import { CommandPalette } from "@/components/command-palette";
 import { RouteProgress } from "@/components/route-progress";
 import { Toaster } from "@/components/toaster";
+import { Pwa } from "@/components/pwa";
 
 // On charge explicitement les poids utilisés dans les maquettes v3 modern
 // (300 light, 400 regular, 500 medium dominant, 600 semibold).
@@ -84,6 +85,8 @@ export default function RootLayout({
             <AppHeader />
             {/* Parcours d'abonnement : essai en cours / résiliation programmée. */}
             <SubscriptionBanner />
+            {/* Couche PWA : service worker (prod) + capture de l'invite d'installation. */}
+            <Pwa />
             {/* pb réservé à la nav basse mobile (--bottom-nav = 0 en desktop). */}
             <main className="flex-1 flex flex-col pb-[var(--bottom-nav)]">{children}</main>
             <CommandPalette />

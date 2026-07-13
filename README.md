@@ -133,6 +133,25 @@ src/
 - `⌘K` / `Ctrl+K` : ouvre la palette de commandes (navigation + actions)
 - `F` (en dehors d'un input) : bascule le mode focus (à câbler avec une classe `.focus-mode` masquant le chrome — utile pour soirée élec et présentations)
 
+## PWA (installation & hors-ligne)
+
+L'app est installable (écran d'accueil / dock) et garde un socle hors-ligne :
+
+- **Manifest** `src/app/manifest.ts` : icônes PNG + maskable (générées par
+  `scripts/pipeline/build-icons.mjs`, versionnées), raccourcis (Explorer,
+  Suivre, QG) et captures d'installation
+  (`scripts/pipeline/build-screenshots.mjs`, compte E2E requis).
+- **Service worker** `public/sw.js` (enregistré en production par
+  `src/components/pwa.tsx`) : navigations réseau-d'abord avec secours
+  `/offline` précaché ; `/_next/static`, `/icons` et fonts en cache-first ;
+  JSON figés du storage public (choroplèthes, détails, analyses) en
+  stale-while-revalidate plafonné. Jamais : `/api/*`, auth/REST Supabase,
+  requêtes Range (PMTiles). **Bump `VERSION` dans sw.js pour invalider les
+  caches** ; `/sw.js` est servi en `no-cache` (netlify.toml).
+- **Installation** : item « Installer l'application » dans le menu compte
+  (Chrome/Edge/Android, via `beforeinstallprompt`) + encart sur `/bienvenue`
+  avec instructions iOS (`src/lib/pwa-install.ts`).
+
 ## Pipeline de données
 
 Documenté dans [`docs/data-pipeline.md`](docs/data-pipeline.md). En résumé :

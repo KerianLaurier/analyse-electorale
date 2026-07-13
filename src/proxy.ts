@@ -16,6 +16,8 @@ const PUBLIC_PATHS = new Set([
   "/auth/callback",
   // Webhook Stripe : pas de session — authentifié par sa signature.
   "/api/stripe/webhook",
+  // Secours hors-ligne : précaché par le service worker, avec ou sans session.
+  "/offline",
   // Ressources PWA (sans extension statique → sinon bloquées par le gating).
   "/manifest.webmanifest",
   "/apple-icon",
@@ -31,6 +33,7 @@ const APP_PREFIXES = [
   "/suivre",
   "/espace",
   "/bienvenue",
+  "/offline",
   "/circo",
   "/commune",
   "/bureau",
@@ -217,8 +220,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Toutes les routes sauf les internals Next et les fichiers statiques / data
-  // (open data ; gating au niveau application pour la performance).
+  // (open data ; gating au niveau application pour la performance). `.js`
+  // couvre public/sw.js — un service worker ne peut pas être servi derrière
+  // une redirection (les bundles applicatifs vivent sous _next/static).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:parquet|pmtiles|json|svg|png|jpg|jpeg|gif|webp|ico|woff2?|wasm)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:parquet|pmtiles|json|svg|png|jpg|jpeg|gif|webp|ico|woff2?|wasm|js)$).*)",
   ],
 };
