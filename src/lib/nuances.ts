@@ -18,6 +18,8 @@ export type NuanceCode =
   | "DIV"
   | "DVC"
   | "ENS"
+  | "REM"
+  | "FN"
   | "MDM"
   | "HOR"
   | "UDI"
@@ -56,7 +58,8 @@ export type NuanceCode =
   | "LREC"
   | "LRN"
   | "LUXD"
-  | "LEXD";
+  | "LEXD"
+  | "LENS";
 
 type NuanceMeta = { label: string; color: string };
 
@@ -76,6 +79,8 @@ export const NUANCES: Record<NuanceCode, NuanceMeta> = {
   DIV: { label: "Divers",                color: "#9ca3af" },
   DVC: { label: "Divers centre",         color: "#fcd34d" },
   ENS: { label: "Ensemble (majorité)",   color: "#f59e0b" },
+  REM: { label: "La République en marche", color: "#f59e0b" }, // législatives 2017
+  FN:  { label: "Front National",        color: "#13294b" },   // législatives 2017 (devenu RN)
   MDM: { label: "Modem",                 color: "#f97316" },
   HOR: { label: "Horizons",              color: "#fbbf24" },
   UDI: { label: "UDI",                   color: "#fb923c" },
@@ -102,6 +107,7 @@ export const NUANCES: Record<NuanceCode, NuanceMeta> = {
   LREG: { label: "Liste régionaliste",    color: "#0d9488" },
   LDIV: { label: "Liste divers",          color: "#9ca3af" },
   LREN: { label: "Liste Renaissance (majorité)", color: "#f59e0b" },
+  LENS: { label: "Liste Ensemble (majorité)", color: "#f59e0b" }, // européennes 2024
   LMDM: { label: "Liste Modem",           color: "#f97316" },
   LUDI: { label: "Liste UDI",             color: "#fb923c" },
   LUC:  { label: "Liste union du centre", color: "#fbbf24" },

@@ -144,6 +144,36 @@
       "approx_size_mb": 13,
       "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
     },
+    "europeennes_2024_bureau": {
+      "url": "https://static.data.gouv.fr/resources/resultats-des-elections-europeennes-du-9-juin-2024/20240613-154804/resultats-definitifs-par-bureau-de-vote.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "bureau",
+      "approx_size_mb": 160,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "europeennes_2019_bureau": {
+      "url": "https://static.data.gouv.fr/resources/resultats-des-elections-europeennes-2019/20190531-144007/resultats-definitifs-par-bureau-de-vote.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 190,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur",
+      "note": "Pas de code nuance officiel en 2019 : mapping libellé de liste → nuance dans build-aggregates.py (EURO_2019_NUANCE)."
+    },
+    "legislatives_2017_t1_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-11-et-18-juin-2017-resultats-par-bureaux-de-vote-du-1er-tour/20170613-100441/Leg_2017_Resultats_BVT_T1_c.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 100,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur",
+      "note": "Contient la circonscription : toutes les mailles sont agrégées depuis ce seul fichier (pas de fichier circo séparé exploitable — xlsx uniquement)."
+    },
+    "legislatives_2017_t2_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-11-et-18-juin-2017-resultats-du-2nd-tour-par-bureaux-de-vote/20170620-094954/Leg_2017_Resultats_BVT_T2_c.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 45,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
     "legislatives_2024_t1_bureau": {
       "url": "https://static.data.gouv.fr/resources/elections-legislatives-des-30-juin-et-7-juillet-2024-resultats-definitifs-du-1er-tour/20240710-171445/resultats-definitifs-par-bureau-de-vote.csv",
       "format": "csv-semicolon-utf8",

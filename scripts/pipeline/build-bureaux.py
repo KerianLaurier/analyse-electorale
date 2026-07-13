@@ -64,6 +64,51 @@ LEGIS22_BASE = list(PRESID_BASE)
 LEGIS22_CAND = ["N°Panneau", "Sexe", "Nom", "Prénom", "Nuance", "Voix",
                 "% Voix/Ins", "% Voix/Exp"]
 
+# Européennes 2019 (wide, sans circonscription) — aligné sur build-aggregates.py.
+EURO19_BASE = [
+    "Code du département", "Libellé du département", "Code de la commune",
+    "Libellé de la commune", "Code du b.vote", "Inscrits", "Abstentions", "% Abs/Ins",
+    "Votants", "% Vot/Ins", "Blancs", "% Blancs/Ins", "% Blancs/Vot",
+    "Nuls", "% Nuls/Ins", "% Nuls/Vot", "Exprimés", "% Exp/Ins", "% Exp/Vot",
+]
+EURO19_CAND = ["N°Liste", "Libellé Abrégé Liste", "Libellé Etendu Liste",
+               "Nom Tête de Liste", "Voix", "% Voix/Ins", "% Voix/Exp"]
+
+# Libellé abrégé de liste 2019 → nuance — copie de EURO_2019_NUANCE
+# (build-aggregates.py) : à modifier ENSEMBLE.
+EURO_2019_NUANCE = {
+    "LUTTE OUVRIÈRE":           "EXG",
+    "POUR L'EUROPE DES GENS":   "COM",
+    "LA FRANCE INSOUMISE":      "FI",
+    "ENVIE D'EUROPE":           "SOC",
+    "LISTE CITOYENNE":          "SOC",
+    "EUROPE ÉCOLOGIE":          "ECO",
+    "URGENCE ÉCOLOGIE":         "ECO",
+    "RENAISSANCE":              "ENS",
+    "LES EUROPÉENS":            "UDI",
+    "UNION DROITE-CENTRE":      "LR",
+    "DEBOUT LA FRANCE":         "DSV",
+    "ENSEMBLE POUR LE FREXIT":  "DSV",
+    "PRENEZ LE POUVOIR":        "RN",
+    "ENSEMBLE PATRIOTES":       "EXD",
+}
+
+
+def utf8_variant(path: Path) -> tuple[Path, str]:
+    """Préfère la copie UTF-8 générée par build-aggregates (certains exports
+    2017/2019 font échouer read_csv en 'latin-1'). À défaut : latin-1."""
+    alt = path.with_name(path.name + ".utf8")
+    return (alt, "utf-8") if alt.exists() else (path, "latin-1")
+
+
+def count_named_csv(path: Path, enc: str, prefix: str, sep: str = ";") -> int:
+    """Compte les groupes de colonnes nommées (fichiers CSV 2024+)."""
+    import csv
+
+    with open(path, encoding=enc, errors="replace") as f:
+        header = next(csv.reader(f, delimiter=sep))
+    return sum(1 for c in header if c.strip().startswith(prefix))
+
 
 def scan_maxcols(path: Path, enc: str, sep: str = ";") -> int:
     mx = 0
@@ -198,10 +243,78 @@ def presid_raw_sql(con, path: Path, year: int):
     return header, cand
 
 
+def euro19_raw_sql(con, path: Path):
+    """(header, cand) depuis le fichier brut européennes 2019 par bureau."""
+    path, enc = utf8_variant(path)
+    ncand = (scan_maxcols(path, enc) - len(EURO19_BASE)) // len(EURO19_CAND)
+    src = read_raw_names(path, enc, EURO19_BASE, EURO19_CAND, ncand)
+    commune = "lpad(\"Code du département\",2,'0') || lpad(\"Code de la commune\",3,'0')"
+    bv = "lpad(\"Code du b.vote\",4,'0')"
+    code = f"{commune} || '_' || {bv}"
+    header = f"""
+      SELECT 'bureaux' AS maille, {code} AS code,
+             'Bureau ' || any_value({bv}) || ' · ' || any_value("Libellé de la commune") AS libelle,
+             SUM({num('Inscrits')}) AS inscrits, SUM({num('Votants')}) AS votants,
+             SUM({num('Exprimés')}) AS exprimes, SUM({num('Abstentions')}) AS abstentions,
+             SUM({num('Blancs')}) AS blancs, SUM({num('Nuls')}) AS nuls
+      FROM {src} WHERE "Code de la commune" IS NOT NULL GROUP BY code
+    """
+    exact = " ".join(
+        f"WHEN upper(trim(abrege)) = {q(k)} THEN {q(v)}" for k, v in EURO_2019_NUANCE.items()
+    )
+    contains = " ".join(
+        f"WHEN position({q(k)} IN upper(etendu)) > 0 THEN {q(v)}" for k, v in EURO_2019_NUANCE.items()
+    )
+    unions = " UNION ALL ".join(
+        f'SELECT {code} AS code, "Libellé Abrégé Liste__{i}" AS abrege, '
+        f'"Libellé Etendu Liste__{i}" AS etendu, {num(f"Voix__{i}")} AS voix '
+        f'FROM {src} WHERE "Libellé Abrégé Liste__{i}" IS NOT NULL'
+        for i in range(1, ncand + 1)
+    )
+    cand = f"""
+      SELECT 'bureaux' AS maille, code, abrege AS label,
+             coalesce(CASE {exact} ELSE NULL END, CASE {contains} ELSE NULL END, 'DIV') AS nuance,
+             voix, false AS elu
+      FROM ({unions}) WHERE voix IS NOT NULL
+    """
+    return header, cand
+
+
+def euro24_raw_sql(con, path: Path):
+    """(header, cand) depuis le CSV européennes 2024 par bureau (format nommé)."""
+    ncand = count_named_csv(path, "utf-8", "Nuance liste")
+    src = f"""read_csv('{path.as_posix()}', sep=';', encoding='utf-8', header=true,
+        all_varchar=true, null_padding=true, ignore_errors=true)"""
+    commune = "lpad(\"Code commune\",5,'0')"
+    bv = "lpad(\"Code BV\",4,'0')"
+    code = f"{commune} || '_' || {bv}"
+    header = f"""
+      SELECT 'bureaux' AS maille, {code} AS code,
+             'Bureau ' || any_value({bv}) || ' · ' || any_value("Libellé commune") AS libelle,
+             SUM({num('Inscrits')}) AS inscrits, SUM({num('Votants')}) AS votants,
+             SUM({num('Exprimés')}) AS exprimes, SUM({num('Abstentions')}) AS abstentions,
+             SUM({num('Blancs')}) AS blancs, SUM({num('Nuls')}) AS nuls
+      FROM {src} WHERE "Code commune" IS NOT NULL GROUP BY code
+    """
+    unions = " UNION ALL ".join(
+        f'SELECT {code} AS code, '
+        f'coalesce(nullif(trim("Libellé abrégé de liste {i}"), \'\'), nullif(trim("Libellé de liste {i}"), \'\')) AS label, '
+        f'nullif(trim("Nuance liste {i}"), \'\') AS nuance, {num(f"Voix {i}")} AS voix '
+        f'FROM {src} WHERE nullif(trim("Nuance liste {i}"), \'\') IS NOT NULL'
+        for i in range(1, ncand + 1)
+    )
+    cand = f"""
+      SELECT 'bureaux' AS maille, code, label, nuance, SUM(voix) AS voix, false AS elu
+      FROM ({unions}) WHERE voix IS NOT NULL GROUP BY code, label, nuance
+    """
+    return header, cand
+
+
 def legis22_raw_sql(con, path: Path):
-    """(header, cand) depuis un fichier brut législatives 2022 par bureau (txt)."""
-    ncand = (scan_maxcols(path, "latin-1") - len(LEGIS22_BASE)) // len(LEGIS22_CAND)
-    src = read_raw_names(path, "latin-1", LEGIS22_BASE, LEGIS22_CAND, ncand)
+    """(header, cand) depuis un fichier brut législatives 2022/2017 par bureau (txt)."""
+    path, enc = utf8_variant(path)
+    ncand = (scan_maxcols(path, enc) - len(LEGIS22_BASE)) // len(LEGIS22_CAND)
+    src = read_raw_names(path, enc, LEGIS22_BASE, LEGIS22_CAND, ncand)
     commune = "lpad(\"Code du département\",2,'0') || lpad(\"Code de la commune\",3,'0')"
     bv = "lpad(\"Code du b.vote\",4,'0')"
     code = f"{commune} || '_' || {bv}"
@@ -231,10 +344,14 @@ SCRUTINS = [
     ("presid-2017-t2", RAW / "presidentielle_2017_t2.txt", "presid_raw", 2017),
     ("presid-2022-t1", ELECTORAL / "presidentielle_2022_t1.parquet", "presid", 2022),
     ("presid-2022-t2", ELECTORAL / "presidentielle_2022_t2.parquet", "presid", 2022),
+    ("legis-2017-t1", RAW / "legislatives_2017_t1_bureau.txt", "legis_raw", None),
+    ("legis-2017-t2", RAW / "legislatives_2017_t2_bureau.txt", "legis_raw", None),
     ("legis-2022-t1", RAW / "legislatives_2022_t1_bureau.txt", "legis_raw", None),
     ("legis-2022-t2", RAW / "legislatives_2022_t2_bureau.txt", "legis_raw", None),
     ("legis-2024-t1", ELECTORAL / "legislatives_2024_t1_bureau.parquet", "legis", None),
     ("legis-2024-t2", ELECTORAL / "legislatives_2024_t2_bureau.parquet", "legis", None),
+    ("euro-2019-t1", RAW / "europeennes_2019_bureau.txt", "euro19_raw", None),
+    ("euro-2024-t1", RAW / "europeennes_2024_bureau.csv", "euro24_raw", None),
 ]
 
 
@@ -258,7 +375,11 @@ def main() -> int:
             header, cand = legis_sql(con, src)
         elif kind == "presid_raw":
             header, cand = presid_raw_sql(con, src, year)
-        else:  # legis_raw
+        elif kind == "euro19_raw":
+            header, cand = euro19_raw_sql(con, src)
+        elif kind == "euro24_raw":
+            header, cand = euro24_raw_sql(con, src)
+        else:  # legis_raw (2017 & 2022 : même schéma wide)
             header, cand = legis22_raw_sql(con, src)
         terr_out = OUT / f"{scrutin}_bureaux_territoires.parquet"
         cand_out = OUT / f"{scrutin}_bureaux_candidats.parquet"

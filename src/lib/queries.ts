@@ -3,7 +3,7 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { dataUrl } from "@/lib/data-url";
 import type { Maille } from "@/lib/map-config";
-import { SCRUTIN_META, isElection, type Scrutin } from "@/lib/url-state";
+import { SCRUTIN_META, isElection, type BlocMetricKey, type Scrutin } from "@/lib/url-state";
 import { blocById, type BlocId } from "@/lib/analysis";
 
 // ─── Types partagés ───────────────────────────────────────────────────────────
@@ -59,13 +59,17 @@ export type CommuneSociologie = {
  * en chargement). Toutes les colorations de l'explorateur passent désormais ici.
  *
  * Deux schémas de fichier :
- *  - électoral  `{scrutin}_{maille}.json` = { vainqueur, participation, abstention }
+ *  - électoral  `{scrutin}_{maille}.json` = { vainqueur, participation,
+ *    abstention, bloc_* (parts des exprimés par bloc politique) }
  *  - thématique `{dataset}.json`          = { colonne: { code: valeur } }
  */
 type FrozenChoro = {
   vainqueur: Record<string, string>;
   participation: Record<string, number>;
   abstention: Record<string, number>;
+} & {
+  // Absentes des fichiers figés avant leur précalcul : traiter comme vide.
+  [K in BlocMetricKey]?: Record<string, number>;
 };
 type ColumnChoro = Record<string, Record<string, number>>;
 
@@ -129,11 +133,14 @@ export function useScrutinWinner(scrutin: Scrutin, maille: Maille, enabled = tru
   });
 }
 
-/** Participation ou abstention (rapport sur inscrits) par territoire. */
+/**
+ * Métrique électorale par territoire : participation/abstention (rapport sur
+ * inscrits) ou part des exprimés d'un bloc politique (`bloc_*`).
+ */
 export function useScrutinMetric(
   scrutin: Scrutin,
   maille: Maille,
-  metric: "participation" | "abstention",
+  metric: "participation" | "abstention" | BlocMetricKey,
   enabled = true,
 ) {
   return useQuery({
@@ -141,7 +148,7 @@ export function useScrutinMetric(
     queryKey: ["scrutin-metric", scrutin, maille, metric],
     queryFn: async (): Promise<NumericRow[]> => {
       const frozen = await loadChoroFile<FrozenChoro>(`${scrutin}_${maille}`);
-      return Object.entries(frozen[metric])
+      return Object.entries(frozen[metric] ?? {})
         .filter(([code, value]) => code && Number.isFinite(value))
         .map(([code, value]) => ({ code, value }));
     },

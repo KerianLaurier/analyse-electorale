@@ -1,0 +1,54 @@
+name: Build agrégats électoraux → Supabase Storage
+
+# Régénère les Parquet agrégés (par maille + par bureau) depuis les SOURCES
+# BRUTES data.gouv (MinInt) et les pousse au bucket Storage `data`. À lancer :
+#  - après l'ajout d'un scrutin au pipeline (sources.json + build-aggregates.py) ;
+#  - après une republication de résultats par le ministère.
+#
+# Chaîne aval : une fois les agrégats au storage, lancer le workflow
+# « Build choroplèthes + détail » qui fige les JSON servis par la carte.
+# Prérequis : secret SUPABASE_SERVICE_ROLE_KEY. cf. docs/object-store.md
+#
+# Durée indicative : 15-25 min (≈ 1,2 Go de sources téléchargées).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer duckdb
+        run: pip install duckdb
+
+      - name: Télécharger les sources brutes (data.gouv)
+        run: bash scripts/pipeline/download.sh
+
+      - name: Agrégats par maille (régions → communes)
+        run: python3 scripts/pipeline/build-aggregates.py
+
+      - name: Agrégats par bureau de vote
+        run: python3 scripts/pipeline/build-bureaux.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Installer les deps
+        run: npm ci
+
+      - name: Upload vers Supabase Storage
+        env:
+          SUPABASE_URL: https://fdfghtrxczauvrbmdxlq.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ONLY: electoral
+        run: node scripts/pipeline/upload-storage.mjs

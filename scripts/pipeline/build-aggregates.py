@@ -103,6 +103,40 @@ LEGIS22_BUREAU_BASE = [
 LEGIS22_BUREAU_CAND = ["N°Panneau","Sexe","Nom","Prénom","Nuance","Voix",
                        "% Voix/Ins","% Voix/Exp"]
 
+# Européennes 2019 (format « wide » latin-1, comme presid 2017 mais SANS
+# circonscription — scrutin national à tour unique, résultats par bureau).
+EURO19_BASE = [
+    "Code du département","Libellé du département","Code de la commune",
+    "Libellé de la commune","Code du b.vote","Inscrits","Abstentions","% Abs/Ins",
+    "Votants","% Vot/Ins","Blancs","% Blancs/Ins","% Blancs/Vot",
+    "Nuls","% Nuls/Ins","% Nuls/Vot","Exprimés","% Exp/Ins","% Exp/Vot",
+]
+EURO19_CAND = ["N°Liste","Libellé Abrégé Liste","Libellé Etendu Liste",
+               "Nom Tête de Liste","Voix","% Voix/Ins","% Voix/Exp"]
+
+# ─── Mapping listes européennes 2019 → nuance ────────────────────────────────
+# Les fichiers 2019 n'ont PAS de code nuance : on mappe le libellé ABRÉGÉ des
+# 34 listes vers la nomenclature de l'app (src/lib/nuances.ts), par tête de
+# liste. Toute liste non mappée tombe en DIV (< 1 % des exprimés chacune) ;
+# la génération affiche les libellés non mappés pour contrôle.
+EURO_2019_NUANCE = {
+    # Libellés ABRÉGÉS exacts du fichier MinInt (colonne « Libellé Abrégé Liste »).
+    "LUTTE OUVRIÈRE":           "EXG",  # Arthaud
+    "POUR L'EUROPE DES GENS":   "COM",  # Brossat (PCF)
+    "LA FRANCE INSOUMISE":      "FI",   # Aubry
+    "ENVIE D'EUROPE":           "SOC",  # Glucksmann (PS – Place publique)
+    "LISTE CITOYENNE":          "SOC",  # Hamon (Génération.s)
+    "EUROPE ÉCOLOGIE":          "ECO",  # Jadot (EELV)
+    "URGENCE ÉCOLOGIE":         "ECO",  # Bourg
+    "RENAISSANCE":              "ENS",  # Loiseau (LREM–MoDem)
+    "LES EUROPÉENS":            "UDI",  # Lagarde
+    "UNION DROITE-CENTRE":      "LR",   # Bellamy
+    "DEBOUT LA FRANCE":         "DSV",  # Dupont-Aignan
+    "ENSEMBLE POUR LE FREXIT":  "DSV",  # Asselineau (UPR)
+    "PRENEZ LE POUVOIR":        "RN",   # Bardella
+    "ENSEMBLE PATRIOTES":       "EXD",  # Philippot
+}
+
 
 def q(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
@@ -140,6 +174,20 @@ def names_clause(base: list[str], cand: list[str], n: int) -> str:
 def num(col: str) -> str:
     """Nettoie un entier MinInt ('1 234' → 1234)."""
     return f"TRY_CAST(replace(replace(\"{col}\", ' ', ''), chr(160), '') AS BIGINT)"
+
+
+def ensure_utf8(src: Path, enc: str = "cp1252") -> Path:
+    """Copie UTF-8 (générée une fois) d'un fichier MinInt dont l'encodage n'est
+    pas accepté par read_csv de duckdb (certains exports 2017/2019 le font
+    échouer en 'latin-1'). Idempotent : réutilise la copie si à jour."""
+    out = src.with_name(src.name + ".utf8")
+    if out.exists() and out.stat().st_mtime >= src.stat().st_mtime:
+        return out
+    with open(src, encoding=enc, errors="replace") as fin, \
+         open(out, "w", encoding="utf-8", newline="") as fout:
+        for line in fin:
+            fout.write(line)
+    return out
 
 
 def read_raw(con, src: Path, enc: str, names: str | None):
@@ -348,6 +396,110 @@ def muni_long(con, src, enc, ncand):
     return header, cand
 
 
+def euro19_nuance_case(abrege_expr: str, etendu_expr: str) -> str:
+    """Nuance d'une liste 2019 : égalité sur le libellé abrégé, sinon inclusion
+    dans le libellé étendu (les clés longues sont distinctives), sinon DIV."""
+    exact = " ".join(
+        f"WHEN upper(trim({abrege_expr})) = {q(k)} THEN {q(v)}"
+        for k, v in EURO_2019_NUANCE.items()
+    )
+    contains = " ".join(
+        f"WHEN position({q(k)} IN upper({etendu_expr})) > 0 THEN {q(v)}"
+        for k, v in EURO_2019_NUANCE.items()
+    )
+    return f"coalesce(CASE {exact} ELSE NULL END, CASE {contains} ELSE NULL END, 'DIV')"
+
+
+def euro19_long(con, src, enc, ncand):
+    """Header + listes au niveau bureau — européennes 2019 (wide, sans circo)."""
+    names = names_clause(EURO19_BASE, EURO19_CAND, ncand)
+    raw = read_raw(con, src, enc, names)
+    dept = "lpad(\"Code du département\", 2, '0')"
+    commune = f"{dept} || lpad(\"Code de la commune\", 3, '0')"
+    region = region_case(dept)
+
+    header = f"""
+      SELECT {region} AS c_region, {dept} AS c_dept, {commune} AS c_commune,
+             "Libellé du département" AS lib_dept, "Libellé de la commune" AS lib_commune,
+             {num('Inscrits')} AS ins, {num('Votants')} AS vot, {num('Exprimés')} AS exp,
+             {num('Abstentions')} AS abst, {num('Blancs')} AS blc, {num('Nuls')} AS nul
+      FROM {raw} WHERE "Code de la commune" IS NOT NULL
+    """
+    unions = []
+    for i in range(1, ncand + 1):
+        abrege = f'"Libellé Abrégé Liste__{i}"'
+        etendu = f'"Libellé Etendu Liste__{i}"'
+        unions.append(f"""
+          SELECT {region} AS c_region, {dept} AS c_dept, {commune} AS c_commune,
+                 {abrege} AS label, {euro19_nuance_case(abrege, etendu)} AS nuance,
+                 {num(f'Voix__{i}')} AS voix, false AS elu
+          FROM {raw} WHERE {abrege} IS NOT NULL
+        """)
+    cand = " UNION ALL ".join(unions)
+    return header, cand
+
+
+def euro24_long(con, src, ncand):
+    """Header + listes au niveau bureau — européennes 2024 (format nommé)."""
+    raw = read_raw(con, src, "utf-8", None)
+    dept = "lpad(\"Code département\", 2, '0')"
+    commune = "lpad(\"Code commune\", 5, '0')"
+    region = region_case(dept)
+
+    header = f"""
+      SELECT {region} AS c_region, {dept} AS c_dept, {commune} AS c_commune,
+             "Libellé département" AS lib_dept, "Libellé commune" AS lib_commune,
+             {num('Inscrits')} AS ins, {num('Votants')} AS vot, {num('Exprimés')} AS exp,
+             {num('Abstentions')} AS abst, {num('Blancs')} AS blc, {num('Nuls')} AS nul
+      FROM {raw} WHERE "Code commune" IS NOT NULL
+    """
+    unions = []
+    for i in range(1, ncand + 1):
+        nu = f'nullif(trim("Nuance liste {i}"), \'\')'
+        lbl = (
+            f'coalesce(nullif(trim("Libellé abrégé de liste {i}"), \'\'), '
+            f'nullif(trim("Libellé de liste {i}"), \'\'))'
+        )
+        unions.append(f"""
+          SELECT {region} AS c_region, {dept} AS c_dept, {commune} AS c_commune,
+                 {lbl} AS label, {nu} AS nuance, {num(f'Voix {i}')} AS voix, false AS elu
+          FROM {raw} WHERE {nu} IS NOT NULL
+        """)
+    cand = " UNION ALL ".join(unions)
+    return header, cand
+
+
+def legis17_long(con, src, enc, ncand):
+    """Toutes mailles depuis le fichier BUREAU (seul format exploitable en 2017 :
+    il contient la circonscription ET les nuances officielles)."""
+    names = names_clause(LEGIS22_BUREAU_BASE, LEGIS22_BUREAU_CAND, ncand)
+    raw = read_raw(con, src, enc, names)
+    dept = "lpad(\"Code du département\", 2, '0')"
+    commune = f"{dept} || lpad(\"Code de la commune\", 3, '0')"
+    circo = f"{dept} || lpad(\"Code de la circonscription\", 2, '0')"
+    region = region_case(dept)
+
+    header = f"""
+      SELECT {region} AS c_region, {dept} AS c_dept, {circo} AS c_circo, {commune} AS c_commune,
+             "Libellé du département" AS lib_dept,
+             "Libellé de la circonscription" AS lib_circo,
+             "Libellé de la commune" AS lib_commune,
+             {num('Inscrits')} AS ins, {num('Votants')} AS vot, {num('Exprimés')} AS exp,
+             {num('Abstentions')} AS abst, {num('Blancs')} AS blc, {num('Nuls')} AS nul
+      FROM {raw} WHERE "Code de la commune" IS NOT NULL
+    """
+    unions = []
+    for i in range(1, ncand + 1):
+        nu = f'nullif(trim("Nuance__{i}"), \'\')'
+        unions.append(f"""
+          SELECT {region} AS c_region, {dept} AS c_dept, {circo} AS c_circo, {commune} AS c_commune,
+                 "Nom__{i}" AS label, {nu} AS nuance, {num(f'Voix__{i}')} AS voix, false AS elu
+          FROM {raw} WHERE "Nom__{i}" IS NOT NULL
+        """)
+    cand = " UNION ALL ".join(unions)
+    return header, cand
+
+
 # ─── Émission des Parquet par maille ─────────────────────────────────────────
 
 def emit(con, scrutin, header_sql, cand_sql, mailles, cand_mode):
@@ -484,6 +636,43 @@ def main() -> int:
         """
         emit(con, scrutin, header, cand,
              ["regions", "departements", "circonscriptions", "communes"], "mixte")
+
+    # ── Législatives 2017 (fichier bureau unique : circo + nuances incluses) ─
+    for scrutin, fname in [
+        ("legis-2017-t1", "legislatives_2017_t1_bureau.txt"),
+        ("legis-2017-t2", "legislatives_2017_t2_bureau.txt"),
+    ]:
+        src = RAW / fname
+        if not src.exists():
+            print(f"  ⚠ {scrutin}: source manquante {fname}"); continue
+        src = ensure_utf8(src)
+        ncand = (scan_maxcols(src, "utf-8") - len(LEGIS22_BUREAU_BASE)) // len(LEGIS22_BUREAU_CAND)
+        print(f"→ {scrutin} ({ncand} candidats max)")
+        header, cand = legis17_long(con, src, "utf-8", ncand)
+        emit(con, scrutin, header, cand,
+             ["regions", "departements", "circonscriptions", "communes"], "mixte")
+
+    # ── Européennes (tour unique, national — pas de circonscriptions) ────────
+    src = RAW / "europeennes_2019_bureau.txt"
+    if src.exists():
+        src = ensure_utf8(src)
+        ncand = (scan_maxcols(src, "utf-8") - len(EURO19_BASE)) // len(EURO19_CAND)
+        print(f"→ euro-2019-t1 ({ncand} listes)")
+        header, cand = euro19_long(con, src, "utf-8", ncand)
+        emit(con, "euro-2019-t1", header, cand,
+             ["regions", "departements", "communes"], "mixte")
+    else:
+        print("  ⚠ euro-2019-t1: source manquante")
+
+    src = RAW / "europeennes_2024_bureau.csv"
+    if src.exists():
+        ncand = count_named(src, "utf-8", "Nuance liste")
+        print(f"→ euro-2024-t1 ({ncand} listes)")
+        header, cand = euro24_long(con, src, ncand)
+        emit(con, "euro-2024-t1", header, cand,
+             ["regions", "departements", "communes"], "mixte")
+    else:
+        print("  ⚠ euro-2024-t1: source manquante")
 
     # ── Municipales ──────────────────────────────────────────────────────────
     muni = [
