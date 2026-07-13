@@ -80,6 +80,10 @@ export async function POST(request: Request) {
         break;
       }
 
+      // `created` couvre les subscriptions nées HORS checkout (dashboard, API,
+      // migration d'un compte facture) : sync silencieuse — le `subscribe` du
+      // parcours normal reste tracé par checkout.session.completed.
+      case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
         const sub = event.data.object as unknown as StripeSubscriptionLike;
@@ -90,16 +94,24 @@ export async function POST(request: Request) {
         const patch = subscriptionToPatch(
           event.type === "customer.subscription.deleted" ? { ...sub, status: "canceled" } : sub,
         );
-        await admin.from("profiles").update(patch).eq("id", userId);
+        // Auto-réparation : rattache aussi le customer (normalement posé par la
+        // route checkout, absent si la subscription est née hors checkout). On
+        // le garde après suppression : le portail (factures) reste accessible.
+        await admin
+          .from("profiles")
+          .update({ ...patch, ...(stripeCustomerId ? { stripe_customer_id: stripeCustomerId } : {}) })
+          .eq("id", userId);
 
         const plan = planFromSubscription(sub);
         const eventType =
           event.type === "customer.subscription.deleted"
             ? "cancel"
-            : subscriptionUpdateEventType(
-                event.data.previous_attributes as Partial<StripeSubscriptionLike> | undefined,
-                sub,
-              );
+            : event.type === "customer.subscription.created"
+              ? null
+              : subscriptionUpdateEventType(
+                  event.data.previous_attributes as Partial<StripeSubscriptionLike> | undefined,
+                  sub,
+                );
         if (eventType) {
           await admin.from("billing_events").insert({
             user_id: userId,
