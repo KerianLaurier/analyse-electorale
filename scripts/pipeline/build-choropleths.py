@@ -44,12 +44,58 @@ NO_CIRCO = ["regions", "departements", "communes"]
 SCRUTINS: dict[str, list[str]] = {
     "presid-2017-t1": WITH_CIRCO, "presid-2017-t2": WITH_CIRCO,
     "presid-2022-t1": WITH_CIRCO, "presid-2022-t2": WITH_CIRCO,
+    "legis-2017-t1": WITH_CIRCO, "legis-2017-t2": WITH_CIRCO,
     "legis-2022-t1": WITH_CIRCO, "legis-2022-t2": WITH_CIRCO,
     "legis-2024-t1": WITH_CIRCO, "legis-2024-t2": WITH_CIRCO,
+    "euro-2019-t1": NO_CIRCO, "euro-2024-t1": NO_CIRCO,
     "municipales-2026-t1": NO_CIRCO, "municipales-2026-t2": NO_CIRCO,
 }
 
 ROUND = 4  # décimales conservées pour les ratios (≈ 0,01 point de %)
+
+# ─── Blocs politiques (part des EXPRIMÉS par bloc — colorations « heatmap ») ──
+# Aligné sur BLOCS de src/lib/analysis.ts / build-potentiel.py, étendu aux
+# nuances de LISTE (préfixe L, scrutins européens/municipaux) et aux unions.
+BLOC_NUANCES: dict[str, tuple[str, ...]] = {
+    "bloc_gauche": ("EXG", "DXG", "COM", "FI", "SOC", "RDG", "DVG", "UG", "NUP",
+                    "LEXG", "LDXG", "LCOM", "LFI", "LSOC", "LRDG", "LDVG", "LUG", "LNUP"),
+    "bloc_ecolo": ("ECO", "VEC", "LECO", "LVEC"),
+    "bloc_centre": ("ENS", "REM", "MDM", "HOR", "UDI", "DVC", "UDC", "UC",
+                    "LENS", "LREM", "LMDM", "LHOR", "LUDI", "LDVC", "LUDC", "LUC"),
+    "bloc_droite": ("LR", "DVD", "UDD", "LLR", "LDVD", "LUDD"),
+    "bloc_rn": ("RN", "UXD", "REC", "EXD", "DSV", "DLF", "FN",
+                "LRN", "LUXD", "LREC", "LEXD", "LDSV", "LFN"),
+}
+
+
+def bloc_shares(con, cand: Path, terr: Path, maille: str) -> dict[str, dict[str, float]]:
+    """Part des exprimés par bloc et territoire : {bloc: {code: ratio}}."""
+    out: dict[str, dict[str, float]] = {}
+    for bloc, nuances in BLOC_NUANCES.items():
+        in_list = ", ".join("'" + n + "'" for n in nuances)
+        rows = con.execute(
+            f"""
+            WITH v AS (
+              SELECT code, SUM(voix) AS voix
+              FROM read_parquet('{cand.as_posix()}')
+              WHERE maille = ? AND nuance IN ({in_list})
+              GROUP BY code
+            )
+            SELECT t.code, CAST(v.voix AS DOUBLE) / t.exprimes
+            FROM read_parquet('{terr.as_posix()}') t
+            JOIN v ON v.code = t.code
+            WHERE t.maille = ? AND t.exprimes > 0
+            """,
+            [maille, maille],
+        ).fetchall()
+        vals = {
+            str(c): round(float(r), ROUND)
+            for c, r in rows
+            if c is not None and r is not None
+        }
+        if vals:
+            out[bloc] = vals
+    return out
 
 
 def winner(con, cand: Path, maille: str) -> dict[str, str]:
@@ -168,6 +214,8 @@ def main() -> int:
                 "vainqueur": winner(con, cand, m),
                 "participation": metric(con, terr, m, "votants"),
                 "abstention": metric(con, terr, m, "abstentions"),
+                # Parts des exprimés par bloc politique (rampes continues).
+                **bloc_shares(con, cand, terr, m),
             }
             if not payload["vainqueur"] and not payload["participation"]:
                 # Maille absente de ce scrutin (ex. circo en municipale) → on saute.

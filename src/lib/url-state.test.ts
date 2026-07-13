@@ -43,7 +43,8 @@ describe("isElection", () => {
 describe("yearsFor", () => {
   it("renvoie les années d'une famille en ordre décroissant", () => {
     expect(yearsFor("presidentielle")).toEqual([2022, 2017]);
-    expect(yearsFor("legislative")).toEqual([2024, 2022]);
+    expect(yearsFor("legislative")).toEqual([2024, 2022, 2017]);
+    expect(yearsFor("europeenne")).toEqual([2024, 2019]);
     expect(yearsFor("municipale")).toEqual([2026]);
   });
 });
@@ -85,8 +86,16 @@ describe("defaultScrutinFor", () => {
 });
 
 describe("colorationsFor", () => {
-  it("propose vainqueur/participation/abstention pour une élection", () => {
-    expect(colorationsFor("presid-2022-t1")).toEqual(["vainqueur", "participation", "abstention"]);
+  it("propose vainqueur/participation/abstention + scores par bloc pour une élection", () => {
+    expect(colorationsFor("presid-2022-t1")).toEqual([
+      "vainqueur", "participation", "abstention",
+      "bloc-gauche", "bloc-ecolo", "bloc-centre", "bloc-droite", "bloc-rn",
+    ]);
+  });
+
+  it("les européennes sont à tour unique, sans circonscriptions", () => {
+    expect(toursFor("europeenne", 2024)).toEqual([1]);
+    expect(maillesFor("euro-2024-t1")).toEqual(["regions", "departements", "communes", "bureaux"]);
   });
 
   it("propose les colorations potentiel par bloc", () => {

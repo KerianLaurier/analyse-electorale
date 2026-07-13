@@ -13,10 +13,14 @@ export type Scrutin =
   | "presid-2017-t2"
   | "presid-2022-t1"
   | "presid-2022-t2"
+  | "legis-2017-t1"
+  | "legis-2017-t2"
   | "legis-2022-t1"
   | "legis-2022-t2"
   | "legis-2024-t1"
   | "legis-2024-t2"
+  | "euro-2019-t1"
+  | "euro-2024-t1"
   | "municipales-2026-t1"
   | "municipales-2026-t2"
   | "sociologie"
@@ -27,6 +31,11 @@ export type Coloration =
   | "vainqueur"
   | "participation"
   | "abstention"
+  | "bloc-gauche"
+  | "bloc-ecolo"
+  | "bloc-centre"
+  | "bloc-droite"
+  | "bloc-rn"
   | "revenu"
   | "pauvrete"
   | "inegalites"
@@ -57,6 +66,7 @@ export type Coloration =
 export type ScrutinFamily =
   | "presidentielle"
   | "legislative"
+  | "europeenne"
   | "municipale"
   | "sociologie"
   | "tendances"
@@ -72,16 +82,23 @@ type ScrutinMeta = {
 // Scrutins disposant de résultats par bureau de vote (agrégats `*_bureaux_*`).
 const WITH_BUREAUX: Maille[] = ["regions", "departements", "circonscriptions", "communes", "bureaux"];
 const NO_CIRCO: Maille[] = ["regions", "departements", "communes"];
+// Scrutins nationaux de liste (européennes) : pas de circonscriptions, mais
+// résultats par bureau de vote disponibles.
+const NATIONAL_BUREAUX: Maille[] = ["regions", "departements", "communes", "bureaux"];
 
 export const SCRUTIN_META: Record<Scrutin, ScrutinMeta> = {
   "presid-2017-t1": { short: "Prés. 2017 · T1", long: "PRÉSIDENTIELLE 2017 · 1ER TOUR", family: "presidentielle", mailles: WITH_BUREAUX },
   "presid-2017-t2": { short: "Prés. 2017 · T2", long: "PRÉSIDENTIELLE 2017 · 2ND TOUR", family: "presidentielle", mailles: WITH_BUREAUX },
   "presid-2022-t1": { short: "Prés. 2022 · T1", long: "PRÉSIDENTIELLE 2022 · 1ER TOUR", family: "presidentielle", mailles: WITH_BUREAUX },
   "presid-2022-t2": { short: "Prés. 2022 · T2", long: "PRÉSIDENTIELLE 2022 · 2ND TOUR", family: "presidentielle", mailles: WITH_BUREAUX },
+  "legis-2017-t1": { short: "Légis. 2017 · T1", long: "LÉGISLATIVES 2017 · 1ER TOUR", family: "legislative", mailles: WITH_BUREAUX },
+  "legis-2017-t2": { short: "Légis. 2017 · T2", long: "LÉGISLATIVES 2017 · 2ND TOUR", family: "legislative", mailles: WITH_BUREAUX },
   "legis-2022-t1": { short: "Légis. 2022 · T1", long: "LÉGISLATIVES 2022 · 1ER TOUR", family: "legislative", mailles: WITH_BUREAUX },
   "legis-2022-t2": { short: "Légis. 2022 · T2", long: "LÉGISLATIVES 2022 · 2ND TOUR", family: "legislative", mailles: WITH_BUREAUX },
   "legis-2024-t1": { short: "Légis. 2024 · T1", long: "LÉGISLATIVES 2024 · 1ER TOUR", family: "legislative", mailles: WITH_BUREAUX },
   "legis-2024-t2": { short: "Légis. 2024 · T2", long: "LÉGISLATIVES 2024 · 2ND TOUR", family: "legislative", mailles: WITH_BUREAUX },
+  "euro-2019-t1": { short: "Europ. 2019", long: "EUROPÉENNES 2019", family: "europeenne", mailles: NATIONAL_BUREAUX },
+  "euro-2024-t1": { short: "Europ. 2024", long: "EUROPÉENNES 2024", family: "europeenne", mailles: NATIONAL_BUREAUX },
   "municipales-2026-t1": { short: "Municip. 2026 · T1", long: "MUNICIPALES 2026 · 1ER TOUR", family: "municipale", mailles: NO_CIRCO },
   "municipales-2026-t2": { short: "Municip. 2026 · T2", long: "MUNICIPALES 2026 · 2ND TOUR", family: "municipale", mailles: NO_CIRCO },
   "sociologie": { short: "Sociologie", long: "INSEE FILOSOFI 2021", family: "sociologie", mailles: ["communes"] },
@@ -99,6 +116,11 @@ export const COLORATION_LABELS: Record<Coloration, string> = {
   vainqueur: "Vainqueur",
   participation: "Participation",
   abstention: "Abstention",
+  "bloc-gauche": "Score gauche / NFP",
+  "bloc-ecolo": "Score écologistes",
+  "bloc-centre": "Score centre / majorité",
+  "bloc-droite": "Score droite (LR)",
+  "bloc-rn": "Score RN / ext. droite",
   revenu: "Revenu médian",
   pauvrete: "Taux de pauvreté",
   inegalites: "Inégalités (D9/D1)",
@@ -136,6 +158,7 @@ export function isElection(scrutin: Scrutin): boolean {
 export const FAMILY_ORDER: ScrutinFamily[] = [
   "presidentielle",
   "legislative",
+  "europeenne",
   "municipale",
   "sociologie",
   "tendances",
@@ -145,6 +168,7 @@ export const FAMILY_ORDER: ScrutinFamily[] = [
 export const FAMILY_LABELS: Record<ScrutinFamily, string> = {
   presidentielle: "Présidentielle",
   legislative: "Législatives",
+  europeenne: "Européennes",
   municipale: "Municipales",
   sociologie: "Sociologie",
   tendances: "Tendances",
@@ -221,8 +245,22 @@ export function colorationsFor(scrutin: Scrutin): Coloration[] {
     ];
   if (scrutin === "potentiel")
     return ["pot-rn", "pot-gauche", "pot-ecolo", "pot-centre", "pot-droite"];
-  return ["vainqueur", "participation", "abstention"];
+  return [
+    "vainqueur", "participation", "abstention",
+    "bloc-gauche", "bloc-ecolo", "bloc-centre", "bloc-droite", "bloc-rn",
+  ];
 }
+
+/** Clé de la part de bloc dans les fichiers choro figés ({scrutin}_{maille}.json). */
+export const BLOC_METRIC_KEYS = {
+  "bloc-gauche": "bloc_gauche",
+  "bloc-ecolo": "bloc_ecolo",
+  "bloc-centre": "bloc_centre",
+  "bloc-droite": "bloc_droite",
+  "bloc-rn": "bloc_rn",
+} as const satisfies Partial<Record<Coloration, string>>;
+
+export type BlocMetricKey = (typeof BLOC_METRIC_KEYS)[keyof typeof BLOC_METRIC_KEYS];
 
 /** Mailles couvertes par les données d'un scrutin. */
 export function maillesFor(scrutin: Scrutin): Maille[] {
@@ -234,6 +272,11 @@ const COLORATIONS = new Set<Coloration>([
   "vainqueur",
   "participation",
   "abstention",
+  "bloc-gauche",
+  "bloc-ecolo",
+  "bloc-centre",
+  "bloc-droite",
+  "bloc-rn",
   "revenu",
   "pauvrete",
   "inegalites",

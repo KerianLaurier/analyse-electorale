@@ -45,8 +45,10 @@ import {
   type Scrutin,
   type Coloration,
   type ScrutinFamily,
+  type BlocMetricKey,
   SCRUTIN_META,
   COLORATION_LABELS,
+  BLOC_METRIC_KEYS,
   FAMILY_ORDER,
   FAMILY_LABELS,
   colorationsFor,
@@ -227,6 +229,34 @@ const POT_DEF: Partial<Record<Coloration, PotentielBloc>> = {
 
 // Mapping coloration « Tendances » → (fichier, colonne, paliers). Une seule
 // requête active à la fois selon la coloration choisie.
+// ─── Scores par bloc (part des exprimés, rampes « heatmap » séquentielles) ───
+// Blanc cassé → couleur pleine du bloc (teintes alignées sur nuances.ts).
+// Domaine 2 % → 50 % : lisible au 1er tour, sature (foncé) sur les duels de
+// 2nd tour — au-delà du dernier palier, MapLibre borne à la couleur pleine.
+const BLOC_GAUCHE_STOPS: Array<[number, string]> = [
+  [0.02, "#f1f5f9"], [0.15, "#fda4af"], [0.3, "#e11d48"], [0.5, "#7f1d1d"],
+];
+const BLOC_ECOLO_STOPS: Array<[number, string]> = [
+  [0.02, "#f1f5f9"], [0.1, "#86efac"], [0.2, "#16a34a"], [0.35, "#14532d"],
+];
+const BLOC_CENTRE_STOPS: Array<[number, string]> = [
+  [0.02, "#f1f5f9"], [0.15, "#fde68a"], [0.3, "#f59e0b"], [0.5, "#92400e"],
+];
+const BLOC_DROITE_STOPS: Array<[number, string]> = [
+  [0.02, "#f1f5f9"], [0.12, "#93c5fd"], [0.25, "#3b82f6"], [0.45, "#1d4ed8"],
+];
+const BLOC_RN_STOPS: Array<[number, string]> = [
+  [0.02, "#f1f5f9"], [0.15, "#a5b4fc"], [0.3, "#4f46e5"], [0.5, "#1e1b4b"],
+];
+
+const BLOC_DEF: Partial<Record<Coloration, { key: BlocMetricKey; stops: Array<[number, string]> }>> = {
+  "bloc-gauche": { key: BLOC_METRIC_KEYS["bloc-gauche"], stops: BLOC_GAUCHE_STOPS },
+  "bloc-ecolo": { key: BLOC_METRIC_KEYS["bloc-ecolo"], stops: BLOC_ECOLO_STOPS },
+  "bloc-centre": { key: BLOC_METRIC_KEYS["bloc-centre"], stops: BLOC_CENTRE_STOPS },
+  "bloc-droite": { key: BLOC_METRIC_KEYS["bloc-droite"], stops: BLOC_DROITE_STOPS },
+  "bloc-rn": { key: BLOC_METRIC_KEYS["bloc-rn"], stops: BLOC_RN_STOPS },
+};
+
 const TREND_DEF: Partial<Record<Coloration, { file: TrendFile; column: TrendColumn; stops: Array<[number, string]> }>> = {
   "evo-abstention": { file: "presid_2017_2022", column: "d_abstention", stops: ABST_PRESID_STOPS },
   "dynamique-rn": { file: "presid_2017_2022", column: "d_rn", stops: RN_STOPS },
@@ -253,12 +283,17 @@ function colorationGroups(scrutin: Scrutin): ColorationGroup[] {
     ];
   if (scrutin === "potentiel")
     return [{ items: ["pot-rn", "pot-gauche", "pot-ecolo", "pot-centre", "pot-droite"] }];
-  return [{ items: ["vainqueur", "participation", "abstention"] }];
+  return [
+    { items: ["vainqueur", "participation", "abstention"] },
+    { title: "Score par bloc", items: ["bloc-gauche", "bloc-ecolo", "bloc-centre", "bloc-droite", "bloc-rn"] },
+  ];
 }
 
 // Aide contextuelle : explique l'indicateur courant au point de décision.
 function colorationHelp(coloration: Coloration): string | null {
   if (coloration === "vainqueur") return "Couleur = nuance politique arrivée en tête.";
+  if (BLOC_DEF[coloration])
+    return "Part des suffrages exprimés du bloc. Plus la teinte est foncée, plus le bloc pèse dans le territoire.";
   if (POT_DEF[coloration])
     return "Score attendu (profil socio) − réel. Chaud = terrain favorable sous-exploité ; froid = bastion qui sur-performe.";
   if (TREND_DEF[coloration]) return "Évolution en points entre les deux scrutins. Rouge = hausse, vert = recul.";
@@ -273,6 +308,8 @@ const COLORATION_PILL_LABEL: Partial<Record<Coloration, string>> = {
   "legis-abstention": "Abstention", "legis-rn": "RN / ext. droite", "legis-gauche": "Gauche / NFP",
   "pot-rn": "RN / ext. droite", "pot-gauche": "Gauche / NFP", "pot-ecolo": "Écologistes",
   "pot-centre": "Centre", "pot-droite": "Droite (LR)",
+  "bloc-gauche": "Gauche / NFP", "bloc-ecolo": "Écologistes", "bloc-centre": "Centre",
+  "bloc-droite": "Droite (LR)", "bloc-rn": "RN / ext. droite",
 };
 const pillLabel = (c: Coloration) => COLORATION_PILL_LABEL[c] ?? COLORATION_LABELS[c];
 
@@ -397,6 +434,8 @@ function ExplorerView() {
   const monoparentales = useFamilleColumnCommune("partFamMono", scrutin === "sociologie" && coloration === "monoparentales");
   const personnesSeules = useFamilleColumnCommune("partPersonnesSeules", scrutin === "sociologie" && coloration === "personnes-seules");
   const nouveauxArrivants = useMobiliteColumnCommune(scrutin === "sociologie" && coloration === "nouveaux-arrivants");
+  const blocDef = election ? BLOC_DEF[coloration] : undefined;
+  const blocMetric = useScrutinMetric(scrutin, maille, blocDef?.key ?? "participation", !!blocDef);
   const trendDef = scrutin === "tendances" ? TREND_DEF[coloration] : undefined;
   const trend = useTrendColumn(
     trendDef?.file ?? "presid_2017_2022",
@@ -413,6 +452,9 @@ function ExplorerView() {
     }
     if (trendDef) {
       return trend.data ? continuousChoropleth(coloration, trendDef.stops, trend.data) : undefined;
+    }
+    if (blocDef) {
+      return blocMetric.data ? continuousChoropleth(coloration, blocDef.stops, blocMetric.data) : undefined;
     }
     switch (coloration) {
       case "vainqueur":
@@ -468,6 +510,8 @@ function ExplorerView() {
     }
   }, [
     coloration,
+    blocDef,
+    blocMetric.data,
     trendDef,
     trend.data,
     potBloc,
@@ -517,7 +561,7 @@ function ExplorerView() {
   // Couches interrogées (une seule active à la fois selon la coloration) : permet
   // de dériver l'état d'erreur et un « réessayer » ciblé sur les seules en échec.
   const layers = [
-    winner, participation, abstention, revenu, pauvrete, inegalites, prestations,
+    winner, participation, abstention, blocMetric, revenu, pauvrete, inegalites, prestations,
     pensions, age65, chomage, cadres, diplome, proprietaires, ressecondaires,
     logvacants, monoparentales, personnesSeules, nouveauxArrivants, trend, potentiel,
   ];
@@ -824,26 +868,29 @@ function ScrutinPicker({
               ))}
             </div>
           </Section>
-          <Section title="Tour">
-            <div className="inline-flex rounded-lg bg-foreground/[0.04] p-0.5">
-              {tours.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => pickTour(t)}
-                  aria-pressed={tour === t}
-                  className={cn(
-                    "rounded-md px-3 py-1 text-[11px] font-medium transition-colors",
-                    tour === t
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  T{t}
-                </button>
-              ))}
-            </div>
-          </Section>
+          {/* Tour unique (européennes) : le segment n'apporte rien → masqué. */}
+          {tours.length > 1 && (
+            <Section title="Tour">
+              <div className="inline-flex rounded-lg bg-foreground/[0.04] p-0.5">
+                {tours.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => pickTour(t)}
+                    aria-pressed={tour === t}
+                    className={cn(
+                      "rounded-md px-3 py-1 text-[11px] font-medium transition-colors",
+                      tour === t
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    T{t}
+                  </button>
+                ))}
+              </div>
+            </Section>
+          )}
         </div>
       )}
 
@@ -941,6 +988,8 @@ function MapBottomLegend({
         <ContinuousMiniLegend stops={PARTICIPATION_STOPS} fmt={(v) => fmtPct(v, 0)} />
       ) : coloration === "abstention" ? (
         <ContinuousMiniLegend stops={ABSTENTION_STOPS} fmt={(v) => fmtPct(v, 0)} />
+      ) : BLOC_DEF[coloration] ? (
+        <ContinuousMiniLegend stops={BLOC_DEF[coloration].stops} fmt={(v) => fmtPct(v, 0)} />
       ) : coloration === "revenu" ? (
         <ContinuousMiniLegend stops={REVENU_STOPS} fmt={(v) => `${Math.round(v / 1000)}k`} />
       ) : coloration === "pauvrete" ? (

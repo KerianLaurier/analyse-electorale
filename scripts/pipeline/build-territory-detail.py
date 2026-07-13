@@ -45,11 +45,15 @@ BUREAUX_SOCIO_COLUMNS = [
 # scrutins qui en disposent (présidentielles + législatives).
 WITH_BUREAUX = ["regions", "departements", "circonscriptions", "communes", "bureaux"]
 NO_CIRCO = ["regions", "departements", "communes"]
+# Scrutins nationaux de liste (européennes) : pas de circo, bureaux disponibles.
+NATIONAL_BUREAUX = ["regions", "departements", "communes", "bureaux"]
 SCRUTINS: dict[str, list[str]] = {
     "presid-2017-t1": WITH_BUREAUX, "presid-2017-t2": WITH_BUREAUX,
     "presid-2022-t1": WITH_BUREAUX, "presid-2022-t2": WITH_BUREAUX,
+    "legis-2017-t1": WITH_BUREAUX, "legis-2017-t2": WITH_BUREAUX,
     "legis-2022-t1": WITH_BUREAUX, "legis-2022-t2": WITH_BUREAUX,
     "legis-2024-t1": WITH_BUREAUX, "legis-2024-t2": WITH_BUREAUX,
+    "euro-2019-t1": NATIONAL_BUREAUX, "euro-2024-t1": NATIONAL_BUREAUX,
     "municipales-2026-t1": NO_CIRCO, "municipales-2026-t2": NO_CIRCO,
 }
 SHARDED = {"communes", "bureaux"}  # trop volumineux → un fichier par département
