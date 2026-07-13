@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound, Sparkles } from "lucide-react";
+import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound, Sparkles, MonitorDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand-mark";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
+import { canPromptInstall, onInstallChange, promptInstall } from "@/lib/pwa-install";
 import { initials } from "@/lib/team";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
 import { ThemeSwitch } from "@/components/theme-switch";
@@ -34,7 +35,7 @@ const HIT_AREA = "relative before:absolute before:-inset-y-1.5 before:-inset-x-0
 
 // Pages sans chrome applicatif : écrans d'auth + landing publique (`/`),
 // qui possèdent leur propre en-tête.
-const NO_CHROME = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset"]);
+const NO_CHROME = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset", "/offline"]);
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -65,6 +66,16 @@ export function AppHeader() {
   }, []);
 
   const notifs = useNotifications(userId);
+
+  // Installation PWA : l'item n'apparaît que si le navigateur la propose
+  // (beforeinstallprompt capté par <Pwa /> au chargement).
+  const [installable, setInstallable] = useState(false);
+  useEffect(() => {
+    const sync = () => setInstallable(canPromptInstall());
+    const off = onInstallChange(sync);
+    sync();
+    return off;
+  }, []);
 
   async function signOut() {
     await createClient().auth.signOut();
@@ -201,6 +212,12 @@ export function AppHeader() {
                 <Sparkles className="h-4 w-4" />
                 Prise en main
               </DropdownMenuItem>
+              {installable && (
+                <DropdownMenuItem onClick={() => void promptInstall()}>
+                  <MonitorDown className="h-4 w-4" />
+                  Installer l&apos;application
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => router.push("/auth/reset")}>
                 <KeyRound className="h-4 w-4" />
                 Changer le mot de passe

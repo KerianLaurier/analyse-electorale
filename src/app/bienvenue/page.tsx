@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { daysLeft, formatDateFr } from "@/lib/billing";
+import { InstallHint } from "@/components/install-hint";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Bienvenue — MOUVANCIA" };
@@ -162,6 +163,9 @@ export default async function BienvenuePage() {
             ))}
           </ol>
         </section>
+
+        {/* ── Installation PWA (invite native ou instructions iOS) ────── */}
+        <InstallHint />
 
         {/* ── CTA ─────────────────────────────────────────────────────── */}
         <div className="mt-8 flex flex-wrap items-center gap-3">
