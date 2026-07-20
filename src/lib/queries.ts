@@ -982,6 +982,23 @@ const LOGEMENT_COLUMNS = [
 ] as const;
 export type LogementColumn = (typeof LOGEMENT_COLUMNS)[number];
 
+// Structure & dynamique de population (build-structpop.py — lot 2 sociologie).
+const STRUCTPOP_COLUMNS = ["densite", "partJeunes", "evoPop"] as const;
+export type StructpopColumn = (typeof STRUCTPOP_COLUMNS)[number];
+
+/** Densité (hab/km²), part des 15-29 ans (%) ou évolution de population 16→22 (%). */
+export function useStructpopColumnCommune(column: StructpopColumn, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["choropleth", "structpop", column],
+    queryFn: () => {
+      const col: StructpopColumn = STRUCTPOP_COLUMNS.includes(column) ? column : "densite";
+      return fetchColumnRows("socio_structpop_communes", col);
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
 /** Choroplèthe d'un indicateur logement par commune (statut d'occupation…). */
 export function useLogementColumnCommune(column: LogementColumn, enabled = true) {
   return useQuery({

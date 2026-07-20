@@ -45,6 +45,10 @@ export type Coloration =
   | "chomage"
   | "cadres"
   | "diplome"
+  | "ouvriers"
+  | "densite"
+  | "jeunes"
+  | "evopop"
   | "proprietaires"
   | "ressecondaires"
   | "logvacants"
@@ -130,6 +134,10 @@ export const COLORATION_LABELS: Record<Coloration, string> = {
   chomage: "Taux de chômage",
   cadres: "Part de cadres",
   diplome: "Diplômés du supérieur",
+  ouvriers: "Part d'ouvriers",
+  densite: "Densité de population",
+  jeunes: "Part des 15-29 ans",
+  evopop: "Évolution de population 2016 → 2022",
   proprietaires: "Part de propriétaires",
   ressecondaires: "Résidences secondaires",
   logvacants: "Logements vacants",
@@ -234,7 +242,8 @@ export function colorationsFor(scrutin: Scrutin): Coloration[] {
   if (scrutin === "sociologie")
     return [
       "revenu", "pauvrete", "inegalites", "prestations", "pensions",
-      "age65", "chomage", "cadres", "diplome",
+      "age65", "jeunes", "chomage", "cadres", "ouvriers", "diplome",
+      "densite", "evopop",
       "proprietaires", "ressecondaires", "logvacants",
       "monoparentales", "personnes-seules", "nouveaux-arrivants",
     ];
@@ -286,6 +295,10 @@ const COLORATIONS = new Set<Coloration>([
   "chomage",
   "cadres",
   "diplome",
+  "ouvriers",
+  "densite",
+  "jeunes",
+  "evopop",
   "proprietaires",
   "ressecondaires",
   "logvacants",

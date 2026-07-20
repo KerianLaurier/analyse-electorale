@@ -18,6 +18,7 @@ import {
   useLogementColumnCommune,
   useFamilleColumnCommune,
   useMobiliteColumnCommune,
+  useStructpopColumnCommune,
   useSociologieCommune,
   useSociologieBureau,
   useTrendColumn,
@@ -190,6 +191,34 @@ const NOUVARR_STOPS: Array<[number, string]> = [
   [14, "#14b8a6"],
   [22, "#115e59"],
 ];
+// Lot 2 — structure & dynamique de population + ouvriers (socio_rp existant).
+const OUVRIERS_STOPS: Array<[number, string]> = [
+  [8, "#fff7ed"],
+  [15, "#fdba74"],
+  [22, "#ea580c"],
+  [30, "#7c2d12"],
+];
+// Densité : progression quasi logarithmique (41 hab/km² médian, Paris > 20 000).
+const DENSITE_STOPS: Array<[number, string]> = [
+  [10, "#f1f5f9"],
+  [100, "#c7d2fe"],
+  [1000, "#6366f1"],
+  [5000, "#312e81"],
+];
+const JEUNES_STOPS: Array<[number, string]> = [
+  [8, "#f0f9ff"],
+  [13, "#7dd3fc"],
+  [18, "#0284c7"],
+  [25, "#0c4a6e"],
+];
+// Divergent : déclin (rouge) ← stable (neutre) → croissance (vert).
+const EVOPOP_STOPS: Array<[number, string]> = [
+  [-10, "#7f1d1d"],
+  [-3, "#fca5a5"],
+  [0, "#f1f5f9"],
+  [3, "#86efac"],
+  [10, "#14532d"],
+];
 
 // Paliers DIVERGENTS pour les deltas (taux 0..1, signés). Négatif → positif.
 // Abstention présidentielle (faibles variations) vs législatives (chute ~20 pts
@@ -272,7 +301,9 @@ function colorationGroups(scrutin: Scrutin): ColorationGroup[] {
   if (scrutin === "sociologie")
     return [
       { title: "Revenus", items: ["revenu", "pauvrete", "inegalites", "prestations", "pensions"] },
-      { title: "Démographie", items: ["age65", "chomage", "cadres", "diplome", "nouveaux-arrivants"] },
+      { title: "Démographie", items: ["age65", "jeunes", "chomage", "nouveaux-arrivants"] },
+      { title: "Emploi & classes sociales", items: ["cadres", "ouvriers", "diplome"] },
+      { title: "Territoire", items: ["densite", "evopop"] },
       { title: "Logement", items: ["proprietaires", "ressecondaires", "logvacants"] },
       { title: "Famille", items: ["monoparentales", "personnes-seules"] },
     ];
@@ -294,6 +325,10 @@ function colorationHelp(coloration: Coloration): string | null {
   if (coloration === "vainqueur") return "Couleur = nuance politique arrivée en tête.";
   if (BLOC_DEF[coloration])
     return "Part des suffrages exprimés du bloc. Plus la teinte est foncée, plus le bloc pèse dans le territoire.";
+  if (coloration === "evopop")
+    return "Évolution de la population entre 2016 et 2022. Rouge = déclin démographique, vert = croissance.";
+  if (coloration === "densite")
+    return "Habitants au km² (échelle resserrée sur le rural : 10 → 5 000+).";
   if (POT_DEF[coloration])
     return "Score attendu (profil socio) − réel. Chaud = terrain favorable sous-exploité ; froid = bastion qui sur-performe.";
   if (TREND_DEF[coloration]) return "Évolution en points entre les deux scrutins. Rouge = hausse, vert = recul.";
@@ -434,6 +469,10 @@ function ExplorerView() {
   const monoparentales = useFamilleColumnCommune("partFamMono", scrutin === "sociologie" && coloration === "monoparentales");
   const personnesSeules = useFamilleColumnCommune("partPersonnesSeules", scrutin === "sociologie" && coloration === "personnes-seules");
   const nouveauxArrivants = useMobiliteColumnCommune(scrutin === "sociologie" && coloration === "nouveaux-arrivants");
+  const ouvriers = useRpColumnCommune("partOuvriers", scrutin === "sociologie" && coloration === "ouvriers");
+  const densite = useStructpopColumnCommune("densite", scrutin === "sociologie" && coloration === "densite");
+  const jeunes = useStructpopColumnCommune("partJeunes", scrutin === "sociologie" && coloration === "jeunes");
+  const evopop = useStructpopColumnCommune("evoPop", scrutin === "sociologie" && coloration === "evopop");
   const blocDef = election ? BLOC_DEF[coloration] : undefined;
   const blocMetric = useScrutinMetric(scrutin, maille, blocDef?.key ?? "participation", !!blocDef);
   const trendDef = scrutin === "tendances" ? TREND_DEF[coloration] : undefined;
@@ -505,6 +544,14 @@ function ExplorerView() {
         return personnesSeules.data ? continuousChoropleth("personnes-seules", PSEUL_STOPS, personnesSeules.data) : undefined;
       case "nouveaux-arrivants":
         return nouveauxArrivants.data ? continuousChoropleth("nouveaux-arrivants", NOUVARR_STOPS, nouveauxArrivants.data) : undefined;
+      case "ouvriers":
+        return ouvriers.data ? continuousChoropleth("ouvriers", OUVRIERS_STOPS, ouvriers.data) : undefined;
+      case "densite":
+        return densite.data ? continuousChoropleth("densite", DENSITE_STOPS, densite.data) : undefined;
+      case "jeunes":
+        return jeunes.data ? continuousChoropleth("jeunes", JEUNES_STOPS, jeunes.data) : undefined;
+      case "evopop":
+        return evopop.data ? continuousChoropleth("evopop", EVOPOP_STOPS, evopop.data) : undefined;
       default:
         return undefined;
     }
@@ -519,6 +566,10 @@ function ExplorerView() {
     proprietaires.data,
     ressecondaires.data,
     logvacants.data,
+    ouvriers.data,
+    densite.data,
+    jeunes.data,
+    evopop.data,
     monoparentales.data,
     personnesSeules.data,
     nouveauxArrivants.data,
@@ -563,7 +614,8 @@ function ExplorerView() {
   const layers = [
     winner, participation, abstention, blocMetric, revenu, pauvrete, inegalites, prestations,
     pensions, age65, chomage, cadres, diplome, proprietaires, ressecondaires,
-    logvacants, monoparentales, personnesSeules, nouveauxArrivants, trend, potentiel,
+    logvacants, monoparentales, personnesSeules, nouveauxArrivants,
+    ouvriers, densite, jeunes, evopop, trend, potentiel,
   ];
   const isError = layers.some((q) => q.isError);
   const retryLayers = () => {
@@ -1020,6 +1072,14 @@ function MapBottomLegend({
         <ContinuousMiniLegend stops={PSEUL_STOPS} fmt={(v) => `${v}%`} />
       ) : coloration === "nouveaux-arrivants" ? (
         <ContinuousMiniLegend stops={NOUVARR_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "ouvriers" ? (
+        <ContinuousMiniLegend stops={OUVRIERS_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "densite" ? (
+        <ContinuousMiniLegend stops={DENSITE_STOPS} fmt={(v) => (v >= 1000 ? `${v / 1000}k` : `${v}`)} />
+      ) : coloration === "jeunes" ? (
+        <ContinuousMiniLegend stops={JEUNES_STOPS} fmt={(v) => `${v}%`} />
+      ) : coloration === "evopop" ? (
+        <ContinuousMiniLegend stops={EVOPOP_STOPS} fmt={(v) => `${v > 0 ? "+" : ""}${v}%`} />
       ) : TREND_DEF[coloration] ? (
         <ContinuousMiniLegend stops={TREND_DEF[coloration]!.stops} fmt={fmtSignedPts} />
       ) : POT_DEF[coloration] ? (

@@ -150,6 +150,9 @@ RP_COLUMNS = [
 LOGEMENT_COLUMNS = ["partProprietaires", "partLocataires", "partResSecondaires", "partLogVacants"]
 FAMILLE_COLUMNS = ["partFamMono", "partPersonnesSeules"]
 MOBILITE_COLUMNS = ["partNouveauxArrivants"]
+# Structure/dynamique de population (build-structpop.py) : densité, 15-29 ans,
+# évolution de population 2016→2022.
+STRUCTPOP_COLUMNS = ["densite", "partJeunes", "evoPop"]
 # pot_* = choroplèthes ; aff_*/reel_* servent la fiche potentiel commune.
 _BLOCS = ["rn", "gauche", "ecolo", "centre", "droite"]
 POTENTIEL_COLUMNS = (
@@ -239,6 +242,7 @@ def main() -> int:
         emit_columns(con, "socio_logement_communes", INSEE / "logement_2022_commune.parquet", LOGEMENT_COLUMNS),
         emit_columns(con, "socio_famille_communes", INSEE / "famille_2022_commune.parquet", FAMILLE_COLUMNS),
         emit_columns(con, "socio_mobilite_communes", INSEE / "mobilite_2022_commune.parquet", MOBILITE_COLUMNS),
+        emit_columns(con, "socio_structpop_communes", INSEE / "structpop_2022_commune.parquet", STRUCTPOP_COLUMNS),
         emit_columns(con, "potentiel_communes", ELECT / "potentiel_commune.parquet", POTENTIEL_COLUMNS),
         # Socio agrégée par circonscription (pour les analyses à la maille circo).
         emit_columns(con, "socio_circo", INSEE / "circo_socio.parquet", CIRCO_SOCIO_COLUMNS),
