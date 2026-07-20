@@ -10,10 +10,15 @@ cd "$(dirname "$0")/../.."
 
 FORCE=0
 ONLY_ELECTORAL=0
+SKIP_MELODI=0
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
     --only-electoral) ONLY_ELECTORAL=1 ;;
+    # Les URLs melodi (api.insee.fr/melodi/file/…) expirent régulièrement ;
+    # elles ne servent qu'à build-rp.py. Les autres bases INSEE (URLs
+    # statiques insee.fr) restent téléchargées.
+    --skip-melodi) SKIP_MELODI=1 ;;
   esac
 done
 
@@ -96,6 +101,9 @@ if [[ -f "data/raw/insee/evolpop.zip" ]] && ! ls "data/raw/insee/evolpop.d"/*.[c
 fi
 
 # INSEE — Recensement de la population (RP 2022, datasets melodi SDMX)
+if [[ $SKIP_MELODI -eq 1 ]]; then
+  echo "→ melodi sautés (--skip-melodi)"
+else
 for ds in DS_RP_POPULATION_PRINC DS_RP_EMPLOI_LR_COMP DS_RP_DIPLOMES_PRINC; do
   fetch "https://api.insee.fr/melodi/file/${ds}/${ds}_2022_CSV_FR" "data/raw/insee/${ds}.zip"
   if [[ -f "data/raw/insee/${ds}.zip" ]] && ! ls "data/raw/insee/${ds}.d"/*.csv >/dev/null 2>&1; then
@@ -103,6 +111,7 @@ for ds in DS_RP_POPULATION_PRINC DS_RP_EMPLOI_LR_COMP DS_RP_DIPLOMES_PRINC; do
     unzip -o "data/raw/insee/${ds}.zip" -d "data/raw/insee/${ds}.d/" >/dev/null || echo "✗ unzip failed for ${ds}.zip"
   fi
 done
+fi
 
 echo
 echo "✓ Sources téléchargées dans data/raw/"

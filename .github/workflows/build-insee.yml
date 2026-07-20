@@ -1,0 +1,60 @@
+name: Build parquets INSEE → Supabase Storage
+
+# Régénère les Parquet sociologiques communaux depuis les bases CC de
+# l'INSEE (URLs statiques insee.fr — les datasets melodi, aux URLs
+# périssables, sont sautés : `rp_2022_commune.parquet` du storage reste la
+# référence tant que build-rp.py n'a pas d'URLs fraîches).
+#
+# Chaîne aval : lancer ensuite « Build choroplèthes + détail » pour figer les
+# JSON de carte. Prérequis : secret SUPABASE_SERVICE_ROLE_KEY.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer duckdb
+        run: pip install duckdb
+
+      - name: Télécharger les bases INSEE (hors melodi)
+        run: bash scripts/pipeline/download.sh --skip-melodi
+
+      - name: Filosofi (revenus, pauvreté)
+        run: python3 scripts/pipeline/build-insee.py
+
+      - name: Logement
+        run: python3 scripts/pipeline/build-logement.py
+
+      - name: Famille
+        run: python3 scripts/pipeline/build-famille.py
+
+      - name: Mobilité résidentielle
+        run: python3 scripts/pipeline/build-mobilite.py
+
+      - name: Structure & dynamique de population
+        run: python3 scripts/pipeline/build-structpop.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Installer les deps
+        run: npm ci
+
+      - name: Upload vers Supabase Storage
+        env:
+          SUPABASE_URL: https://fdfghtrxczauvrbmdxlq.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ONLY: insee
+        run: node scripts/pipeline/upload-storage.mjs

@@ -61,7 +61,8 @@ jobs:
             dl "electoral/agg/${s}_bureaux_territoires.parquet"
           done
           for f in filosofi_2021_commune rp_2022_commune logement_2022_commune \
-                   famille_2022_commune mobilite_2022_commune bureaux_socio circo_socio; do
+                   famille_2022_commune mobilite_2022_commune structpop_2022_commune \
+                   bureaux_socio circo_socio; do
             dl "insee/${f}.parquet"
           done
           dl "electoral/potentiel_commune.parquet"
