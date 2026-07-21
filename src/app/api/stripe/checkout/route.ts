@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient, serviceRoleConfigured } from "@/lib/supabase/admin";
 import { getStripe, resolvePriceId, stripeEnabled, SELF_SERVICE_TIERS } from "@/lib/stripe";
 import type { Cycle, Tier } from "@/lib/billing";
+import { env } from "@/lib/env";
 
 /**
  * Démarre un paiement par carte : crée une session Stripe Checkout (hébergée)
@@ -70,7 +71,10 @@ export async function POST(request: Request) {
     await admin.from("profiles").update({ stripe_customer_id: customerId }).eq("id", user.id);
   }
 
-  const origin = request.headers.get("origin") ?? new URL(request.url).origin;
+  // Origine de confiance : l'URL app configurée (prod) prime sur l'en-tête
+  // `Origin` (contrôlable par le client) → pas de redirection Stripe forgée.
+  // Repli sur l'en-tête puis l'origine de la requête en local/preview (APP_URL absente).
+  const origin = env.APP_URL ?? request.headers.get("origin") ?? new URL(request.url).origin;
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,

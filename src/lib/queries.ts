@@ -79,10 +79,17 @@ const choroCache = new Map<string, Promise<unknown>>();
 function loadChoroFile<T>(name: string): Promise<T> {
   let p = choroCache.get(name);
   if (!p) {
-    p = fetch(dataUrl(`/electoral/choro/${name}.json`)).then((r) => {
-      if (!r.ok) throw new Error(`choroplèthe figée introuvable: ${name} (HTTP ${r.status})`);
-      return r.json();
-    });
+    // Éviction en cas d'échec : sans ça, une erreur réseau transitoire reste
+    // mémorisée jusqu'au rechargement de la page (promesse rejetée figée).
+    p = fetch(dataUrl(`/electoral/choro/${name}.json`))
+      .then((r) => {
+        if (!r.ok) throw new Error(`choroplèthe figée introuvable: ${name} (HTTP ${r.status})`);
+        return r.json();
+      })
+      .catch((e) => {
+        choroCache.delete(name);
+        throw e;
+      });
     choroCache.set(name, p);
   }
   return p as Promise<T>;

@@ -8,13 +8,15 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { waitForSessionCookie } from "@/lib/session-cookie";
+import { safeInternalPath } from "@/lib/safe-redirect";
 
 type Mode = "login" | "signup";
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const isLogin = mode === "login";
   const params = useSearchParams();
-  const next = params.get("next") || "/explorer";
+  // Chemin interne validé : bloque les redirections ouvertes via ?next=…
+  const next = safeInternalPath(params.get("next"));
   const [status, setStatus] = useState<"idle" | "pending" | "check-email" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 

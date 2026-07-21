@@ -19,10 +19,17 @@ const jsonCache = new Map<string, Promise<unknown>>();
 function loadJson<T>(path: string): Promise<T> {
   let p = jsonCache.get(path);
   if (!p) {
-    p = fetch(dataUrl(path)).then((r) => {
-      if (!r.ok) throw new Error(`agrégat figé introuvable: ${path} (HTTP ${r.status})`);
-      return r.json();
-    });
+    // Éviction en cas d'échec : une erreur réseau transitoire ne doit pas rester
+    // mémorisée jusqu'au rechargement (promesse rejetée figée dans le cache).
+    p = fetch(dataUrl(path))
+      .then((r) => {
+        if (!r.ok) throw new Error(`agrégat figé introuvable: ${path} (HTTP ${r.status})`);
+        return r.json();
+      })
+      .catch((e) => {
+        jsonCache.delete(path);
+        throw e;
+      });
     jsonCache.set(path, p);
   }
   return p as Promise<T>;

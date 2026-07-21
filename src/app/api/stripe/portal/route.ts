@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient, serviceRoleConfigured } from "@/lib/supabase/admin";
 import { getStripe, stripeEnabled } from "@/lib/stripe";
+import { env } from "@/lib/env";
 
 /**
  * Ouvre le Billing Portal Stripe du compte : moyens de paiement, factures,
@@ -46,7 +47,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const origin = request.headers.get("origin") ?? new URL(request.url).origin;
+  // Origine de confiance : l'URL app configurée (prod) prime sur l'en-tête
+  // `Origin` (contrôlable par le client) → pas de retour de portail forgé.
+  const origin = env.APP_URL ?? request.headers.get("origin") ?? new URL(request.url).origin;
   const subscriptionId = (prof?.stripe_subscription_id as string | null) ?? null;
   const session = await getStripe().billingPortal.sessions.create({
     customer: customerId,
