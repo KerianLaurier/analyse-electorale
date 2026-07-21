@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { getQueryClient } from "@/providers/query-provider";
@@ -233,5 +234,8 @@ export function useShifts(): Shift[] {
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useShiftsQuery().isSuccess;
+  // `&& useHydrated()` : contenu révélé après hydratation → pas de mismatch SSR.
+  const ok = useShiftsQuery().isSuccess;
+  const hydrated = useHydrated();
+  return ok && hydrated;
 }

@@ -1,5 +1,7 @@
-"use client";
-
+// Module partagé (pas de directive "use client") : les fonctions de fetch et
+// les fabriques `queryOptions` sont isomorphes → utilisables par les composants
+// serveur (préfetch SSR des fiches) ET par les hooks côté client définis ici.
+// Les hooks `useQuery` ne sont invoqués que depuis des composants clients.
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { dataUrl } from "@/lib/data-url";
 import type { Maille } from "@/lib/map-config";
