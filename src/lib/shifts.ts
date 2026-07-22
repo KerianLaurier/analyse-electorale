@@ -75,10 +75,11 @@ async function fetchShifts(): Promise<Shift[]> {
   const { userId } = await getIdentity();
   if (!userId) return [];
   const supabase = createClient();
-  const [{ data: rows }, { data: signupRows }] = await Promise.all([
+  const [{ data: rows, error: e1 }, { data: signupRows, error: e2 }] = await Promise.all([
     supabase.from("shifts").select("*").order("date", { ascending: true }),
     supabase.from("shift_signups").select("shift_id, user_id"),
   ]);
+  if (e1 || e2) throw e1 ?? e2; // remonte l'échec de lecture → état d'erreur
 
   const byShift = new Map<string, string[]>();
   for (const s of (signupRows ?? []) as SignupRow[]) {
@@ -232,10 +233,14 @@ export function useShifts(): Shift[] {
   return useShiftsQuery().data ?? EMPTY;
 }
 
+/** État de chargement d'un onglet : `loaded` (après hydratation), `error`, `retry`. */
+export function useLoadState() {
+  const q = useShiftsQuery();
+  const hydrated = useHydrated();
+  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+}
+
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  // `&& useHydrated()` : contenu révélé après hydratation → pas de mismatch SSR.
-  const ok = useShiftsQuery().isSuccess;
-  const hydrated = useHydrated();
-  return ok && hydrated;
+  return useLoadState().loaded;
 }

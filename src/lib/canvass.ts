@@ -92,7 +92,8 @@ async function fetchReports(): Promise<CanvassReport[]> {
   const { userId } = await getIdentity();
   if (!userId) return [];
   const supabase = createClient();
-  const { data } = await supabase.from("canvass_reports").select("*").order("date", { ascending: false });
+  const { data, error } = await supabase.from("canvass_reports").select("*").order("date", { ascending: false });
+  if (error) throw error; // remonte l'échec de lecture → état d'erreur
   return (data ?? []).map((r) => mapRow(r as Row, userId));
 }
 
@@ -284,10 +285,14 @@ export function weeklyTrend(reports: CanvassReport[]): WeekPoint[] {
     });
 }
 
+/** État de chargement d'un onglet : `loaded` (après hydratation), `error`, `retry`. */
+export function useLoadState() {
+  const q = useReportsQuery();
+  const hydrated = useHydrated();
+  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+}
+
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  // `&& useHydrated()` : contenu révélé après hydratation → pas de mismatch SSR.
-  const ok = useReportsQuery().isSuccess;
-  const hydrated = useHydrated();
-  return ok && hydrated;
+  return useLoadState().loaded;
 }

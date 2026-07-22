@@ -4,10 +4,11 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { DoorOpen, Plus, Users, Trash2, MapPin, Loader2, Info, ClipboardList, Target, TrendingUp, LayoutGrid, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useReports, useLoaded as useCanvassLoaded, addReport, deleteReport, summarize, bySector, weeklyTrend, type CanvassReport, type SectorAgg, type WeekPoint } from "@/lib/canvass";
-import { useSectors, useHasTeam, useCampaign, useLoaded as useCampaignLoaded, voteGoal, updateSector, type Sector } from "@/lib/campaign";
+import { useReports, useLoadState as useCanvassLoad, addReport, deleteReport, summarize, bySector, weeklyTrend, type CanvassReport, type SectorAgg, type WeekPoint } from "@/lib/canvass";
+import { useSectors, useHasTeam, useCampaign, useLoadState as useCampaignLoad, voteGoal, updateSector, type Sector } from "@/lib/campaign";
 import { CanvassMap } from "@/app/espace/canvass-map";
 import { PanelsSkeleton } from "@/components/skeleton";
+import { ErrorState } from "@/components/error-state";
 
 export const fmtInt = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n));
 export const fmtPct = (n: number, d = 0) =>
@@ -18,10 +19,12 @@ export const fmtDate = (iso: string) => new Date(iso + "T00:00:00").toLocaleDate
 export const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
 
 export function EspaceCanvass() {
-  const canvassLoaded = useCanvassLoaded();
-  const campaignLoaded = useCampaignLoaded();
+  const canvassLoad = useCanvassLoad();
+  const campaignLoad = useCampaignLoad();
   const hasTeam = useHasTeam();
-  if (!canvassLoaded || !campaignLoaded) return <PanelsSkeleton />;
+  if (canvassLoad.error || campaignLoad.error)
+    return <ErrorState message="Impossible de charger le porte-à-porte." onRetry={() => { canvassLoad.retry(); campaignLoad.retry(); }} />;
+  if (!canvassLoad.loaded || !campaignLoad.loaded) return <PanelsSkeleton />;
   if (!hasTeam) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-16 text-center">

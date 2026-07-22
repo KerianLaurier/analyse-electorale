@@ -6,7 +6,7 @@ import { Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Users, Loader2, Cont
 import { cn } from "@/lib/utils";
 import {
   useContacts,
-  useLoaded,
+  useLoadState,
   addContact,
   updateContact,
   deleteContact,
@@ -19,6 +19,7 @@ import {
 import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
 import type { WsContext } from "@/app/espace/types";
 import { TabSkeleton } from "@/components/skeleton";
+import { ErrorState } from "@/components/error-state";
 
 const KINDS = Object.keys(CONTACT_KIND_LABELS) as ContactKind[];
 const SUPPORTS = Object.keys(CONTACT_SUPPORT_LABELS) as ContactSupport[];
@@ -35,11 +36,12 @@ const field =
 
 export function EspaceContacts({ ctx }: { ctx: WsContext }) {
   const contacts = useContacts();
-  const loaded = useLoaded();
+  const { loaded, error, retry } = useLoadState();
   const [kindFilter, setKindFilter] = useState<ContactKind | "all">("all");
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
 
+  if (error) return <ErrorState message="Impossible de charger les contacts." onRetry={retry} />;
   if (!loaded) return <TabSkeleton />;
 
   const q = query.trim().toLowerCase();

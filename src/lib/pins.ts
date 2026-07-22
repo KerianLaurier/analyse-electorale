@@ -74,10 +74,11 @@ async function fetchPins(): Promise<PinsData> {
   const { userId, teamId } = await getIdentity();
   if (!userId) return { rows: [], userId: null, teamId: null };
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("pins")
     .select("type,item_id,label,sublabel,href,created_at,user_id,team_id")
     .order("created_at", { ascending: false });
+  if (error) throw error; // remonte l'échec de lecture → état d'erreur
   return { rows: (data ?? []) as Row[], userId, teamId };
 }
 
@@ -262,11 +263,15 @@ export function useMyTeamId(): string | null {
   return usePinsData()?.teamId ?? null;
 }
 
+/** État de chargement d'un onglet : `loaded` (après hydratation), `error`, `retry`. */
+export function useLoadState() {
+  ensureIdentityWired();
+  const q = useQuery(pinsQuery);
+  const hydrated = useHydrated();
+  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+}
+
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  ensureIdentityWired();
-  // `&& useHydrated()` : contenu révélé après hydratation → pas de mismatch SSR.
-  const ok = useQuery(pinsQuery).isSuccess;
-  const hydrated = useHydrated();
-  return ok && hydrated;
+  return useLoadState().loaded;
 }

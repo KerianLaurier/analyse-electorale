@@ -4,17 +4,18 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock, Users2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTasks, TASK_KIND_LABELS, useLoaded as useTasksLoaded, type Task } from "@/lib/tasks";
-import { useNotes, useLoaded as useNotesLoaded } from "@/lib/notes";
-import { usePins, useLoaded as usePinsLoaded } from "@/lib/pins";
-import { useShifts, SHIFT_KIND_LABELS, useLoaded as useShiftsLoaded, type Shift } from "@/lib/shifts";
-import { useContacts, useLoaded as useContactsLoaded } from "@/lib/contacts";
-import { useReports, summarize, useLoaded as useReportsLoaded } from "@/lib/canvass";
-import { usePhoneContacts, summarizePhoning, useLoaded as usePhoningLoaded } from "@/lib/phoning";
-import { useCampaign, useSectors, voteGoal, useLoaded as useCampaignLoaded } from "@/lib/campaign";
+import { useTasks, TASK_KIND_LABELS, useLoadState as useTasksLoad, type Task } from "@/lib/tasks";
+import { useNotes, useLoadState as useNotesLoad } from "@/lib/notes";
+import { usePins, useLoadState as usePinsLoad } from "@/lib/pins";
+import { useShifts, SHIFT_KIND_LABELS, useLoadState as useShiftsLoad, type Shift } from "@/lib/shifts";
+import { useContacts, useLoadState as useContactsLoad } from "@/lib/contacts";
+import { useReports, summarize, useLoadState as useReportsLoad } from "@/lib/canvass";
+import { usePhoneContacts, summarizePhoning, useLoadState as usePhoningLoad } from "@/lib/phoning";
+import { useCampaign, useSectors, voteGoal, useLoadState as useCampaignLoad } from "@/lib/campaign";
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
 import { RoleChips } from "@/components/role-chip";
 import { Skeleton } from "@/components/skeleton";
+import { ErrorState } from "@/components/error-state";
 import { EspaceOnboarding } from "@/app/espace/espace-onboarding";
 import type { Tab } from "@/app/espace/espace-view";
 import { fmtInt } from "@/lib/format";
@@ -36,17 +37,18 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
 
   // Disponibilité des données (évite le flash d'état vide au chargement).
   // Tous les hooks sont appelés inconditionnellement (pas de court-circuit).
-  const loadedFlags = [
-    useTasksLoaded(),
-    useNotesLoaded(),
-    usePinsLoaded(),
-    useShiftsLoaded(),
-    useContactsLoaded(),
-    useReportsLoaded(),
-    usePhoningLoaded(),
-    useCampaignLoaded(),
+  const loadStates = [
+    useTasksLoad(),
+    useNotesLoad(),
+    usePinsLoad(),
+    useShiftsLoad(),
+    useContactsLoad(),
+    useReportsLoad(),
+    usePhoningLoad(),
+    useCampaignLoad(),
   ];
-  const ready = loadedFlags.every(Boolean);
+  const ready = loadStates.every((s) => s.loaded);
+  const anyError = loadStates.some((s) => s.error);
 
   const goal = voteGoal(campaign);
   const identified = sectors.reduce((s, x) => s + x.favorable, 0);
@@ -83,6 +85,8 @@ export function EspaceOverview({ ctx, setTab }: { ctx: WsContext; setTab: (t: Ta
   }, [summary, phoneContacts]);
   const benevoles = contacts.filter((c) => c.kind === "benevole").length;
 
+  if (anyError)
+    return <ErrorState message="Impossible de charger le tableau de bord." onRetry={() => loadStates.forEach((s) => s.retry())} />;
   if (!ready) return <OverviewSkeleton />;
 
   return (

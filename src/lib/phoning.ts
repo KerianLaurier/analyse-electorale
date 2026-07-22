@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { getQueryClient } from "@/providers/query-provider";
@@ -110,10 +111,11 @@ async function fetchPhoning(): Promise<PhoningData> {
   const { userId, teamId } = await getIdentity();
   if (!userId || !teamId) return { lists: [], contacts: [] };
   const supabase = createClient();
-  const [{ data: l }, { data: c }] = await Promise.all([
+  const [{ data: l, error: e1 }, { data: c, error: e2 }] = await Promise.all([
     supabase.from("phone_lists").select("*").order("created_at", { ascending: false }),
     supabase.from("phone_contacts").select("*").order("created_at", { ascending: true }),
   ]);
+  if (e1 || e2) throw e1 ?? e2; // remonte l'échec de lecture → état d'erreur
   return {
     lists: ((l ?? []) as ListRow[]).map(mapList),
     contacts: ((c ?? []) as ContactRow[]).map(mapContact),
@@ -315,7 +317,14 @@ export function summarizePhoning(contacts: PhoneContact[]): PhoningSummary {
   };
 }
 
+/** État de chargement d'un onglet : `loaded` (après hydratation), `error`, `retry`. */
+export function useLoadState() {
+  const q = usePhoningQuery();
+  const hydrated = useHydrated();
+  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+}
+
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return usePhoningQuery().isSuccess;
+  return useLoadState().loaded;
 }
