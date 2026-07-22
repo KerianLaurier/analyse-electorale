@@ -179,7 +179,15 @@ export function AuthForm({ mode }: { mode: Mode }) {
           </p>
 
           <p className="mt-8 text-center text-[10.5px] text-muted-foreground/70">
-            En continuant, vous acceptez les conditions d&apos;utilisation de MOUVANCIA.
+            En continuant, vous acceptez les{" "}
+            <Link href="/cgu" className="underline underline-offset-2 hover:text-foreground">
+              conditions d&apos;utilisation
+            </Link>{" "}
+            et la{" "}
+            <Link href="/confidentialite" className="underline underline-offset-2 hover:text-foreground">
+              politique de confidentialité
+            </Link>{" "}
+            de MOUVANCIA.
           </p>
         </div>
       </div>

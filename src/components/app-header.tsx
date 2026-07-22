@@ -35,7 +35,7 @@ const HIT_AREA = "relative before:absolute before:-inset-y-1.5 before:-inset-x-0
 
 // Pages sans chrome applicatif : écrans d'auth + landing publique (`/`),
 // qui possèdent leur propre en-tête.
-const NO_CHROME = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset", "/offline"]);
+const NO_CHROME = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset", "/offline", "/mentions-legales", "/confidentialite", "/cgu"]);
 
 export function AppHeader() {
   const pathname = usePathname();

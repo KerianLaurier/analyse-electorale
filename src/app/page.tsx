@@ -185,14 +185,10 @@ export default async function HomePage() {
         />
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-14 sm:px-8 lg:grid-cols-[1.08fr_0.92fr] lg:pb-24 lg:pt-20">
           <div className="anim-fade-in">
-            <span className="inline-flex items-center gap-2.5 rounded-pill border border-warm/30 bg-warm/[0.08] py-1.5 pl-3 pr-3.5 text-[11px] font-semibold uppercase tracking-[0.13em] text-warm">
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-warm" />
-              Présidentielle &amp; législatives 2027
-            </span>
             <h1
               className={cn(
                 DISPLAY,
-                "mt-6 max-w-[16ch] text-[clamp(2.7rem,6.4vw,5.1rem)] font-extrabold leading-[0.94] tracking-[-0.025em]",
+                "max-w-[16ch] text-[clamp(2.7rem,6.4vw,5.1rem)] font-extrabold leading-[0.94] tracking-[-0.025em]",
               )}
             >
               L&apos;intelligence électorale, du national au <Mark>bureau de vote</Mark>.
@@ -541,6 +537,11 @@ export default async function HomePage() {
             <span className={cn(DISPLAY, "font-bold uppercase tracking-[0.12em] text-foreground/80")}>Mouvancia</span>
           </span>
           <span>Sources · Ministère de l&apos;Intérieur · INSEE · Assemblée nationale · Commission des sondages</span>
+          <nav className="flex flex-wrap items-center gap-x-3 gap-y-1" aria-label="Informations légales">
+            <Link href="/mentions-legales" className="hover:text-foreground hover:underline">Mentions légales</Link>
+            <Link href="/confidentialite" className="hover:text-foreground hover:underline">Confidentialité</Link>
+            <Link href="/cgu" className="hover:text-foreground hover:underline">CGU</Link>
+          </nav>
           <span>© 2026</span>
         </div>
       </footer>
