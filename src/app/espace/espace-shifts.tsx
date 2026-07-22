@@ -5,7 +5,7 @@ import { Plus, CalendarClock, MapPin, Users, Check, Trash2, Pencil, Loader2, Clo
 import { cn } from "@/lib/utils";
 import {
   useShifts,
-  useLoaded,
+  useLoadState,
   addShift,
   updateShift,
   deleteShift,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/shifts";
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
 import { TabSkeleton } from "@/components/skeleton";
+import { ErrorState } from "@/components/error-state";
 
 const KINDS = Object.keys(SHIFT_KIND_LABELS) as ShiftKind[];
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -28,10 +29,11 @@ const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13
 
 export function EspaceShifts({ ctx }: { ctx: WsContext }) {
   const shifts = useShifts();
-  const loaded = useLoaded();
+  const { loaded, error, retry } = useLoadState();
   const [scope, setScope] = useState<"upcoming" | "all">("upcoming");
   const [showForm, setShowForm] = useState(false);
 
+  if (error) return <ErrorState message="Impossible de charger les créneaux." onRetry={retry} />;
   if (!loaded) return <TabSkeleton />;
 
   const today = todayISO();

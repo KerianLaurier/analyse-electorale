@@ -6,7 +6,7 @@ import { Plus, Check, Circle, CircleDot, MoreHorizontal, Trash2, Users, User, Ca
 import { cn } from "@/lib/utils";
 import {
   useTasks,
-  useLoaded,
+  useLoadState,
   addTask,
   updateTask,
   deleteTask,
@@ -33,6 +33,7 @@ import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
 import { RoleChips } from "@/components/role-chip";
 import { TabSkeleton } from "@/components/skeleton";
+import { ErrorState } from "@/components/error-state";
 
 const STATUS_ORDER: TaskStatus[] = ["todo", "doing", "done"];
 const KINDS = Object.keys(TASK_KIND_LABELS) as TaskKind[];
@@ -49,11 +50,12 @@ const fmtDue = (iso: string) =>
 
 export function EspaceTasks({ ctx }: { ctx: WsContext }) {
   const tasks = useTasks();
-  const loaded = useLoaded();
+  const { loaded, error, retry } = useLoadState();
   const [filter, setFilter] = useState<TaskStatus | "all">("all");
   const [onlyMine, setOnlyMine] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
+  if (error) return <ErrorState message="Impossible de charger les actions." onRetry={retry} />;
   if (!loaded) return <TabSkeleton />;
 
   const visible = tasks.filter((t) => {

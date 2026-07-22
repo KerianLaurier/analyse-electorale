@@ -109,7 +109,8 @@ async function fetchContacts(): Promise<Contact[]> {
   const { userId } = await getIdentity();
   if (!userId) return [];
   const supabase = createClient();
-  const { data } = await supabase.from("contacts").select("*").order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("contacts").select("*").order("created_at", { ascending: false });
+  if (error) throw error; // remonte l'échec de lecture → état d'erreur
   return (data ?? []).map((r) => mapRow(r as Row, userId));
 }
 
@@ -236,10 +237,14 @@ export function useContacts(): Contact[] {
   return useContactsQuery().data ?? EMPTY;
 }
 
+/** État de chargement d'un onglet : `loaded` (après hydratation), `error`, `retry`. */
+export function useLoadState() {
+  const q = useContactsQuery();
+  const hydrated = useHydrated();
+  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+}
+
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  // `&& useHydrated()` : contenu révélé après hydratation → pas de mismatch SSR.
-  const ok = useContactsQuery().isSuccess;
-  const hydrated = useHydrated();
-  return ok && hydrated;
+  return useLoadState().loaded;
 }

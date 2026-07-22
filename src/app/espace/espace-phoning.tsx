@@ -8,13 +8,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  usePhoneLists, usePhoneContacts, useLoaded as usePhoningLoaded, createList, deleteList, addNumbers, logCall, deleteContact,
+  usePhoneLists, usePhoneContacts, useLoadState as usePhoningLoad, createList, deleteList, addNumbers, logCall, deleteContact,
   summarizePhoning, isHandled, CALL_STATUS_LABELS, CALL_OPINION_LABELS,
   type PhoneList, type PhoneContact, type CallStatus, type CallOpinion,
 } from "@/lib/phoning";
-import { useHasTeam, useLoaded as useCampaignLoaded } from "@/lib/campaign";
+import { useHasTeam, useLoadState as useCampaignLoad } from "@/lib/campaign";
 import { fmtInt, fmtPct, KPI, Legend, Progress } from "@/app/espace/espace-canvass";
 import { PanelsSkeleton } from "@/components/skeleton";
+import { ErrorState } from "@/components/error-state";
 import { ConfirmButton } from "@/components/confirm-button";
 
 const STATUS_ORDER: CallStatus[] = ["joint", "repondeur", "occupe", "faux", "refus", "rappeler"];
@@ -34,10 +35,12 @@ const OPINION_TONE: Record<CallOpinion, string> = {
 };
 
 export function EspacePhoning() {
-  const phoningLoaded = usePhoningLoaded();
-  const campaignLoaded = useCampaignLoaded();
+  const phoningLoad = usePhoningLoad();
+  const campaignLoad = useCampaignLoad();
   const hasTeam = useHasTeam();
-  if (!phoningLoaded || !campaignLoaded) return <PanelsSkeleton />;
+  if (phoningLoad.error || campaignLoad.error)
+    return <ErrorState message="Impossible de charger le phoning." onRetry={() => { phoningLoad.retry(); campaignLoad.retry(); }} />;
+  if (!phoningLoad.loaded || !campaignLoad.loaded) return <PanelsSkeleton />;
   if (!hasTeam) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-6 py-16 text-center">

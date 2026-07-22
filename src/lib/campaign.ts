@@ -118,10 +118,11 @@ async function fetchCampaign(): Promise<CampaignData> {
     return { campaign: null, sectors: [], hasTeam: false };
   }
   const supabase = createClient();
-  const [{ data: c }, { data: s }] = await Promise.all([
+  const [{ data: c, error: e1 }, { data: s, error: e2 }] = await Promise.all([
     supabase.from("campaigns").select("*").eq("team_id", teamId).maybeSingle(),
     supabase.from("campaign_sectors").select("*").eq("team_id", teamId).order("created_at", { ascending: true }),
   ]);
+  if (e1 || e2) throw e1 ?? e2; // remonte l'échec de lecture → état d'erreur
   return {
     campaign: c ? mapCampaign(c as CampaignRow) : null,
     sectors: (s ?? []).map((r) => mapSector(r as SectorRow)),
@@ -296,10 +297,14 @@ export function voteGoal(c: Campaign | null): number | null {
   return Math.round(c.registered * c.turnoutTarget * c.scoreTarget);
 }
 
+/** État de chargement d'un onglet : `loaded` (après hydratation), `error`, `retry`. */
+export function useLoadState() {
+  const q = useCampaignQuery();
+  const hydrated = useHydrated();
+  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+}
+
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  // `&& useHydrated()` : contenu révélé après hydratation → pas de mismatch SSR.
-  const ok = useCampaignQuery().isSuccess;
-  const hydrated = useHydrated();
-  return ok && hydrated;
+  return useLoadState().loaded;
 }

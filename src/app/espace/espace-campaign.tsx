@@ -11,7 +11,7 @@ import {
   useCampaign,
   useSectors,
   useHasTeam,
-  useLoaded,
+  useLoadState,
   saveCampaign,
   addSector,
   addSectorsBulk,
@@ -25,6 +25,7 @@ import {
   type SectorStatus,
 } from "@/lib/campaign";
 import { PanelsSkeleton } from "@/components/skeleton";
+import { ErrorState } from "@/components/error-state";
 
 const pctToFrac = (s: string) => {
   const n = parseFloat(s.replace(",", "."));
@@ -36,8 +37,9 @@ const field =
   "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
 
 export function EspaceCampaign() {
-  const loaded = useLoaded();
+  const { loaded, error, retry } = useLoadState();
   const hasTeam = useHasTeam();
+  if (error) return <ErrorState message="Impossible de charger la campagne." onRetry={retry} />;
   if (!loaded) return <PanelsSkeleton />;
   if (!hasTeam) {
     return (

@@ -115,10 +115,11 @@ async function fetchTasks(): Promise<Task[]> {
   const { userId } = await getIdentity();
   if (!userId) return [];
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("tasks")
     .select("*")
     .order("created_at", { ascending: false });
+  if (error) throw error; // remonte l'échec de lecture → état d'erreur (au lieu d'un vide silencieux)
   return (data ?? []).map((r) => mapRow(r as Row, userId));
 }
 
@@ -254,11 +255,15 @@ export function useTasks(): Task[] {
   return useTasksQuery().data ?? EMPTY;
 }
 
+/** État de chargement d'un onglet : `loaded` (après hydratation), `error`, `retry`. */
+export function useLoadState() {
+  const q = useTasksQuery();
+  const hydrated = useHydrated();
+  // `loaded` seulement après hydratation → premier rendu client = HTML serveur.
+  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+}
+
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  // `&& useHydrated()` : ne bascule squelette → contenu qu'après hydratation,
-  // pour que le premier rendu client corresponde au HTML serveur (pas de mismatch).
-  const ok = useTasksQuery().isSuccess;
-  const hydrated = useHydrated();
-  return ok && hydrated;
+  return useLoadState().loaded;
 }
