@@ -25,6 +25,10 @@ const PUBLIC_PATHS = new Set([
   "/mentions-legales",
   "/confidentialite",
   "/cgu",
+  // SEO : robots.txt / sitemap.xml (le matcher n'exclut pas .txt/.xml → passent
+  // par le middleware ; sans ça, un crawler serait redirigé vers la connexion).
+  "/robots.txt",
+  "/sitemap.xml",
 ]);
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname);
