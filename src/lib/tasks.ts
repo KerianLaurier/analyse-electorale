@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { getQueryClient } from "@/providers/query-provider";
@@ -255,5 +256,9 @@ export function useTasks(): Task[] {
 
 /** True une fois le premier chargement terminé (pour les squelettes). */
 export function useLoaded(): boolean {
-  return useTasksQuery().isSuccess;
+  // `&& useHydrated()` : ne bascule squelette → contenu qu'après hydratation,
+  // pour que le premier rendu client corresponde au HTML serveur (pas de mismatch).
+  const ok = useTasksQuery().isSuccess;
+  const hydrated = useHydrated();
+  return ok && hydrated;
 }
