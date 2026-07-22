@@ -20,6 +20,7 @@ import { LandingDeck } from "@/components/landing-deck";
 import { LandingStats } from "@/components/landing-stats";
 import { LandingZoom } from "@/components/landing-zoom";
 import { LandingShowcase } from "@/components/landing-showcase";
+import { LandingContact } from "@/components/landing-contact";
 
 // Typographie scopée à la landing : Archivo (display affirmé, grotesque
 // éditorial) + Public Sans (corps institutionnel, lignée USWDS). Volontairement
@@ -44,6 +45,7 @@ const NAV = [
   { href: "#produit", label: "Fonctionnalités" },
   { href: "#cas-usage", label: "Cas d'usage" },
   { href: "#tarifs", label: "Tarifs" },
+  { href: "#contact", label: "Contact" },
 ];
 
 const STEPS = [
@@ -429,6 +431,11 @@ export default async function HomePage() {
             </details>
           ))}
         </div>
+      </section>
+
+      {/* ── Contact ──────────────────────────────────────────────────────── */}
+      <section id="contact" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-12 sm:px-8 lg:py-16">
+        <LandingContact />
       </section>
 
       {/* ── CTA final ────────────────────────────────────────────────────── */}
