@@ -21,6 +21,10 @@ const PUBLIC_PATHS = new Set([
   // Ressources PWA (sans extension statique → sinon bloquées par le gating).
   "/manifest.webmanifest",
   "/apple-icon",
+  // Images de partage social (Open Graph / Twitter) — doivent rester publiques
+  // pour les robots des réseaux sociaux (sans extension → passent le matcher).
+  "/opengraph-image",
+  "/twitter-image",
   // Pages légales (accessibles sans compte).
   "/mentions-legales",
   "/confidentialite",

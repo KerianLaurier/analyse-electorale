@@ -11,6 +11,17 @@ import { RouteProgress } from "@/components/route-progress";
 import { Toaster } from "@/components/toaster";
 import { Pwa } from "@/components/pwa";
 
+// URL de la vitrine (domaine racine) pour les URL absolues des images sociales.
+// En prod, NEXT_PUBLIC_APP_URL pointe l'app (app.mouvancia.fr) ; la vitrine vit
+// sur le domaine racine → on retire le sous-domaine `app.`.
+const SITE_URL =
+  process.env.NEXT_PUBLIC_APP_URL?.replace(/:\/\/app\./, "://").replace(/\/$/, "") ??
+  "https://mouvancia.fr";
+
+const OG_TITLE = "MOUVANCIA — L'intelligence électorale, du national au bureau de vote";
+const OG_DESC =
+  "Analyse électorale et pilotage de campagne, réunis : cartographie, sociologie, prédictif et QG de terrain. Données ouvertes, essai gratuit sans carte bancaire.";
+
 // On charge explicitement les poids utilisés dans les maquettes v3 modern
 // (300 light, 400 regular, 500 medium dominant, 600 semibold).
 const geistSans = Geist({
@@ -29,12 +40,27 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Base absolue pour les URL d'images sociales (og:image / twitter:image),
+  // générées par app/opengraph-image.tsx et app/twitter-image.tsx.
+  metadataBase: new URL(SITE_URL),
   title: "Analyse électorale",
   description:
     "Outil professionnel d'analyse politique et électorale — présidentielle et législatives 2027.",
   applicationName: "MOUVANCIA",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "MOUVANCIA" },
   formatDetection: { telephone: false },
+  openGraph: {
+    type: "website",
+    siteName: "MOUVANCIA",
+    locale: "fr_FR",
+    title: OG_TITLE,
+    description: OG_DESC,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: OG_TITLE,
+    description: OG_DESC,
+  },
 };
 
 export const viewport: Viewport = {

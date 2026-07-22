@@ -11,6 +11,10 @@ import {
   ShieldCheck,
   Check,
   Plus,
+  EyeOff,
+  Server,
+  Users,
+  FileCheck2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/team";
@@ -116,6 +120,13 @@ const TRUST = [
   { icon: Database, title: "Données ouvertes & sourcées", desc: "Ministère de l'Intérieur, INSEE, Assemblée nationale, Commission des sondages." },
   { icon: Clock, title: "Requêtes instantanées", desc: "Analyse exécutée dans le navigateur, sans serveur ni attente." },
   { icon: ShieldCheck, title: "Mises à jour automatiques", desc: "Sondages, scrutins et dossiers rafraîchis chaque jour." },
+];
+
+const SECURITY = [
+  { icon: EyeOff, title: "Aucune donnée d'électeur", desc: "MOUVANCIA n'exploite que des agrégats publics. Aucune donnée nominative d'électeur n'est collectée ni stockée." },
+  { icon: Server, title: "Hébergement dans l'UE", desc: "Vos données de campagne sont hébergées et chiffrées au sein de l'Union européenne." },
+  { icon: Users, title: "Cloisonnement par équipe", desc: "Chaque équipe accède uniquement à ses propres données : contacts, terrain et analyses restent privés." },
+  { icon: FileCheck2, title: "Conforme au RGPD", desc: "Les opinions politiques sont traitées avec le plus grand soin. Droits d'accès et d'effacement garantis." },
 ];
 
 export default async function HomePage() {
@@ -341,6 +352,43 @@ export default async function HomePage() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* ── Sécurité & confidentialité ───────────────────────────────────── */}
+      <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8 lg:py-20">
+        <div className="overflow-hidden rounded-3xl border border-border bg-surface/40">
+          <div className="grid gap-8 p-6 sm:p-9 lg:grid-cols-[0.85fr_1.15fr] lg:gap-12">
+            <div>
+              <SectionLabel>Sécurité &amp; confidentialité</SectionLabel>
+              <h2 className={cn(DISPLAY, "mt-3 text-[clamp(1.7rem,3.4vw,2.4rem)] font-extrabold leading-[1.05] tracking-[-0.02em]")}>
+                Vos données, protégées et souveraines.
+              </h2>
+              <p className="mt-3 max-w-[44ch] text-[14.5px] leading-relaxed text-muted-foreground">
+                Un outil pensé pour un sujet sensible : sécurité, cloisonnement et respect du RGPD, par défaut.
+              </p>
+              <Link
+                href="/confidentialite"
+                className="mt-5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-foreground underline underline-offset-2 hover:text-foreground/70"
+              >
+                Lire notre politique de confidentialité <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              {SECURITY.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <div key={s.title} className="flex flex-col gap-2">
+                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-warm/12 text-warm">
+                      <Icon className="h-[17px] w-[17px]" />
+                    </span>
+                    <h3 className={cn(DISPLAY, "mt-1 text-[14.5px] font-bold tracking-[-0.01em]")}>{s.title}</h3>
+                    <p className="text-[12.5px] leading-relaxed text-muted-foreground">{s.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </section>
 
