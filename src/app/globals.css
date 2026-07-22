@@ -293,3 +293,18 @@
     }
   }
 }
+
+/* Prose des pages légales (mentions légales, confidentialité, CGU).
+   Texte en `foreground` (fort contraste sur le fond clair). */
+@layer components {
+  .legal-prose { color: var(--foreground); font-size: 15px; line-height: 1.7; }
+  .legal-prose h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 34px 0 10px; }
+  .legal-prose h2:first-child { margin-top: 0; }
+  .legal-prose p { margin: 10px 0; }
+  .legal-prose ul { margin: 10px 0; padding-left: 20px; list-style: disc; }
+  .legal-prose li { margin: 5px 0; }
+  .legal-prose a { color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; }
+  .legal-prose a:hover { opacity: 0.7; }
+  .legal-prose strong { font-weight: 600; }
+  .legal-prose address { font-style: normal; }
+}

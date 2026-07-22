@@ -21,6 +21,10 @@ const PUBLIC_PATHS = new Set([
   // Ressources PWA (sans extension statique → sinon bloquées par le gating).
   "/manifest.webmanifest",
   "/apple-icon",
+  // Pages légales (accessibles sans compte).
+  "/mentions-legales",
+  "/confidentialite",
+  "/cgu",
 ]);
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname);
