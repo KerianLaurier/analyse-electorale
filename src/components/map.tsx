@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 import maplibregl, {
   type Map as MapLibreMap,
+  type MapLayerMouseEvent,
   type StyleSpecification,
   type DataDrivenPropertyValueSpecification,
 } from "maplibre-gl";
@@ -222,72 +223,97 @@ export function Map({
       maxZoom: 14,
     });
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
+    // Zoom en bas à droite : le coin haut-droit est occupé par la recherche et
+    // la fiche flottante du territoire sélectionné.
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "bottom-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
 
     mapRef.current = map;
+    // Remise à zéro explicite : sur un remontage (StrictMode en dev, navigation
+    // client), le drapeau d'une instance précédente ferait croire aux effets que
+    // le style de la NOUVELLE carte est déjà chargé → paint/feature-states
+    // appliqués trop tôt et silencieusement perdus.
+    styleLoadedRef.current = false;
     map.on("load", () => {
       styleLoadedRef.current = true;
     });
 
-    for (const m of MAILLE_ORDER) {
-      const layerId = `${m}-fill`;
-      const cfg = TILES[m];
-
-      map.on("mousemove", layerId, (e) => {
-        if (!e.features?.length) return;
-        const feature = e.features[0];
-        map.getCanvas().style.cursor = "pointer";
-        const prev = hoveredFeatureRef.current;
-        if (prev) {
-          map.setFeatureState(
-            { source: prev.source, sourceLayer: prev.sourceLayer, id: prev.id },
-            { hover: false },
-          );
-        }
-        if (feature.id !== undefined) {
-          hoveredFeatureRef.current = {
-            source: m,
-            sourceLayer: cfg.sourceLayer,
-            id: feature.id as number | string,
-          };
-          map.setFeatureState(hoveredFeatureRef.current, { hover: true });
-        }
-        onFeatureHoverRef.current?.({
-          maille: m,
-          properties: normProps(m, feature.properties),
-          point: { x: e.point.x, y: e.point.y },
-        });
-      });
-
-      map.on("mouseleave", layerId, () => {
-        map.getCanvas().style.cursor = "";
-        const prev = hoveredFeatureRef.current;
-        if (prev) {
-          map.setFeatureState(
-            { source: prev.source, sourceLayer: prev.sourceLayer, id: prev.id },
-            { hover: false },
-          );
-        }
-        hoveredFeatureRef.current = null;
-        onFeatureHoverRef.current?.(null);
-      });
-
-      map.on("click", layerId, (e) => {
-        const cb = onFeatureClickRef.current;
-        if (!e.features?.length || !cb) return;
-        cb({
-          maille: m,
-          properties: normProps(m, e.features[0].properties),
-        });
-      });
-    }
-
     return () => {
+      if (fsRafRef.current != null) cancelAnimationFrame(fsRafRef.current);
+      fsRafRef.current = null;
+      styleLoadedRef.current = false;
       map.remove();
       mapRef.current = null;
     };
   }, []);
+
+  // Interactions (survol / clic) : branchées UNIQUEMENT sur la maille visible.
+  // Auparavant les 5 mailles étaient écoutées en permanence → MapLibre faisait 5
+  // `queryRenderedFeatures` par événement souris (dont 4 sur des couches
+  // masquées), pour un seul résultat exploitable.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const m = maille;
+    const layerId = `${m}-fill`;
+    const cfg = TILES[m];
+
+    const clearHover = () => {
+      const prev = hoveredFeatureRef.current;
+      if (prev) {
+        map.setFeatureState(
+          { source: prev.source, sourceLayer: prev.sourceLayer, id: prev.id },
+          { hover: false },
+        );
+      }
+      hoveredFeatureRef.current = null;
+    };
+
+    const onMove = (e: MapLayerMouseEvent) => {
+      if (!e.features?.length) return;
+      const feature = e.features[0];
+      map.getCanvas().style.cursor = "pointer";
+      clearHover();
+      if (feature.id !== undefined) {
+        hoveredFeatureRef.current = {
+          source: m,
+          sourceLayer: cfg.sourceLayer,
+          id: feature.id as number | string,
+        };
+        map.setFeatureState(hoveredFeatureRef.current, { hover: true });
+      }
+      onFeatureHoverRef.current?.({
+        maille: m,
+        properties: normProps(m, feature.properties),
+        point: { x: e.point.x, y: e.point.y },
+      });
+    };
+
+    const onLeave = () => {
+      map.getCanvas().style.cursor = "";
+      clearHover();
+      onFeatureHoverRef.current?.(null);
+    };
+
+    const onClick = (e: MapLayerMouseEvent) => {
+      const cb = onFeatureClickRef.current;
+      if (!e.features?.length || !cb) return;
+      cb({ maille: m, properties: normProps(m, e.features[0].properties) });
+    };
+
+    map.on("mousemove", layerId, onMove);
+    map.on("mouseleave", layerId, onLeave);
+    map.on("click", layerId, onClick);
+    return () => {
+      map.off("mousemove", layerId, onMove);
+      map.off("mouseleave", layerId, onLeave);
+      map.off("click", layerId, onClick);
+      // La carte peut déjà avoir été détruite (démontage) : ne toucher aux
+      // feature-states que si l'instance est encore vivante.
+      if (mapRef.current === map) clearHover();
+      onFeatureHoverRef.current?.(null);
+    };
+  }, [maille]);
 
   // Fond de carte accordé au thème (clair / sombre).
   useEffect(() => {

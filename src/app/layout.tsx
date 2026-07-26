@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { QueryProvider } from "@/providers/query-provider";
@@ -18,6 +18,23 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/:\/\/app\./, "://").replace(/\/$/, "") ??
   "https://mouvancia.fr";
 
+// Origine de l'object store / de Supabase, pour la préconnexion (cf. <head>).
+// Les deux variables pointent le même hôte en production ; on garde un repli sur
+// l'URL Supabase si l'object store n'est pas configuré (dev, aperçus).
+//
+// Déclaration de fonction (hissée) plutôt qu'IIFE en portée module : Turbopack
+// élimine le binding d'une IIFE dont l'unique entrée est une variable
+// NEXT_PUBLIC_* inlinée, et le rendu échoue alors sur un ReferenceError.
+function dataOrigin(): string | null {
+  const raw = process.env.NEXT_PUBLIC_DATA_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!raw) return null;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
+}
+
 const OG_TITLE = "MOUVANCIA — L'intelligence électorale, du national au bureau de vote";
 const OG_DESC =
   "Analyse électorale et pilotage de campagne, réunis : cartographie, sociologie, prédictif et QG de terrain. Données ouvertes, essai gratuit sans carte bancaire.";
@@ -32,12 +49,9 @@ const geistSans = Geist({
   display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  display: "swap",
-});
+// Geist Mono n'est plus chargé ici : il ne sert que dans /admin et vit donc
+// dans src/app/admin/layout.tsx (deux fichiers de police en moins sur toutes
+// les autres pages). Le token --font-mono retombe sur la pile système ailleurs.
 
 export const metadata: Metadata = {
   // Base absolue pour les URL d'images sociales (og:image / twitter:image),
@@ -77,11 +91,12 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const origin = dataOrigin();
   return (
     <html
       lang="fr"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {/* Résolution anticipée des connexions externes (gros gain de latence
@@ -94,6 +109,10 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://d.basemaps.cartocdn.com" />
         <link rel="dns-prefetch" href="https://object.files.data.gouv.fr" />
         <link rel="dns-prefetch" href="https://demotiles.maplibre.org" />
+        {/* Origine Supabase : elle sert TOUTES les données (choroplèthes, tuiles,
+            détails) ET l'authentification. C'était la seule origine critique sans
+            préconnexion — on économise DNS + TCP + TLS avant la première requête. */}
+        {origin && <link rel="preconnect" href={origin} crossOrigin="" />}
         {/* Thème : clair par défaut, sombre disponible via le sélecteur du menu
             profil (next-themes pose `.dark` sur <html>). `enableSystem` permet
             l'option « Système ». Toutes les surfaces/bordures passent par des
