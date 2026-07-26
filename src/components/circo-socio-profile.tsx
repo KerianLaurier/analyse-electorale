@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SOCIO_INDICATORS, useSocioFeaturesCirco, type SocioUnit } from "@/lib/analysis";
 import { fmtInt } from "@/lib/format";
+import { ErrorState } from "@/components/error-state";
 
 function fmtSocio(v: number, unit: SocioUnit): string {
   if (unit === "euro") return `${fmtInt(v)} €`;
@@ -48,8 +49,26 @@ export function CircoSocioProfile({ code, className }: { code: string; className
       </p>
     );
   }
+  // Un ÉCHEC de chargement affichait le même message qu'une absence légitime de
+  // données, sans moyen de réessayer : on ne pouvait pas distinguer « INSEE ne
+  // couvre pas ce territoire » d'une panne réseau.
+  if (features.isError) {
+    return (
+      <ErrorState
+        className={className}
+        message="Impossible de charger le profil sociologique."
+        onRetry={() => void features.refetch()}
+      />
+    );
+  }
   if (!rows) {
-    return <p className={cn("text-[12px] text-muted-foreground", className)}>Données sociologiques indisponibles.</p>;
+    return (
+      <p className={cn("text-[12px] text-muted-foreground", className)}>
+        Pas d’indicateurs INSEE pour cette circonscription — les 38 sièges d’outre-mer
+        et des Français de l’étranger ne sont pas couverts par les bases Filosofi et
+        Recensement à cette maille.
+      </p>
+    );
   }
 
   return (

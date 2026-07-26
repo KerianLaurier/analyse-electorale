@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { MapPin, Building2, Map, Vote, Loader2, ArrowRight, UserRound, Star, Users } from "lucide-react";
 import { usePins } from "@/lib/pins";
+import { circoShortLabel } from "@/lib/territoire";
 import { toast } from "@/components/toaster";
 import {
   Command,
@@ -21,6 +22,7 @@ import {
   TYPE_LABELS,
   mailleForType,
   searchEntries,
+  entryLabel,
   useSearchIndex,
 } from "@/lib/search";
 
@@ -224,10 +226,10 @@ export function CommandPalette() {
                     ) : (
                       <Icon className="h-4 w-4 text-muted-foreground" />
                     )}
-                    <span className="flex-1 truncate">{e.nom}</span>
+                    <span className="flex-1 truncate">{entryLabel(e)}</span>
                     <span className="ml-2 shrink-0 text-xs text-muted-foreground tabular-nums">
                       {e.type === "depute"
-                        ? `${e.groupe ?? ""} · circ. ${e.code}`
+                        ? `${e.groupe ?? ""} · ${circoShortLabel(e.code)}`
                         : e.departement
                           ? `${e.departement} · ${e.code}`
                           : e.code}

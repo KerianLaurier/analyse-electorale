@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, Crosshair, Loader2, MapPin, Info, Plus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCircoList, useCircoBureaux, scoreBureaux, type TargetBureau, type TargetReason } from "@/lib/queries";
+import { circoLabel } from "@/lib/territoire";
 import { BLOCS, blocById, type BlocId } from "@/lib/analysis";
 import { useHasTeam, addSectorsBulk } from "@/lib/campaign";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
@@ -105,7 +106,7 @@ export function CiblageView() {
             >
               <option value="">Choisir une circonscription…</option>
               {(list.data ?? []).map((c) => (
-                <option key={c.code} value={c.code}>{c.code} · {c.libelle}</option>
+                <option key={c.code} value={c.code}>{circoLabel(c.code)}</option>
               ))}
             </select>
           </label>

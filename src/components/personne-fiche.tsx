@@ -23,6 +23,7 @@ import {
   displayName,
 } from "@/lib/personnes";
 import { fmtInt, fmtPct } from "@/lib/format";
+import { circoLabel, circoShortLabel } from "@/lib/territoire";
 import { InlineLoading } from "@/components/inline-loading";
 
 const fmtDateFr = (iso: string | null) => {
@@ -81,8 +82,6 @@ export function PersonneFiche({
       : displayName(target.label, personne)
     : "";
 
-  const circoLibelle = detail.data?.libelle;
-  const circoNum = Number(circo.slice(-2));
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
@@ -119,7 +118,7 @@ export function PersonneFiche({
                   return sexe ? <span> · {sexe === "F" ? "Femme" : "Homme"}</span> : null;
                 })()}
                 {" · "}
-                {Number.isFinite(circoNum) ? `${ORDINAL(circoNum)} circ. ` : ""}dépt {dept}
+                {circoLabel(circo)}
               </p>
             </div>
             {target.elu && (
@@ -143,7 +142,7 @@ export function PersonneFiche({
                     type: mode,
                     id: pinId,
                     label: fullName || nuanceLabel(target.nuance),
-                    sublabel: `${target.elu ? "Élu·e" : "Candidat·e"} · ${SCRUTIN_META[scrutin].short} · circ. ${circo}`,
+                    sublabel: `${target.elu ? "Élu·e" : "Candidat·e"} · ${SCRUTIN_META[scrutin].short} · ${circoShortLabel(circo)}`,
                     href: pinHref,
                   }}
                 />
@@ -198,7 +197,7 @@ export function PersonneFiche({
             <SectionTitle>
               Classement —{" "}
               <Link href={`/circo/${encodeURIComponent(circo)}`} className="text-warm hover:underline">
-                {circoLibelle ?? `circonscription ${circo}`}
+                {circoLabel(circo)}
               </Link>
             </SectionTitle>
             <div className="mt-2 rounded-2xl border border-foreground/5 bg-surface/60 p-5">

@@ -15,6 +15,7 @@ import { ErrorState } from "@/components/error-state";
 import { InlineLoading } from "@/components/inline-loading";
 import { EmptyState } from "@/components/empty-state";
 import { downloadCsv, type CsvRow } from "@/lib/export";
+import { circoLabel, DEPT_NAMES } from "@/lib/territoire";
 import { fmtInt, fmtPct } from "@/lib/format";
 
 const candidatHref = (scrutin: Scrutin, code: string, label: string) =>
@@ -34,8 +35,6 @@ function decodeCircoCode(code: string): { dept: string; num: number | null } {
   const num = Number(code.slice(-2));
   return { dept, num: Number.isFinite(num) ? num : null };
 }
-
-const ORDINAL = (n: number) => (n === 1 ? "1ʳᵉ" : `${n}ᵉ`);
 
 type CircoTab = "strategie" | "resultats";
 
@@ -98,10 +97,7 @@ export function CircoFiche({ code }: { code: string }) {
             Circonscription législative
           </p>
           <h1 className="mt-0.5 text-[22px] font-semibold tracking-tight">
-            {num != null ? `${ORDINAL(num)} circonscription` : `Circonscription ${code}`}
-            <span className="ml-2 text-[15px] font-medium text-muted-foreground">
-              · dépt {dept}
-            </span>
+            {circoLabel(code)}
           </h1>
           {libelle && num == null && (
             <p className="text-[13px] text-muted-foreground">{libelle}</p>
@@ -109,7 +105,7 @@ export function CircoFiche({ code }: { code: string }) {
         </div>
         <div className="flex items-center gap-2">
           <PinButton
-            pin={{ type: "circo", id: code, label: num != null ? `${ORDINAL(num)} circonscription` : `Circonscription ${code}`, sublabel: `Circonscription · dépt ${dept}`, href: `/circo/${code}` }}
+            pin={{ type: "circo", id: code, label: circoLabel(code), sublabel: `Circonscription législative · ${DEPT_NAMES[dept] ?? dept}`, href: `/circo/${code}` }}
           />
           {ordered.length > 0 && <ExportButton onClick={exportCsv} />}
           <Link
@@ -139,7 +135,7 @@ export function CircoFiche({ code }: { code: string }) {
         <InlineLoading label="Chargement de la circonscription…" />
       ) : ordered.length === 0 ? (
         <EmptyState
-          title={`Aucune donnée pour la circonscription ${code}`}
+          title={`Aucune donnée pour la ${circoLabel(code)}`}
           description="Vérifie le code (format INSEE, ex. « 2602 ») ou explore la carte."
           action={{ href: "/explorer?maille=circonscriptions&scrutin=legis-2024-t2", label: "Ouvrir l'explorateur" }}
         />

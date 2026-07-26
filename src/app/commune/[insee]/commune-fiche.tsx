@@ -23,6 +23,7 @@ import { InlineLoading } from "@/components/inline-loading";
 import { EmptyState } from "@/components/empty-state";
 import { downloadCsv, type CsvRow } from "@/lib/export";
 import { fmtInt, fmtEuro, fmtPct } from "@/lib/format";
+import { circoLabel } from "@/lib/territoire";
 
 const FR = { revenuMedian: 22040, tauxPauvrete: 14.4 };
 
@@ -285,7 +286,6 @@ function SociologieSection({ socio }: { socio: CommuneSociologie }) {
   );
 }
 
-const ordinal = (n: number) => (n === 1 ? "1ʳᵉ" : `${n}ᵉ`);
 
 function CirconscriptionsBanner({ circos }: { circos: string[] }) {
   const multi = circos.length > 1;
@@ -295,20 +295,15 @@ function CirconscriptionsBanner({ circos }: { circos: string[] }) {
         {multi ? `Circonscriptions législatives · ${circos.length}` : "Circonscription législative"}
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {circos.map((code) => {
-          const num = Number(code.slice(-2));
-          const dept = code.slice(0, -2);
-          return (
-            <Link
-              key={code}
-              href={`/circo/${encodeURIComponent(code)}`}
-              className="inline-flex items-center gap-1 rounded-full bg-warm/10 px-2.5 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-warm/20"
-            >
-              {Number.isFinite(num) ? `${ordinal(num)} circ. ` : ""}
-              <span className="text-muted-foreground">· dépt {dept}</span>
-            </Link>
-          );
-        })}
+        {circos.map((code) => (
+          <Link
+            key={code}
+            href={`/circo/${encodeURIComponent(code)}`}
+            className="inline-flex items-center gap-1 rounded-full bg-warm/10 px-2.5 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-warm/20"
+          >
+            {circoLabel(code)}
+          </Link>
+        ))}
       </div>
       {multi && (
         <p className="mt-2 text-[10px] text-muted-foreground">

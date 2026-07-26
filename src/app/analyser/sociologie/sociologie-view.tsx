@@ -21,6 +21,7 @@ import {
   type SocioUnit,
 } from "@/lib/analysis";
 import { CircoSocioProfile } from "@/components/circo-socio-profile";
+import { circoLabel } from "@/lib/territoire";
 import { ErrorState } from "@/components/error-state";
 
 const MapView = dynamic(() => import("@/components/map").then((m) => m.Map), {
@@ -243,7 +244,7 @@ export function SociologieView() {
             >
               <option value="">Choisir une circonscription…</option>
               {circoList.map((c) => (
-                <option key={c.code} value={c.code}>{c.code} · {c.libelle}</option>
+                <option key={c.code} value={c.code}>{circoLabel(c.code)}</option>
               ))}
             </select>
             {profileCode ? (
