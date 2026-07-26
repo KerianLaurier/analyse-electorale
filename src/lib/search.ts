@@ -2,8 +2,19 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { dataUrl } from "@/lib/data-url";
+import { circoLabel } from "@/lib/territoire";
 
 export type SearchEntryType = "region" | "departement" | "circo" | "commune" | "depute";
+
+/**
+ * Nom affichable d'une entrée. Les circonscriptions de l'index ne portent que
+ * leur numéro (« 1ère circonscription ») — il y en a 577 : sans le département,
+ * un résultat de recherche est indiscernable des 100 autres. On reconstruit
+ * donc le libellé complet depuis le code.
+ */
+export function entryLabel(entry: SearchEntry): string {
+  return entry.type === "circo" ? circoLabel(entry.code) : entry.nom;
+}
 
 export type SearchEntry = {
   type: SearchEntryType;
