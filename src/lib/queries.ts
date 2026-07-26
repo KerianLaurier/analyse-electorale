@@ -5,7 +5,9 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { dataUrl } from "@/lib/data-url";
 import type { Maille } from "@/lib/map-config";
-import { SCRUTIN_META, isElection, type BlocMetricKey, type Scrutin } from "@/lib/url-state";
+// Catalogue importé depuis le module ISOMORPHE : `url-state` est une frontière
+// client, dont le serveur ne recevrait qu'une référence vide (cf. scrutins.ts).
+import { SCRUTIN_META, isElection, type BlocMetricKey, type Scrutin } from "@/lib/scrutins";
 import { blocById, type BlocId } from "@/lib/analysis";
 
 // ─── Types partagés ───────────────────────────────────────────────────────────
@@ -191,9 +193,25 @@ function detailFileName(scrutin: Scrutin, maille: Maille, code: string): string 
 function loadDetailFile(name: string): Promise<DetailFile | null> {
   let p = detailCache.get(name);
   if (!p) {
+    // Distinguer ABSENCE et ÉCHEC est capital. Tout ramener à `null` faisait
+    // réussir la requête avec un résultat VIDE : au préfetch serveur (où
+    // `dataUrl` est relatif sans NEXT_PUBLIC_DATA_URL, donc `fetch` échoue), la
+    // fiche était déshydratée vide vers le client, qui l'adoptait sans jamais
+    // refetcher (staleTime 30 min) → « Aucune donnée ». Un incident réseau
+    // passager en production produisait le même écran.
+    //   404      → absence légitime (shard sans données) : `null`.
+    //   autre    → échec : on propage, la requête est en erreur (donc non
+    //              déshydratée) et le client refetche / propose « réessayer ».
     p = fetch(dataUrl(`/electoral/detail/${name}.json`))
-      .then((r) => (r.ok ? (r.json() as Promise<DetailFile>) : null))
-      .catch(() => null);
+      .then((r) => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error(`détail territoire indisponible: ${name} (HTTP ${r.status})`);
+        return r.json() as Promise<DetailFile>;
+      })
+      .catch((e) => {
+        detailCache.delete(name); // sans éviction, l'échec resterait figé
+        throw e;
+      });
     detailCache.set(name, p);
   }
   return p;
@@ -847,9 +865,17 @@ const bureauSocioCache = new Map<string, Promise<Record<string, BureauSocioEntry
 function loadBureauSocioShard(dept: string): Promise<Record<string, BureauSocioEntry> | null> {
   let p = bureauSocioCache.get(dept);
   if (!p) {
+    // Même distinction absence / échec que `loadDetailFile`.
     p = fetch(dataUrl(`/electoral/detail/socio_bureaux/${dept}.json`))
-      .then((r) => (r.ok ? (r.json() as Promise<Record<string, BureauSocioEntry>>) : null))
-      .catch(() => null);
+      .then((r) => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error(`socio bureaux indisponible: ${dept} (HTTP ${r.status})`);
+        return r.json() as Promise<Record<string, BureauSocioEntry>>;
+      })
+      .catch((e) => {
+        bureauSocioCache.delete(dept);
+        throw e;
+      });
     bureauSocioCache.set(dept, p);
   }
   return p;

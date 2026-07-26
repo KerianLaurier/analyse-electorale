@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { LayoutDashboard, ListTodo, StickyNote, Star, Users, Megaphone, Contact, CalendarClock, DoorOpen, MapPin, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WsContext } from "@/app/espace/types";
@@ -33,8 +34,17 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
 
 const TAB_IDS = new Set<Tab>(["overview", "territoire", "campaign", "tasks", "shifts", "canvass", "phoning", "contacts", "notes", "pins"]);
 
-export function EspaceView({ ctx, initialTab }: { ctx: WsContext; initialTab?: string }) {
-  const [tab, setTab] = useState<Tab>(initialTab && TAB_IDS.has(initialTab as Tab) ? (initialTab as Tab) : "overview");
+export function EspaceView({ ctx }: { ctx: WsContext }) {
+  // Onglet piloté par l'URL (?tab=) : rafraîchir, partager un lien ou revenir en
+  // arrière conserve l'écran courant — l'état local le perdait à chaque fois.
+  // `pushState` (et non `replaceState`) pour que le bouton Retour du navigateur
+  // ramène à l'onglet précédent, ce qu'attend une navigation par onglets.
+  const params = useSearchParams();
+  const raw = params.get("tab");
+  const tab: Tab = raw && TAB_IDS.has(raw as Tab) ? (raw as Tab) : "overview";
+  const setTab = useCallback((t: Tab) => {
+    window.history.pushState(null, "", t === "overview" ? "/espace" : `/espace?tab=${t}`);
+  }, []);
 
   return (
     <div className="flex-1 bg-canvas">

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   BarChart3,
@@ -54,7 +54,6 @@ function useAnalyserUrlState(): {
   sel: TerritorySel | null;
   setSel: (s: TerritorySel) => void;
 } {
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
 
@@ -71,9 +70,11 @@ function useAnalyserUrlState(): {
       next.set("t", s.type);
       next.set("c", s.code);
       next.set("l", s.label);
-      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+      // Routing « shallow » natif (cf. useExplorerUrlState) : pas de requête RSC
+      // au changement de territoire, les données viennent de React Query.
+      window.history.replaceState(null, "", `${pathname}?${next.toString()}`);
     },
-    [pathname, router],
+    [pathname],
   );
 
   return { sel, setSel };

@@ -1,9 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore,
+  type RefObject,
+} from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Loader2, X, Search, BadgeCheck, ArrowUpRight, Info, SlidersHorizontal, RotateCw } from "lucide-react";
+import {
+  Loader2, X, Search, BadgeCheck, ArrowUpRight, Info, SlidersHorizontal, RotateCw,
+  ChevronLeft, MousePointerClick,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
 import {
@@ -40,6 +46,7 @@ import {
 } from "@/lib/queries";
 import type { Choropleth } from "@/components/map";
 import { buildNuanceMatchExpression, nuanceColor, nuanceLabel } from "@/lib/nuances";
+import { circoLabel } from "@/lib/territoire";
 import { fmtInt, fmtEuro, fmtPct } from "@/lib/format";
 import {
   useExplorerUrlState,
@@ -386,6 +393,16 @@ function pickName(props: Record<string, unknown>): string {
   }
   return "Sans nom";
 }
+/**
+ * Nom affichable d'une entité selon sa maille. Les tuiles « circonscriptions »
+ * ne portent que le numéro (« 1ère circonscription ») : sans le département, on
+ * ne sait pas de laquelle il s'agit — on reconstruit donc le libellé complet.
+ */
+function territoryName(maille: Maille, props: Record<string, unknown>, code: string | null): string {
+  if (maille === "circonscriptions" && code) return circoLabel(code);
+  return pickName(props);
+}
+
 function pickCode(props: Record<string, unknown>): string | null {
   for (const key of ["codeBureauVote", "code", "codeCirconscription", "CODE", "INSEE_COM", "insee", "id"]) {
     const value = props[key];
@@ -622,43 +639,97 @@ function ExplorerView() {
     for (const q of layers) if (q.isError) void q.refetch();
   };
 
-  // Aperçu au survol (sans clic) — throttlé en rAF pour rester fluide même à la
-  // maille bureaux (~70k entités).
+  // Aperçu au survol (sans clic). L'état vit dans <HoverTooltip> et n'est écrit
+  // que par une référence : sans ça, chaque frame de souris re-rendait TOUT
+  // l'explorateur (panneau de contrôle, fiche, légende) à 60 fps.
   const choroByCode = useMemo(() => {
     const m = new Map<string, number | string>();
     if (choropleth) for (const d of choropleth.data) m.set(String(d.code), d.value);
     return m;
   }, [choropleth]);
-  const [hover, setHover] = useState<{ name: string; value: number | string | undefined; x: number; y: number } | null>(null);
+  const hoverSetRef = useRef<((h: HoverInfo | null) => void) | null>(null);
   const hoverRaf = useRef<number | null>(null);
   const onFeatureHover = useCallback(
-    (info: { properties: Record<string, unknown>; point: { x: number; y: number } } | null) => {
+    (info: { maille: Maille; properties: Record<string, unknown>; point: { x: number; y: number } } | null) => {
+      const set = hoverSetRef.current;
+      if (!set) return;
       if (hoverRaf.current) cancelAnimationFrame(hoverRaf.current);
       if (!info) {
-        setHover(null);
+        set(null);
         return;
       }
       const c = pickCode(info.properties);
-      const name = pickName(info.properties);
+      const name = territoryName(info.maille, info.properties, c);
       const { x, y } = info.point;
-      hoverRaf.current = requestAnimationFrame(() =>
-        setHover({ name, value: c ? choroByCode.get(c) : undefined, x, y }),
-      );
+      hoverRaf.current = requestAnimationFrame(() => set({ name, code: c, x, y }));
     },
-    [choroByCode],
+    [],
   );
 
-  // Panneaux en tiroir sur mobile (< lg) ; statiques sur desktop.
-  const [mobilePane, setMobilePane] = useState<null | "filters" | "fiche">(null);
+  const onFeatureClick = useCallback(
+    ({ maille: m, properties }: { maille: Maille; properties: Record<string, unknown> }) => {
+      const c = pickCode(properties);
+      if (!c) return;
+      setLastClicked({ code: c, name: territoryName(m, properties, c), maille: m });
+      update({ code: c, maille: m });
+    },
+    [update],
+  );
+  const clearSelection = useCallback(() => update({ code: null }), [update]);
+
+  // Panneau de contrôle : tiroir sur mobile, carte flottante repliable sur desktop.
+  const [filtersMobileOpen, setFiltersMobileOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  const closeFiltersMobile = useCallback(() => setFiltersMobileOpen(false), []);
+  const openFilters = useCallback(() => {
+    setFiltersMobileOpen(true);
+    setFiltersOpen(true);
+  }, []);
 
   return (
-    <div className="relative flex h-[calc(100dvh-3.5rem-var(--bottom-nav))] w-full overflow-hidden bg-canvas">
-      {mobilePane && (
+    <div className="relative h-[calc(100dvh-3.5rem-var(--bottom-nav))] w-full overflow-hidden bg-canvas">
+      {/* La carte occupe tout le cadre ; les panneaux flottent au-dessus. */}
+      <MapView
+        className="absolute inset-0 h-full w-full"
+        maille={maille}
+        choropleth={choropleth}
+        selectedCode={code}
+        onFeatureHover={onFeatureHover}
+        onFeatureClick={onFeatureClick}
+      />
+
+      {filtersMobileOpen && (
         <div
           className="absolute inset-0 z-20 bg-foreground/30 lg:hidden"
-          onClick={() => setMobilePane(null)}
+          onClick={closeFiltersMobile}
           aria-hidden
         />
+      )}
+
+      <MapTopBar
+        scrutin={scrutin}
+        filtersOpen={filtersOpen}
+        onOpenSearch={openSearchPalette}
+        onOpenFilters={openFilters}
+      />
+
+      {isLoading && (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Mise à jour de la carte…
+          </span>
+        </div>
+      )}
+      {!isLoading && isError && (
+        <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
+          <button
+            type="button"
+            onClick={retryLayers}
+            className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-destructive shadow-sm backdrop-blur transition-colors hover:bg-surface"
+          >
+            <RotateCw className="h-3.5 w-3.5" /> Données indisponibles — réessayer
+          </button>
+        </div>
       )}
 
       <ControlsPanel
@@ -667,124 +738,203 @@ function ExplorerView() {
         coloration={coloration}
         update={update}
         isLoading={isLoading}
-        mobileOpen={mobilePane === "filters"}
-        onCloseMobile={() => setMobilePane(null)}
+        open={filtersOpen}
+        mobileOpen={filtersMobileOpen}
+        onCloseMobile={closeFiltersMobile}
+        onCollapse={() => setFiltersOpen(false)}
       />
 
-      <div className="relative flex-1">
-        <MapTopBar
-          scrutin={scrutin}
-          onOpenSearch={openSearchPalette}
-          onOpenFilters={() => setMobilePane("filters")}
-        />
-        {isLoading && (
-          <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Mise à jour de la carte…
-            </span>
-          </div>
-        )}
-        {!isLoading && isError && (
-          <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
-            <button
-              type="button"
-              onClick={retryLayers}
-              className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-destructive shadow-sm backdrop-blur transition-colors hover:bg-surface"
-            >
-              <RotateCw className="h-3.5 w-3.5" /> Données indisponibles — réessayer
-            </button>
-          </div>
-        )}
-        <MapView
-          className="h-full w-full"
-          maille={maille}
-          choropleth={choropleth}
-          selectedCode={code}
-          onFeatureHover={onFeatureHover}
-          onFeatureClick={({ maille: m, properties }) => {
-            const c = pickCode(properties);
-            if (!c) return;
-            setLastClicked({ code: c, name: pickName(properties), maille: m });
-            update({ code: c, maille: m });
-            setMobilePane("fiche"); // ouvre la fiche en tiroir sur mobile (inerte sur desktop)
-          }}
-        />
-        {hover && (
-          <div className="anim-pop-in pointer-events-none absolute z-30 max-w-[210px]" style={{ left: hover.x, top: hover.y }}>
-            <div className="ml-3 mt-3 rounded-lg bg-surface/95 px-2.5 py-1.5 shadow-floating ring-1 ring-foreground/10 backdrop-blur">
-              <p className="text-[11.5px] font-semibold leading-tight">{hover.name}</p>
-              <p className="mt-0.5 text-[10.5px] text-muted-foreground">
-                {hover.value == null
-                  ? "Donnée indisponible"
-                  : coloration === "vainqueur"
-                    ? nuanceLabel(String(hover.value))
-                    : `${COLORATION_LABELS[coloration]} : ${colorationValueFmt(coloration)(Number(hover.value))}`}
-              </p>
-            </div>
-          </div>
-        )}
-        <MapBottomLegend
-          coloration={coloration}
-          winnerRows={coloration === "vainqueur" ? winner.data : undefined}
-        />
-      </div>
+      <HoverTooltip setterRef={hoverSetRef} valueByCode={choroByCode} coloration={coloration} />
 
-      <aside
-        className={cn(
-          "z-10 flex w-[340px] shrink-0 flex-col border-l border-foreground/5 bg-surface/95 backdrop-blur lg:bg-surface/70",
-          "max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[88%] max-lg:max-w-[360px] max-lg:shadow-floating max-lg:transition-transform max-lg:duration-300",
-          mobilePane === "fiche" ? "max-lg:translate-x-0" : "max-lg:translate-x-full lg:translate-x-0",
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => setMobilePane(null)}
-          aria-label="Fermer la fiche"
-          className="absolute right-2 top-2 z-10 grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground lg:hidden"
+      <MapBottomLegend
+        coloration={coloration}
+        winnerRows={coloration === "vainqueur" ? winner.data : undefined}
+        shiftedRight={filtersOpen}
+        hiddenOnMobile={!!code}
+      />
+
+      {!code && !isLoading && <SelectionCoach />}
+
+      {/* Fiche flottante : n'apparaît QUE lorsqu'un territoire est sélectionné. */}
+      {code && (
+        <aside
+          className={cn(
+            "anim-pop-in absolute z-30 flex flex-col overflow-hidden rounded-2xl border border-foreground/5 bg-surface/95 shadow-floating backdrop-blur-md",
+            // Mobile : feuille basse — la carte reste visible au-dessus.
+            "inset-x-2 bottom-2 max-h-[62%]",
+            // Desktop : carte flottante à droite, sous la barre supérieure.
+            "lg:inset-x-auto lg:right-3 lg:top-[3.25rem] lg:bottom-3 lg:w-[352px] lg:max-h-none",
+          )}
         >
-          <X className="h-4 w-4" />
-        </button>
-        <FicheTerritoire
-          code={code}
-          maille={maille}
-          scrutin={scrutin}
-          lastClicked={lastClicked}
-          onClear={() => update({ code: null })}
-        />
-      </aside>
+          <FicheTerritoire
+            code={code}
+            maille={maille}
+            scrutin={scrutin}
+            lastClicked={lastClicked}
+            onClear={clearSelection}
+          />
+        </aside>
+      )}
       {/* La CommandPalette est rendue globalement par le layout racine —
          un second rendu ici doublait les écouteurs clavier (⌘K, F). */}
     </div>
   );
 }
 
+// ─── Survol : état local isolé (piloté par référence, sans re-rendu parent) ────
+
+type HoverInfo = { name: string; code: string | null; x: number; y: number };
+
+const HoverTooltip = memo(function HoverTooltip({
+  setterRef,
+  valueByCode,
+  coloration,
+}: {
+  setterRef: RefObject<((h: HoverInfo | null) => void) | null>;
+  valueByCode: Map<string, number | string>;
+  coloration: Coloration;
+}) {
+  const [hover, setHover] = useState<HoverInfo | null>(null);
+
+  useEffect(() => {
+    setterRef.current = setHover;
+    return () => {
+      setterRef.current = null;
+    };
+  }, [setterRef]);
+
+  if (!hover) return null;
+  const value = hover.code ? valueByCode.get(hover.code) : undefined;
+  return (
+    <div className="anim-pop-in pointer-events-none absolute z-30 max-w-[210px]" style={{ left: hover.x, top: hover.y }}>
+      <div className="ml-3 mt-3 rounded-lg bg-surface/95 px-2.5 py-1.5 shadow-floating ring-1 ring-foreground/10 backdrop-blur">
+        <p className="text-[11.5px] font-semibold leading-tight">{hover.name}</p>
+        <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+          {value == null
+            ? "Donnée indisponible"
+            : coloration === "vainqueur"
+              ? nuanceLabel(String(value))
+              : `${COLORATION_LABELS[coloration]} : ${colorationValueFmt(coloration)(Number(value))}`}
+        </p>
+      </div>
+    </div>
+  );
+});
+
+// ─── Accompagnement des débutants ─────────────────────────────────────────────
+
+const COACH_KEY = "mouvancia.explorer.coach.v1";
+
+const subscribeNoop = () => () => {};
+function readCoachDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(COACH_KEY) === "1";
+  } catch {
+    return true; // stockage indisponible (mode privé) : ne pas insister
+  }
+}
+
+/**
+ * Aide au premier usage : rappelle les 3 gestes de base tant que rien n'est
+ * sélectionné. Une fois écartée (localStorage), il ne reste qu'une pastille
+ * discrète invitant à cliquer sur la carte.
+ */
+function SelectionCoach() {
+  // Lecture du localStorage via useSyncExternalStore : le snapshot serveur vaut
+  // `null` (rien n'est rendu au prérendu) → aucun écart d'hydratation, et pas de
+  // setState en effet.
+  const stored = useSyncExternalStore(subscribeNoop, readCoachDismissed, () => null);
+  const [justDismissed, setJustDismissed] = useState(false);
+  const dismissed = justDismissed || stored;
+  if (dismissed === null) return null;
+
+  if (dismissed) {
+    return (
+      <div className="pointer-events-none absolute left-1/2 top-14 z-20 -translate-x-1/2">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+          <MousePointerClick className="h-3.5 w-3.5" /> Cliquez sur un territoire pour voir sa fiche
+        </span>
+      </div>
+    );
+  }
+
+  const steps = [
+    "Choisissez un scrutin (ou une analyse) à gauche.",
+    "Choisissez ce que la couleur représente.",
+    "Cliquez sur un territoire : sa fiche s’ouvre à droite.",
+  ];
+  return (
+    <div className="absolute left-1/2 top-14 z-20 w-[min(22rem,calc(100%-1.5rem))] -translate-x-1/2">
+      <div className="anim-pop-in rounded-2xl border border-foreground/5 bg-surface/95 p-3.5 shadow-floating backdrop-blur-md">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[12px] font-semibold tracking-tight">Premiers pas sur la carte</p>
+          <button
+            type="button"
+            aria-label="Masquer l’aide"
+            onClick={() => {
+              try {
+                window.localStorage.setItem(COACH_KEY, "1");
+              } catch {
+                /* stockage indisponible : on masque pour la session */
+              }
+              setJustDismissed(true);
+            }}
+            className="-mr-1 -mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <ol className="mt-2 flex flex-col gap-1.5">
+          {steps.map((s, i) => (
+            <li key={s} className="flex items-start gap-2 text-[11.5px] leading-snug text-muted-foreground">
+              <span className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-warm/15 text-[9.5px] font-semibold text-foreground">
+                {i + 1}
+              </span>
+              {s}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
 // ─── Panneau de contrôle (gauche) ─────────────────────────────────────────────
 
-function ControlsPanel({
+const ControlsPanel = memo(function ControlsPanel({
   maille,
   scrutin,
   coloration,
   update,
   isLoading,
+  open,
   mobileOpen,
   onCloseMobile,
+  onCollapse,
 }: {
   maille: Maille;
   scrutin: Scrutin;
   coloration: Coloration;
   update: (p: { maille?: Maille; scrutin?: Scrutin; coloration?: Coloration; code?: string | null }) => void;
   isLoading: boolean;
+  open: boolean;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  onCollapse: () => void;
 }) {
   const mailles = maillesFor(scrutin);
 
   return (
     <div
+      // `inert` quand replié : le panneau reste monté (pas de re-montage coûteux)
+      // mais sort du flux de tabulation et des lecteurs d'écran.
+      inert={!open && !mobileOpen}
       className={cn(
-        "z-10 flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-foreground/5 bg-surface/95 p-4 backdrop-blur lg:bg-surface/70",
-        "max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:w-[86%] max-lg:max-w-[330px] max-lg:shadow-floating max-lg:transition-transform max-lg:duration-300",
-        mobileOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full lg:translate-x-0",
+        "absolute z-30 flex flex-col gap-5 overflow-y-auto rounded-2xl border border-foreground/5 bg-surface/95 p-4 shadow-floating backdrop-blur-md transition-[transform,opacity] duration-300",
+        "inset-y-3 left-3 w-[86%] max-w-[330px]",
+        "lg:bottom-3 lg:top-[3.25rem] lg:w-[288px]",
+        mobileOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-[calc(100%+1rem)] max-lg:opacity-0",
+        open ? "lg:translate-x-0 lg:opacity-100" : "lg:-translate-x-[calc(100%+1rem)] lg:opacity-0",
       )}
     >
       <div className="flex items-center justify-between">
@@ -799,6 +949,15 @@ function ControlsPanel({
           >
             <X className="h-4 w-4" />
           </button>
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Replier le panneau pour agrandir la carte"
+            title="Replier le panneau"
+            className="hidden h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground lg:grid"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -806,26 +965,8 @@ function ControlsPanel({
 
       <div className="h-px bg-foreground/5" />
 
-      <Section title="Échelle géographique">
-        <div className="flex flex-col gap-1">
-          {mailles.map((m) => (
-            <button
-              key={m}
-              onClick={() => update({ maille: m, code: null })}
-              className={cn(
-                "flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition-colors",
-                maille === m ? "bg-primary text-primary-foreground" : "hover:bg-foreground/[0.04]",
-              )}
-            >
-              <span>{MAILLE_LABELS[m]}</span>
-              <span className={cn("text-[10px] tabular-nums", maille === m ? "text-primary-foreground/60" : "text-muted-foreground")}>
-                {fmtInt(MAILLE_COUNTS[m])}
-              </span>
-            </button>
-          ))}
-        </div>
-      </Section>
-
+      {/* Ordre calqué sur le parcours d'un novice : quoi (scrutin) → quelle
+          couleur (indicateur) → à quelle échelle. */}
       <Section title="Colorer par">
         <div className="flex flex-col gap-3">
           {colorationGroups(scrutin).map((g, i) => (
@@ -850,9 +991,33 @@ function ControlsPanel({
           </p>
         )}
       </Section>
+
+      <Section title="Échelle géographique">
+        <div className="flex flex-col gap-1">
+          {mailles.map((m) => (
+            <button
+              key={m}
+              onClick={() => update({ maille: m, code: null })}
+              className={cn(
+                "flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition-colors",
+                maille === m ? "bg-primary text-primary-foreground" : "hover:bg-foreground/[0.04]",
+              )}
+            >
+              <span>{MAILLE_LABELS[m]}</span>
+              <span className={cn("text-[10px] tabular-nums", maille === m ? "text-primary-foreground/60" : "text-muted-foreground")}>
+                {fmtInt(MAILLE_COUNTS[m])}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-1 text-[10.5px] leading-snug text-muted-foreground/80">
+          Plus l’échelle est fine, plus le détail est précis — et plus l’affichage
+          demande de zoom pour être lisible.
+        </p>
+      </Section>
     </div>
   );
-}
+});
 
 // ─── Sélecteur de scrutin à deux niveaux (type → année → tour) ────────────────
 
@@ -983,24 +1148,31 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
 
 // ─── Barre supérieure carte ────────────────────────────────────────────────────
 
-function MapTopBar({
+const MapTopBar = memo(function MapTopBar({
   scrutin,
+  filtersOpen,
   onOpenSearch,
   onOpenFilters,
 }: {
   scrutin: Scrutin;
+  filtersOpen: boolean;
   onOpenSearch: () => void;
   onOpenFilters: () => void;
 }) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 p-3">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-2 p-3">
       <div className="flex min-w-0 items-center gap-2">
         <button
           onClick={onOpenFilters}
-          aria-label="Ouvrir les filtres"
-          className="pointer-events-auto grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface/90 text-foreground shadow-sm backdrop-blur lg:hidden"
+          aria-label="Ouvrir les filtres de la carte"
+          title="Filtres"
+          className={cn(
+            "pointer-events-auto flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface/90 px-2 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-surface",
+            filtersOpen && "lg:hidden",
+          )}
         >
           <SlidersHorizontal className="h-4 w-4" />
+          <span className="hidden pr-1 text-[12px] font-medium lg:inline">Filtres</span>
         </button>
         <div className="pointer-events-auto truncate rounded-full bg-surface/90 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground shadow-sm backdrop-blur">
           <span className="lg:hidden">{SCRUTIN_META[scrutin].short}</span>
@@ -1018,19 +1190,31 @@ function MapTopBar({
       </button>
     </div>
   );
-}
+});
 
 // ─── Légende ───────────────────────────────────────────────────────────────────
 
-function MapBottomLegend({
+const MapBottomLegend = memo(function MapBottomLegend({
   coloration,
   winnerRows,
+  shiftedRight,
+  hiddenOnMobile,
 }: {
   coloration: Coloration;
   winnerRows?: WinningNuanceRow[];
+  /** Décale la légende quand le panneau de contrôle est déplié (desktop). */
+  shiftedRight: boolean;
+  /** Masquée sur mobile quand la fiche occupe le bas de l'écran. */
+  hiddenOnMobile: boolean;
 }) {
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[300px] rounded-xl bg-surface/90 p-3 shadow-card backdrop-blur">
+    <div
+      className={cn(
+        "pointer-events-none absolute bottom-3 left-3 z-20 max-w-[300px] rounded-xl bg-surface/90 p-3 shadow-card backdrop-blur transition-[left] duration-300",
+        shiftedRight ? "lg:left-[19.5rem]" : "lg:left-3",
+        hiddenOnMobile && "max-lg:hidden",
+      )}
+    >
       <p className="mb-1.5 text-[10px] font-semibold uppercase leading-snug tracking-[0.07em] text-muted-foreground">
         {COLORATION_LABELS[coloration]}
       </p>
@@ -1087,7 +1271,7 @@ function MapBottomLegend({
       ) : null}
     </div>
   );
-}
+});
 
 function NuanceMiniLegend({ rows }: { rows: WinningNuanceRow[] }) {
   const present = useMemo(() => {
@@ -1134,7 +1318,7 @@ function ContinuousMiniLegend({
 
 type FicheTab = "resultats" | "socio" | "france" | "tendances" | "potentiel";
 
-function FicheTerritoire({
+const FicheTerritoire = memo(function FicheTerritoire({
   code,
   maille,
   scrutin,
@@ -1187,7 +1371,10 @@ function FicheTerritoire({
   if (!code) return <FicheEmpty />;
 
   const cachedName = lastClicked?.code === code ? lastClicked.name : null;
-  const displayName = cachedName ?? detail.data?.libelle ?? `Code ${code}`;
+  const displayName =
+    maille === "circonscriptions"
+      ? circoLabel(code)
+      : (cachedName ?? detail.data?.libelle ?? `Code ${code}`);
 
   const tabs: { id: FicheTab; label: string; enabled: boolean }[] = [
     { id: "resultats", label: "Résultats", enabled: election },
@@ -1279,7 +1466,7 @@ function FicheTerritoire({
       </div>
     </div>
   );
-}
+});
 
 function ResultsBlock({ detail }: { detail: ScrutinDetail }) {
   const top = detail.candidates.slice(0, 6);

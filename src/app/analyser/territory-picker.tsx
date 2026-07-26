@@ -5,6 +5,7 @@ import { Crosshair, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   searchEntries,
+  entryLabel,
   useSearchIndex,
   type SearchEntry,
   type SearchEntryType,
@@ -65,7 +66,7 @@ export function TerritoryPicker({
   }, [index.data, query, filter]);
 
   function pick(entry: SearchEntry, type: TerritoryType) {
-    onChange({ type, code: entry.code, label: entry.nom });
+    onChange({ type, code: entry.code, label: entryLabel(entry) });
     setQuery("");
     setOpen(false);
   }

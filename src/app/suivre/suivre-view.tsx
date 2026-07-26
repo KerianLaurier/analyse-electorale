@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   BarChart3,
   Vote,
@@ -106,15 +106,15 @@ function parseSection(v: string | null): Section {
 export function SuivreView() {
   // Section pilotée par l'URL (?s=) : retour navigateur, partage de lien et
   // rafraîchissement conservent l'écran courant.
-  const router = useRouter();
   const params = useSearchParams();
   const section = parseSection(params.get("s"));
-  const setSection = useCallback(
-    (s: Section) => {
-      router.replace(s === "briefing" ? "/suivre" : `/suivre?s=${s}`, { scroll: false });
-    },
-    [router],
-  );
+  const setSection = useCallback((s: Section) => {
+    // Routing « shallow » natif : `history.replaceState` est intégré au routeur
+    // Next (useSearchParams se resynchronise) sans requête RSC. `router.replace`
+    // déclenchait un aller-retour réseau à chaque changement d'onglet, alors que
+    // les données de toutes les sections sont déjà en cache React Query.
+    window.history.replaceState(null, "", s === "briefing" ? "/suivre" : `/suivre?s=${s}`);
+  }, []);
 
   // « Depuis votre dernière visite » : compteurs de nouveautés par section
   // (timestamp local par appareil). Les jeux de données sont déjà chargés par
