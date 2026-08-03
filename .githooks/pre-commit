@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Vérifie que package-lock.json reste installable sur les runners (linux/x64).
+#
+# Pourquoi : un `npm install` lancé depuis macOS élague du lock les dépendances
+# des variantes wasm32-wasi (@emnapi/*, tirées par @tailwindcss/oxide-wasm32-wasi,
+# @rolldown/binding-wasm32-wasi, @unrs/resolver-binding-wasm32-wasi). Ces paquets
+# n'entrent dans l'arbre idéal de npm que sur linux/x64 : le lock reste donc
+# valide en local et casse `npm ci` sur GitHub Actions (cf. 016db4e, qui a
+# cassé CI et le refresh quotidien pendant 3 jours).
+#
+# Activation : git config core.hooksPath .githooks
+
+set -euo pipefail
+
+# Ne se déclenche que si le lock fait partie du commit.
+if ! git diff --cached --name-only | grep -qx 'package-lock.json'; then
+  exit 0
+fi
+
+echo "→ vérification de package-lock.json pour linux/x64…"
+
+if npm run --silent check:lock >/dev/null 2>&1; then
+  echo "✓ package-lock.json est cohérent pour les runners"
+  exit 0
+fi
+
+cat >&2 <<'MSG'
+
+✗ package-lock.json est désynchronisé pour linux/x64.
+
+`npm ci` passera en local mais échouera sur GitHub Actions. Détail :
+
+    npm run check:lock
+
+Cause habituelle : un `npm install` lancé depuis macOS a élagué les entrées
+@emnapi/* du lock. Pour régénérer un lock valide sur toutes les plateformes :
+
+    rm -rf node_modules package-lock.json
+    npm install --os=linux --cpu=x64
+    npm install
+
+Pour committer malgré tout : git commit --no-verify
+
+MSG
+exit 1
