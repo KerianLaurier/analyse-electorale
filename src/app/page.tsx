@@ -9,7 +9,6 @@ import {
   Database,
   Clock,
   ShieldCheck,
-  Check,
   Plus,
   EyeOff,
   Server,
@@ -17,7 +16,6 @@ import {
   FileCheck2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { PLANS } from "@/lib/team";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand-mark";
 import { LandingDeck } from "@/components/landing-deck";
@@ -25,6 +23,8 @@ import { LandingStats } from "@/components/landing-stats";
 import { LandingZoom } from "@/components/landing-zoom";
 import { LandingShowcase } from "@/components/landing-showcase";
 import { LandingContact } from "@/components/landing-contact";
+import { WaitlistForm } from "@/components/waitlist-form";
+import { StructuredData } from "@/components/structured-data";
 
 // Typographie scopée à la landing : Archivo (display affirmé, grotesque
 // éditorial) + Public Sans (corps institutionnel, lignée USWDS). Volontairement
@@ -48,7 +48,9 @@ const DISPLAY = "[font-family:var(--font-display)]";
 const NAV = [
   { href: "#produit", label: "Fonctionnalités" },
   { href: "#cas-usage", label: "Cas d'usage" },
-  { href: "#tarifs", label: "Tarifs" },
+  // Pré-lancement : la section Tarifs est remplacée par « Bientôt disponible »,
+  // qui porte l'inscription à la liste d'attente.
+  { href: "#bientot", label: "Disponibilité" },
   { href: "#contact", label: "Contact" },
 ];
 
@@ -111,8 +113,12 @@ const FAQ = [
     a: "Non. Les analyses s'exécutent dans votre navigateur, sans installation. Carte, comparaisons et simulateur sont pensés pour être pris en main en quelques minutes par une équipe de campagne.",
   },
   {
-    q: "Puis-je résilier à tout moment ?",
-    a: "Oui. L'essai de 14 jours est sans carte bancaire et sans engagement, et l'abonnement est résiliable quand vous le souhaitez.",
+    q: "Quand MOUVANCIA sera-t-il disponible ?",
+    a: "La plateforme est en cours de finalisation en vue des échéances de 2027. Inscrivez-vous à la liste d'attente pour être prévenu·e dès l'ouverture : vous recevrez un e-mail à ce moment-là, et rien d'autre entre-temps.",
+  },
+  {
+    q: "Combien coûtera l'abonnement ?",
+    a: "La grille tarifaire sera publiée à l'ouverture du service. Elle proposera plusieurs formules selon la taille de l'équipe, du candidat local au parti national. Les inscrits à la liste d'attente en seront informés en premier.",
   },
 ];
 
@@ -141,6 +147,10 @@ export default async function HomePage() {
       className={cn(display.variable, body.variable, "flex-1 scroll-smooth bg-canvas text-foreground")}
       style={{ fontFamily: "var(--font-body)" }}
     >
+      {/* Données structurées : Organization, WebSite, SoftwareApplication et
+          FAQPage — alimentée par la même constante FAQ que la section rendue. */}
+      <StructuredData faq={FAQ} />
+
       {/* ── Header landing (propre, sans navbar applicative) ─────────────── */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-canvas/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
@@ -167,15 +177,10 @@ export default async function HomePage() {
                 Accéder à mon QG <ArrowRight className="h-4 w-4" />
               </PrimaryLink>
             ) : (
-              <>
-                <Link
-                  href="/auth/login"
-                  className="hidden rounded-pill px-3.5 py-2 text-[13.5px] font-medium text-foreground/75 transition-colors hover:bg-surface-soft hover:text-foreground sm:inline-block"
-                >
-                  Se connecter
-                </Link>
-                <PrimaryLink href="/auth/signup">Essai gratuit</PrimaryLink>
-              </>
+              // Pré-lancement : plus de mise en avant de l'inscription. Le CTA
+              // renvoie vers la liste d'attente ; l'accès aux comptes existants
+              // reste possible par le lien discret du pied de page.
+              <PrimaryLink href="#bientot">Être prévenu·e</PrimaryLink>
             )}
           </nav>
         </div>
@@ -190,9 +195,9 @@ export default async function HomePage() {
         />
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-14 sm:px-8 lg:grid-cols-[1.08fr_0.92fr] lg:pb-24 lg:pt-20">
           <div className="anim-fade-in">
-            <span className="inline-flex items-center gap-2 rounded-pill border border-border bg-surface px-3 py-1.5 text-[11.5px] font-semibold text-foreground/70">
+            <span className="inline-flex items-center gap-2 rounded-pill border border-warm/40 bg-warm/[0.08] px-3 py-1.5 text-[11.5px] font-semibold text-foreground/80">
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-warm" />
-              Analyse électorale &amp; pilotage de campagne
+              Bientôt disponible — ouverture en vue de 2027
             </span>
             <h1
               className={cn(
@@ -214,15 +219,15 @@ export default async function HomePage() {
                 </CtaPrimary>
               ) : (
                 <>
-                  <CtaPrimary href="/auth/signup">
-                    Démarrer l&apos;essai gratuit <ArrowRight className="h-[18px] w-[18px]" />
+                  <CtaPrimary href="#bientot">
+                    Rejoindre la liste d&apos;attente <ArrowRight className="h-[18px] w-[18px]" />
                   </CtaPrimary>
                   <CtaGhost href="#produit">Découvrir la plateforme</CtaGhost>
                 </>
               )}
             </div>
             <p className="mt-5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-muted-foreground">
-              <Dot /> Sans carte bancaire
+              <Dot /> Inscription sans engagement
               <Dot /> Données officielles
               <Dot /> Conçu pour candidats, partis &amp; cabinets
             </p>
@@ -393,70 +398,29 @@ export default async function HomePage() {
       </section>
 
       {/* ── Tarifs ───────────────────────────────────────────────────────── */}
-      <section id="tarifs" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-12 sm:px-8 lg:py-16">
-        <div className="max-w-2xl">
-          <SectionLabel>Tarifs</SectionLabel>
-          <h2 className={cn(DISPLAY, "mt-3 text-[clamp(1.8rem,3.6vw,2.7rem)] font-extrabold leading-[1.02] tracking-[-0.02em]")}>
-            Une formule pour chaque campagne.
-          </h2>
-          <p className="mt-3 text-[14.5px] text-muted-foreground">Essai gratuit de 14 jours · sans carte bancaire · sans engagement.</p>
-        </div>
-        <div className="mt-10 grid gap-4 lg:grid-cols-3">
-          {PLANS.map((p) => {
-            const featured = p.id === "equipe";
-            const quote = p.monthly == null;
-            const href = quote
-              ? "mailto:contact@mouvancia.fr?subject=Formule%20Cabinet"
-              : authed
-                ? `/auth/abonnement?plan=${p.id}`
-                : "/auth/signup";
-            const cta = quote ? "Nous contacter" : authed ? "Gérer l'abonnement" : "Démarrer l'essai gratuit";
-            return (
-              <div
-                key={p.id}
-                className={cn(
-                  "flex flex-col rounded-2xl p-6",
-                  featured
-                    ? "border-2 border-warm bg-warm/[0.05] shadow-floating"
-                    : "border border-border bg-surface",
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <p className={cn(DISPLAY, "text-[16px] font-bold")}>{p.name}</p>
-                  {featured && (
-                    <span className="rounded-pill bg-warm px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0a0a0c]">
-                      Recommandé
-                    </span>
-                  )}
-                </div>
-                <p className={cn(DISPLAY, "mt-4 text-[34px] font-extrabold leading-none tracking-[-0.02em]")}>
-                  {p.price}
-                  <span className="text-[13px] font-medium text-muted-foreground"> {p.period}</span>
-                </p>
-                <p className="mt-1.5 text-[11.5px] text-muted-foreground">{p.seats}</p>
-                <p className="mt-2.5 text-[13px] text-muted-foreground">{p.tagline}</p>
-                <ul className="mt-5 flex flex-1 flex-col gap-2">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-[13px] text-foreground/80">
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={href}
-                  className={cn(
-                    "mt-6 inline-flex items-center justify-center gap-1.5 rounded-pill px-4 py-2.5 text-[13.5px] font-semibold transition-all",
-                    featured
-                      ? "bg-primary text-primary-foreground hover:opacity-90"
-                      : "border border-border bg-surface text-foreground/80 hover:border-foreground/30 hover:text-foreground",
-                  )}
-                >
-                  {cta}
-                </Link>
-              </div>
-            );
-          })}
+      {/* ── Bientôt disponible + liste d'attente ─────────────────────────── */}
+      <section id="bientot" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-12 sm:px-8 lg:py-16">
+        <div className="relative overflow-hidden rounded-3xl border border-border bg-surface/40 px-6 py-10 sm:px-10 sm:py-14">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -left-24 -top-24 h-[380px] w-[380px] rounded-full bg-warm/12 blur-[110px]"
+          />
+          <div className="relative mx-auto max-w-2xl text-center">
+            <span className="inline-flex items-center gap-2 rounded-pill border border-warm/40 bg-warm/[0.08] px-3 py-1.5 text-[11.5px] font-semibold text-foreground/80">
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-warm" />
+              Bientôt disponible
+            </span>
+            <h2 className={cn(DISPLAY, "mt-5 text-[clamp(1.8rem,3.6vw,2.7rem)] font-extrabold leading-[1.02] tracking-[-0.02em]")}>
+              La plateforme ouvre bientôt.
+            </h2>
+            <p className="mx-auto mt-4 max-w-[54ch] text-[15px] leading-relaxed text-muted-foreground">
+              MOUVANCIA est en cours de finalisation en vue des échéances de 2027. Laissez-nous
+              votre adresse : vous serez prévenu·e dès l&apos;ouverture, et informé·e en premier de
+              la grille tarifaire.
+            </p>
+
+            <WaitlistForm className="mx-auto mt-8 max-w-xl text-left" />
+          </div>
         </div>
       </section>
 
@@ -498,7 +462,7 @@ export default async function HomePage() {
               <p className="mt-2 max-w-[48ch] text-[14.5px] text-primary-foreground/65">
                 {authed
                   ? "Votre QG vous attend."
-                  : "Essai gratuit, sans engagement. Données ouvertes, mises à jour quotidiennes."}
+                  : "Ouverture prochaine. Soyez prévenu·e en premier — données ouvertes, mises à jour quotidiennes."}
               </p>
             </div>
             <div className="flex shrink-0 gap-3">
@@ -507,14 +471,9 @@ export default async function HomePage() {
                   Accéder à mon QG <ArrowRight className="h-4 w-4" />
                 </Link>
               ) : (
-                <>
-                  <Link href="/auth/signup" className="inline-flex items-center gap-2 rounded-pill bg-warm px-5 py-3 text-[14px] font-bold text-[#0a0a0c] transition-opacity hover:opacity-90">
-                    Démarrer l&apos;essai gratuit <ArrowRight className="h-4 w-4" />
-                  </Link>
-                  <Link href="/auth/login" className="inline-flex items-center rounded-pill border border-primary-foreground/25 px-5 py-3 text-[14px] font-medium text-primary-foreground transition-colors hover:bg-primary-foreground/10">
-                    Se connecter
-                  </Link>
-                </>
+                <a href="#bientot" className="inline-flex items-center gap-2 rounded-pill bg-warm px-5 py-3 text-[14px] font-bold text-[#0a0a0c] transition-opacity hover:opacity-90">
+                  Rejoindre la liste d&apos;attente <ArrowRight className="h-4 w-4" />
+                </a>
               )}
             </div>
           </div>
@@ -533,6 +492,11 @@ export default async function HomePage() {
             <Link href="/mentions-legales" className="hover:text-foreground hover:underline">Mentions légales</Link>
             <Link href="/confidentialite" className="hover:text-foreground hover:underline">Confidentialité</Link>
             <Link href="/cgu" className="hover:text-foreground hover:underline">CGU</Link>
+            {/* Pré-lancement : l'inscription n'est plus mise en avant, mais les
+                comptes existants (démo, testeurs) gardent un accès discret. */}
+            {!authed && (
+              <Link href="/auth/login" className="hover:text-foreground hover:underline">Se connecter</Link>
+            )}
           </nav>
           <span>© 2026</span>
         </div>
