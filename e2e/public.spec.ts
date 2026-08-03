@@ -6,10 +6,35 @@ import { test, expect } from "@playwright/test";
  * formulaires d'auth et messages d'erreur en français.
  */
 
-test("la landing s'affiche", async ({ page }) => {
+test("la landing s'affiche en mode pré-lancement", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(/intelligence électorale/i);
-  await expect(page.getByRole("link", { name: /essai gratuit/i }).first()).toBeVisible();
+  // Pré-lancement : le CTA mène à la liste d'attente, plus à l'essai gratuit.
+  await expect(page.getByRole("link", { name: /liste d'attente/i }).first()).toBeVisible();
+  // La section Tarifs a été retirée (les prix ne sont pas encore publics).
+  await expect(page.locator("#tarifs")).toHaveCount(0);
+  await expect(page.locator("#bientot")).toBeVisible();
+});
+
+test("la liste d'attente accepte une adresse et répond", async ({ page }) => {
+  await page.goto("/#bientot");
+
+  const section = page.locator("#bientot");
+  await expect(section.getByRole("heading", { name: /la plateforme ouvre bientôt/i })).toBeVisible();
+  // Mention RGPD obligatoire : la base légale de la collecte est le consentement.
+  await expect(section.getByText(/politique de confidentialité/i)).toBeVisible();
+
+  const champ = section.getByPlaceholder("vous@organisation.fr");
+  await expect(champ).toBeVisible();
+  await champ.fill("e2e@exemple.fr");
+  await section.getByRole("button", { name: /être prévenu/i }).click();
+
+  // Le back-end n'est pas garanti configuré en CI (SUPABASE_SERVICE_ROLE_KEY
+  // absente → 503). On vérifie donc que la boucle client → API → UI aboutit à
+  // un retour explicite, succès comme repli, plutôt qu'à un formulaire figé.
+  await expect(
+    section.getByText(/c'est noté|indisponible|impossible/i).first(),
+  ).toBeVisible();
 });
 
 test("les routes applicatives exigent une connexion", async ({ page }) => {

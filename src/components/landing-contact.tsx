@@ -68,11 +68,11 @@ export function LandingContact() {
         </a>
 
         <p className="mt-5 text-[12px] text-muted-foreground">
-          Vous préférez tester d&apos;abord ?{" "}
-          <a href="/auth/signup" className="font-medium text-foreground underline underline-offset-2 hover:text-foreground/70">
-            Démarrez l&apos;essai gratuit
+          Vous voulez simplement être prévenu·e de l&apos;ouverture ?{" "}
+          <a href="#bientot" className="font-medium text-foreground underline underline-offset-2 hover:text-foreground/70">
+            Rejoignez la liste d&apos;attente
           </a>{" "}
-          — sans carte bancaire.
+          — une adresse e-mail suffit.
         </p>
       </div>
 

@@ -16,6 +16,10 @@ const PUBLIC_PATHS = new Set([
   "/auth/callback",
   // Webhook Stripe : pas de session — authentifié par sa signature.
   "/api/stripe/webhook",
+  // Liste d'attente de pré-lancement : appelée depuis la landing par des
+  // visiteurs anonymes — c'est tout l'objet du formulaire. Sans cette entrée,
+  // le POST est redirigé (307) vers /auth/login et l'inscription est impossible.
+  "/api/waitlist",
   // Secours hors-ligne : précaché par le service worker, avec ou sans session.
   "/offline",
   // Ressources PWA (sans extension statique → sinon bloquées par le gating).

@@ -36,8 +36,10 @@ function dataOrigin(): string | null {
 }
 
 const OG_TITLE = "MOUVANCIA — L'intelligence électorale, du national au bureau de vote";
+// Pré-lancement : plus de promesse d'essai gratuit (les tarifs sont retirés de
+// la landing). La description reste factuelle sur le périmètre du produit.
 const OG_DESC =
-  "Analyse électorale et pilotage de campagne, réunis : cartographie, sociologie, prédictif et QG de terrain. Données ouvertes, essai gratuit sans carte bancaire.";
+  "Analyse électorale et pilotage de campagne, réunis : cartographie, sociologie, prédictif et QG de terrain. Données publiques officielles. Ouverture prochaine.";
 
 // On charge explicitement les poids utilisés dans les maquettes v3 modern
 // (300 light, 400 regular, 500 medium dominant, 600 semibold).
@@ -57,9 +59,17 @@ export const metadata: Metadata = {
   // Base absolue pour les URL d'images sociales (og:image / twitter:image),
   // générées par app/opengraph-image.tsx et app/twitter-image.tsx.
   metadataBase: new URL(SITE_URL),
-  title: "Analyse électorale",
+  // `default` sert de titre à la vitrine ; `template` suffixe la marque aux
+  // pages qui définissent leur propre titre (légal, app) — sans le dupliquer.
+  title: {
+    default: "MOUVANCIA — Analyse électorale et pilotage de campagne",
+    template: "%s · MOUVANCIA",
+  },
   description:
-    "Outil professionnel d'analyse politique et électorale — présidentielle et législatives 2027.",
+    "Plateforme d'analyse électorale et de pilotage de campagne : résultats du national au bureau de vote, sociologie INSEE, historique multi-scrutins et QG de terrain. Présidentielle et législatives 2027.",
+  // Canonique sur le domaine racine : la vitrine et l'app cohabitent sur deux
+  // sous-domaines (cf. src/proxy.ts), il ne faut pas les faire concourir.
+  alternates: { canonical: "/" },
   applicationName: "MOUVANCIA",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "MOUVANCIA" },
   formatDetection: { telephone: false },
