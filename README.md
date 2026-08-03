@@ -33,6 +33,25 @@ Scripts :
 | `npm run build` | build de production |
 | `npm start` | lance le build de production |
 | `npm run lint` | ESLint |
+| `npm run check:lock` | vérifie que `package-lock.json` est installable sur les runners (linux/x64) |
+
+### Hooks git (à activer une fois par clone)
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Le hook `pre-commit` lance `npm run check:lock` quand `package-lock.json` fait
+partie du commit. Il évite un piège coûteux : un `npm install` lancé depuis
+macOS élague du lock les dépendances des variantes `wasm32-wasi` (`@emnapi/*`).
+Le lock reste alors valide en local mais casse `npm ci` sur GitHub Actions —
+c'est ce qui a mis CI et le refresh quotidien en échec pendant 3 jours.
+
+Si le lock doit être régénéré :
+
+```bash
+rm -rf node_modules package-lock.json && npm install --os=linux --cpu=x64 && npm install
+```
 
 ## Structure des routes
 
