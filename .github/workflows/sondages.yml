@@ -79,5 +79,4 @@ jobs:
             echo "= SUPABASE_SERVICE_ROLE_KEY absent → upload storage ignoré"
             exit 0
           fi
-          npm ci
           node scripts/pipeline/upload-storage.mjs

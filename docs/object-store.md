@@ -31,12 +31,20 @@ fichiers restent dans git.
 
 ## Variante manuelle (terminal)
 
+Aucune installation préalable : le script n'a aucune dépendance (`fetch` natif,
+Node ≥ 18).
+
 ```bash
-npm install   # node_modules doit contenir @supabase/supabase-js
 SUPABASE_URL=https://fdfghtrxczauvrbmdxlq.supabase.co \
 SUPABASE_SERVICE_ROLE_KEY=<service_role> \
 node scripts/pipeline/upload-storage.mjs        # DRY_RUN=1 pour lister sans écrire
 ```
+
+> Cette absence de dépendance est délibérée : les 5 workflows qui appellent ce
+> script faisaient auparavant un `npm ci` complet (~790 paquets) pour trois
+> requêtes HTTP. Un `package-lock.json` cassé coupait donc la synchro des
+> données alors que leur collecte fonctionnait (panne du 30/07 au 03/08 2026).
+> Merci de ne pas réintroduire d'`import` tiers ici.
 
 ## Pointer l'app vers le bucket
 

@@ -10,11 +10,18 @@
 //
 // Idempotent (upsert). Le service_role contourne la RLS Storage — à n'utiliser
 // QUE côté serveur/CI, jamais exposé au client.
+//
+// ZÉRO DÉPENDANCE : uniquement des modules natifs + `fetch` (global depuis
+// Node 18). Ce script tapait auparavant l'API Storage via @supabase/supabase-js,
+// ce qui obligeait les 5 workflows qui l'appellent à faire un `npm ci` complet
+// (~790 paquets) pour trois requêtes HTTP. Un lock cassé coupait alors la
+// synchro des données alors que leur collecte, elle, fonctionnait — c'est
+// exactement ce qui s'est produit du 30/07 au 03/08. Garder ce fichier sans
+// dépendance, c'est garder l'upload indépendant de l'état de node_modules.
 
 import { readdir, stat, readFile } from "node:fs/promises";
 import { join, relative, extname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createClient } from "@supabase/supabase-js";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 const PUBLIC = join(ROOT, "public");
@@ -52,9 +59,27 @@ if (!SUPABASE_URL || !SERVICE_ROLE) {
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
-  auth: { persistSession: false },
+const API = `${SUPABASE_URL.replace(/\/+$/, "")}/storage/v1`;
+
+// Le service_role sert à la fois d'apikey et de bearer, comme le fait
+// supabase-js. Les deux en-têtes sont attendus par l'API Storage.
+const authHeaders = () => ({
+  apikey: SERVICE_ROLE,
+  authorization: `Bearer ${SERVICE_ROLE}`,
 });
+
+// Remonte un message d'erreur lisible : l'API Storage répond en JSON
+// ({ message } ou { error }), mais pas sur toutes les couches (un 502 de
+// passerelle renvoie du HTML) — d'où le repli sur le texte brut.
+async function storageError(res) {
+  const raw = await res.text().catch(() => "");
+  try {
+    const j = JSON.parse(raw);
+    return j.message ?? j.error ?? raw ?? `HTTP ${res.status}`;
+  } catch {
+    return raw.slice(0, 200) || `HTTP ${res.status}`;
+  }
+}
 
 async function* walk(dir) {
   let entries;
@@ -72,15 +97,41 @@ async function* walk(dir) {
 }
 
 async function ensureBucket() {
-  const { data } = await supabase.storage.getBucket(BUCKET);
-  if (data) return;
+  const res = await fetch(`${API}/bucket/${encodeURIComponent(BUCKET)}`, {
+    headers: authHeaders(),
+  });
+  if (res.ok) return;
+  if (res.status !== 404) {
+    throw new Error(`getBucket: ${await storageError(res)}`);
+  }
   if (DRY_RUN) {
     console.log(`(dry-run) créerait le bucket public « ${BUCKET} »`);
     return;
   }
-  const { error } = await supabase.storage.createBucket(BUCKET, { public: true });
-  if (error) throw new Error(`createBucket: ${error.message}`);
+  const created = await fetch(`${API}/bucket`, {
+    method: "POST",
+    headers: { ...authHeaders(), "content-type": "application/json" },
+    body: JSON.stringify({ id: BUCKET, name: BUCKET, public: true }),
+  });
+  if (!created.ok) throw new Error(`createBucket: ${await storageError(created)}`);
   console.log(`✓ bucket « ${BUCKET} » créé (public)`);
+}
+
+// Upload d'un objet. `x-upsert` rend l'opération idempotente (ré-upload d'un
+// fichier existant = remplacement), et `cache-control` doit être envoyé sous
+// forme `max-age=<s>` : supabase-js faisait cette conversion, pas l'API.
+async function uploadObject(key, body, contentType, cacheControl) {
+  const path = key.split("/").map(encodeURIComponent).join("/");
+  return fetch(`${API}/object/${encodeURIComponent(BUCKET)}/${path}`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      "content-type": contentType,
+      "cache-control": `max-age=${cacheControl}`,
+      "x-upsert": "true",
+    },
+    body,
+  });
 }
 
 async function collectFiles() {
@@ -124,14 +175,18 @@ async function main() {
     // parfois un 400/timeout transitoire en rafale. 3 tentatives + backoff.
     let lastErr = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const { error } = await supabase.storage
-        .from(BUCKET)
-        .upload(key, body, { contentType, upsert: true, cacheControl });
-      if (!error) {
-        lastErr = null;
-        break;
+      try {
+        const res = await uploadObject(key, body, contentType, cacheControl);
+        if (res.ok) {
+          lastErr = null;
+          break;
+        }
+        lastErr = new Error(await storageError(res));
+      } catch (err) {
+        // Coupure réseau/DNS : fetch rejette au lieu de répondre. Même
+        // traitement que les erreurs HTTP, pour ne pas perdre le retry.
+        lastErr = err;
       }
-      lastErr = error;
       if (attempt < 3) await new Promise((r) => setTimeout(r, 400 * attempt));
     }
     if (lastErr) {

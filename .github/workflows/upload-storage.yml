@@ -23,9 +23,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install deps
-        run: npm ci
-
+      # Pas de `npm ci` : upload-storage.mjs n'a aucune dépendance (fetch natif).
       - name: Upload to Supabase Storage
         env:
           SUPABASE_URL: https://fdfghtrxczauvrbmdxlq.supabase.co
