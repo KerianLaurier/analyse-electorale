@@ -49,9 +49,6 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Installer les deps
-        run: npm ci
-
       - name: Upload vers Supabase Storage
         env:
           SUPABASE_URL: https://fdfghtrxczauvrbmdxlq.supabase.co
