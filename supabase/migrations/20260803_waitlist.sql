@@ -1,9 +1,11 @@
 -- Liste d'attente de pré-lancement.
 --
--- ⚠️ NON ENCORE APPLIQUÉE EN PROD au moment du commit. À appliquer sur
--- fdfghtrxczauvrbmdxlq sur accord explicite de Kerian (cf. convention des
--- migrations précédentes). Tant qu'elle ne l'est pas, POST /api/waitlist
--- répondra 500 — le formulaire de la landing affiche alors un repli e-mail.
+-- ⚠️ APPLIQUÉE EN PROD le 2026-08-03 (via MCP apply_migration sur
+-- fdfghtrxczauvrbmdxlq, sur accord explicite de Kerian). Ce fichier versionne
+-- le SQL. Vérifié après application : 5 colonnes, RLS active, 0 policy,
+-- contrainte unique et CHECK minuscules présents ; lecture ET écriture avec la
+-- clé `anon` refusées en 401 (42501 permission denied) ; upsert idempotent et
+-- rejet de la casse mixte confirmés par insertion de test, puis table vidée.
 --
 -- Contexte : la landing passe en mode « bientôt disponible » (les tarifs sont
 -- retirés) et collecte des adresses e-mail en attendant l'ouverture.
@@ -11,7 +13,11 @@
 -- RGPD — la table est volontairement minimale : e-mail, horodatage, origine.
 -- Aucune donnée d'opinion politique, aucun nom, aucune IP, aucun user-agent.
 -- La base légale est le consentement, recueilli explicitement dans le
--- formulaire (case à cocher) et tracé par `consent_at`.
+-- formulaire de la landing (mention sous le champ) et tracé par `consent_at`.
+--
+-- Le linter Supabase signale `rls_enabled_no_policy` (niveau INFO) sur cette
+-- table : c'est le comportement VOULU, identique à `public.stripe_events`.
+-- Ne pas « corriger » en ajoutant une policy — ce serait ouvrir la liste.
 
 create table if not exists public.waitlist (
   id          uuid primary key default gen_random_uuid(),
