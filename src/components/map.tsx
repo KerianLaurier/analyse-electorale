@@ -362,14 +362,20 @@ export function Map({
     const map = mapRef.current;
     if (!map) return;
     const apply = () => {
-      map.setPaintProperty("background", "background-color", palette.background);
-      map.setPaintProperty("france-masque", "fill-color", palette.background);
-      map.setPaintProperty("france-contour-line", "line-color", palette.contour);
+      // `once("load")` peut se déclencher après un démontage (la carte est alors
+      // détruite) : on garde le même réflexe que les autres effets — ne toucher
+      // qu'à des couches encore présentes.
+      const set = (layer: string, prop: string, value: string) => {
+        if (map.getLayer(layer)) map.setPaintProperty(layer, prop, value);
+      };
+      set("background", "background-color", palette.background);
+      set("france-masque", "fill-color", palette.background);
+      set("france-contour-line", "line-color", palette.contour);
       for (const rank of CITY_RANKS) {
-        map.setPaintProperty(`city-dots-rank${rank}`, "circle-color", palette.city[rank]);
-        map.setPaintProperty(`city-dots-rank${rank}`, "circle-stroke-color", palette.cityStroke);
-        map.setPaintProperty(`city-labels-rank${rank}`, "text-color", palette.city[rank]);
-        map.setPaintProperty(`city-labels-rank${rank}`, "text-halo-color", palette.cityHalo);
+        set(`city-dots-rank${rank}`, "circle-color", palette.city[rank]);
+        set(`city-dots-rank${rank}`, "circle-stroke-color", palette.cityStroke);
+        set(`city-labels-rank${rank}`, "text-color", palette.city[rank]);
+        set(`city-labels-rank${rank}`, "text-halo-color", palette.cityHalo);
       }
     };
     if (styleLoadedRef.current || map.isStyleLoaded()) apply();
