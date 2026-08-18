@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTheme } from "next-themes";
 import maplibregl, {
   type Map as MapLibreMap,
   type MapLayerMouseEvent,
@@ -36,15 +37,56 @@ function registerPmtilesProtocol() {
   protocolRegistered = true;
 }
 
+// ── Palette par thème ─────────────────────────────────────────────────────────
+// L'app expose un thème sombre (next-themes, `.dark` sur <html>) : la carte doit
+// suivre, sinon elle reste un rectangle blanc éblouissant en mode sombre. Les
+// couleurs de fond/masque/villes sont alignées sur les tokens de globals.css
+// (canvas sombre #0a0a0c, cf. themeColor du layout).
+type MapPalette = {
+  /** Fond de carte ET masque « monde moins France » (même couleur, opaque). */
+  background: string;
+  /** Bordure France (seule ligne visible hors hover). */
+  contour: string;
+  /** Remplissage des territoires sans donnée. */
+  noData: string;
+  /** Points/labels villes par rang (1 grandes villes, 3 préfectures, 4 sous-préf). */
+  city: Record<1 | 3 | 4, string>;
+  /** Halo des labels villes (même famille que le fond). */
+  cityHalo: string;
+  /** Liseré des points villes. */
+  cityStroke: string;
+};
+
+const PALETTES: Record<"light" | "dark", MapPalette> = {
+  light: {
+    background: "#ffffff",
+    contour: "#888888",
+    noData: "#f0f0f0",
+    city: { 1: "#222222", 3: "#333333", 4: "#555555" },
+    cityHalo: "rgba(255,255,255,0.9)",
+    cityStroke: "#ffffff",
+  },
+  dark: {
+    background: "#0a0a0c",
+    contour: "#52525b",
+    noData: "#232327",
+    city: { 1: "#e4e4e7", 3: "#c0c0c8", 4: "#9c9ca4" },
+    cityHalo: "rgba(10,10,12,0.9)",
+    cityStroke: "#0a0a0c",
+  },
+};
+
+const CITY_RANKS = [1, 3, 4] as const;
+
 /**
  * Style inspiré de projetelections.onrender.com :
- *   — fond blanc (aucune tuile raster),
- *   — « monde entier moins France » masqué en blanc opaque (GeoJSON statique),
+ *   — fond uni thémé (aucune tuile raster),
+ *   — « monde entier moins France » masqué opaque (GeoJSON statique),
  *   — pas de traits de séparation entre territoires : `line-width: 0`,
  *   — villes repères (grandes villes / préfectures / sous-préfectures),
  *   — seule la bordure France et le hover blanc sont visibles.
  */
-function buildStyle(): StyleSpecification {
+function buildStyle(palette: MapPalette): StyleSpecification {
   const sources: StyleSpecification["sources"] = {
     // Masque + contour France (générés par scripts/pipeline/build-france-mask.py)
     "france-contour": {
@@ -55,6 +97,7 @@ function buildStyle(): StyleSpecification {
     "france-cities": {
       type: "geojson",
       data: "/france_cities.geojson",
+      attribution: 'Villes © <a href="https://geo.api.gouv.fr">geo.api.gouv.fr</a>',
     },
   };
 
@@ -67,15 +110,16 @@ function buildStyle(): StyleSpecification {
       type: "vector",
       url: `pmtiles://${tilesUrl}`,
       promoteId: { [cfg.sourceLayer]: cfg.promoteId },
+      attribution: cfg.attribution,
     };
   }
 
   const layers: StyleSpecification["layers"] = [
-    // 1. Fond blanc — remplace le basemap raster.
+    // 1. Fond uni thémé — remplace le basemap raster.
     {
       id: "background",
       type: "background",
-      paint: { "background-color": "#ffffff" },
+      paint: { "background-color": palette.background },
     },
   ];
 
@@ -90,10 +134,10 @@ function buildStyle(): StyleSpecification {
       minzoom: cfg.minzoom,
       maxzoom: cfg.maxzoom + 1,
       paint: {
-        // Default fill (no data) — gris très clair, pas de teinte « couleur ».
+        // Default fill (no data) — gris neutre thémé, pas de teinte « couleur ».
         // Pour les bureaux (petits polygones), on force une opacité plus forte
         // pour qu'ils restent visibles à zoom faible.
-        "fill-color": "#f0f0f0",
+        "fill-color": palette.noData,
         "fill-opacity": [
           "case",
           ["boolean", ["feature-state", "selected"], false], 0.95,
@@ -142,14 +186,14 @@ function buildStyle(): StyleSpecification {
     type: "fill",
     source: "france-contour",
     filter: ["==", ["get", "masque"], true],
-    paint: { "fill-color": "#ffffff", "fill-opacity": 1 },
+    paint: { "fill-color": palette.background, "fill-opacity": 1 },
   });
 
   // 5. Points + labels villes (3 niveaux de zoom).
   const cityRankConfigs = [
-    { rank: 1, minzoom: 5, textSize: 11, circleRadius: 3, haloWidth: 1.5, color: "#222222" },
-    { rank: 3, minzoom: 7, textSize: 9,  circleRadius: 2, haloWidth: 1.2, color: "#333333" },
-    { rank: 4, minzoom: 9, textSize: 8,  circleRadius: 2, haloWidth: 1,   color: "#555555" },
+    { rank: 1, minzoom: 5, textSize: 11, circleRadius: 3, haloWidth: 1.5 },
+    { rank: 3, minzoom: 7, textSize: 9,  circleRadius: 2, haloWidth: 1.2 },
+    { rank: 4, minzoom: 9, textSize: 8,  circleRadius: 2, haloWidth: 1 },
   ] as const;
   for (const cfg of cityRankConfigs) {
     layers.push(
@@ -161,9 +205,9 @@ function buildStyle(): StyleSpecification {
         filter: ["==", ["get", "rank"], cfg.rank],
         paint: {
           "circle-radius": cfg.circleRadius,
-          "circle-color": cfg.color,
+          "circle-color": palette.city[cfg.rank],
           "circle-stroke-width": 1,
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": palette.cityStroke,
         },
       },
       {
@@ -181,8 +225,8 @@ function buildStyle(): StyleSpecification {
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": cfg.color,
-          "text-halo-color": "rgba(255,255,255,0.9)",
+          "text-color": palette.city[cfg.rank],
+          "text-halo-color": palette.cityHalo,
           "text-halo-width": cfg.haloWidth,
         },
       },
@@ -195,7 +239,7 @@ function buildStyle(): StyleSpecification {
     type: "line",
     source: "france-contour",
     filter: ["!", ["has", "masque"]],
-    paint: { "line-color": "#888888", "line-width": 1 },
+    paint: { "line-color": palette.contour, "line-width": 1 },
   });
 
   return {
@@ -245,6 +289,12 @@ export function Map({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const styleLoadedRef = useRef(false);
+  // Thème : `resolvedTheme` vaut undefined au premier rendu (hydratation
+  // next-themes) → on démarre en clair, l'effet thème corrige juste après.
+  const { resolvedTheme } = useTheme();
+  const palette = PALETTES[resolvedTheme === "dark" ? "dark" : "light"];
+  const paletteRef = useRef(palette);
+  paletteRef.current = palette;
   const hoveredFeatureRef = useRef<{
     source: string;
     sourceLayer: string;
@@ -273,7 +323,7 @@ export function Map({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: buildStyle(),
+      style: buildStyle(paletteRef.current),
       center: FRANCE_CENTER,
       zoom: FRANCE_ZOOM,
       attributionControl: { compact: true },
@@ -303,6 +353,28 @@ export function Map({
       mapRef.current = null;
     };
   }, []);
+
+  // Bascule de thème : on retouche les paints (fond, masque, contour, villes)
+  // sans reconstruire le style — les sources, feature-states et le zoom
+  // survivent. Le gris « no data » des fills est retouché par l'effet
+  // choroplèthe (qui dépend aussi de `palette`).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      map.setPaintProperty("background", "background-color", palette.background);
+      map.setPaintProperty("france-masque", "fill-color", palette.background);
+      map.setPaintProperty("france-contour-line", "line-color", palette.contour);
+      for (const rank of CITY_RANKS) {
+        map.setPaintProperty(`city-dots-rank${rank}`, "circle-color", palette.city[rank]);
+        map.setPaintProperty(`city-dots-rank${rank}`, "circle-stroke-color", palette.cityStroke);
+        map.setPaintProperty(`city-labels-rank${rank}`, "text-color", palette.city[rank]);
+        map.setPaintProperty(`city-labels-rank${rank}`, "text-halo-color", palette.cityHalo);
+      }
+    };
+    if (styleLoadedRef.current || map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [palette]);
 
   // Interactions (survol / clic) : branchées UNIQUEMENT sur la maille visible.
   // Auparavant les 5 mailles étaient écoutées en permanence → MapLibre faisait 5
@@ -419,7 +491,7 @@ export function Map({
           const paint: DataDrivenPropertyValueSpecification<string> = [
             "case",
             ["==", ["feature-state", choropleth.stateKey], null],
-            "#f0f0f0",
+            palette.noData,
             choropleth.paint,
           ] as DataDrivenPropertyValueSpecification<string>;
           map.setPaintProperty(fillLayer, "fill-color", paint);
@@ -463,7 +535,7 @@ export function Map({
             fsRafRef.current = requestAnimationFrame(step);
           }
         } else {
-          map.setPaintProperty(fillLayer, "fill-color", "#f0f0f0");
+          map.setPaintProperty(fillLayer, "fill-color", palette.noData);
           map.setPaintProperty(fillLayer, "fill-opacity", [
             "case",
             ["boolean", ["feature-state", "selected"], false], 0.95,
@@ -487,7 +559,7 @@ export function Map({
 
     if (styleLoadedRef.current || map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [choropleth, maille]);
+  }, [choropleth, maille, palette]);
 
   // "selected" feature-state — pour highlight de l'élément sélectionné.
   useEffect(() => {
