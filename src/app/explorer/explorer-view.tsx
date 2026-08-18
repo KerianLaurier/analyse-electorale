@@ -1320,7 +1320,11 @@ const MapBottomLegend = memo(function MapBottomLegend({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute bottom-3 left-3 z-20 max-w-[300px] rounded-xl bg-surface/90 p-3 shadow-card backdrop-blur transition-[left] duration-300",
+        // `bottom-9` sur petit écran : la légende y occupe presque toute la largeur
+        // et recouvrait sinon la bande basse de la carte (échelle MapLibre à
+        // gauche, attribution à droite). En `lg` la place est suffisante, on
+        // garde le calage bas d'origine.
+        "pointer-events-none absolute bottom-9 left-3 z-20 max-w-[340px] rounded-xl bg-surface/90 p-3 shadow-card backdrop-blur transition-[left] duration-300 lg:bottom-3",
         shiftedRight ? "lg:left-[19.5rem]" : "lg:left-3",
         hiddenOnMobile && "max-lg:hidden",
       )}
@@ -1398,7 +1402,11 @@ function NuanceMiniLegend({ rows }: { rows: WinningNuanceRow[] }) {
       {present.map(([nuance]) => (
         <div key={nuance} className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: nuanceColor(nuance) }} />
-          <span className="truncate text-[11px] text-foreground">{nuanceLabel(nuance)}</span>
+          {/* `title` en filet de sécurité : « Rassemblement National » est le
+              libellé le plus long et frôlait la troncature à 300 px. */}
+          <span className="truncate text-[11px] text-foreground" title={nuanceLabel(nuance)}>
+            {nuanceLabel(nuance)}
+          </span>
         </div>
       ))}
     </div>
