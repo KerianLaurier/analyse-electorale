@@ -73,7 +73,7 @@ export const TILES: Record<Maille, TileConfig> = {
     path: "/tiles/communes.pmtiles",
     sourceLayer: "communes",
     promoteId: "code",
-    minzoom: 6,
+    minzoom: 5,   // avant : 6 — apparition plus précoce
     maxzoom: 13,
     color: "#14b8a6",
   },

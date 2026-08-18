@@ -91,12 +91,14 @@ function buildStyle(): StyleSpecification {
       maxzoom: cfg.maxzoom + 1,
       paint: {
         // Default fill (no data) — gris très clair, pas de teinte « couleur ».
+        // Pour les bureaux (petits polygones), on force une opacité plus forte
+        // pour qu'ils restent visibles à zoom faible.
         "fill-color": "#f0f0f0",
         "fill-opacity": [
           "case",
           ["boolean", ["feature-state", "selected"], false], 0.95,
           ["boolean", ["feature-state", "hover"], false], 1.0,
-          0.85,
+          maille === "bureaux" ? 0.92 : 0.85,
         ],
       },
       layout: {
@@ -425,7 +427,7 @@ export function Map({
             "case",
             ["boolean", ["feature-state", "selected"], false], 0.95,
             ["boolean", ["feature-state", "hover"], false], 1.0,
-            0.85,
+            m === "bureaux" ? 0.92 : 0.85,
           ]);
 
           // Application des feature-states. Pour les grosses mailles (bureaux,
@@ -466,7 +468,7 @@ export function Map({
             "case",
             ["boolean", ["feature-state", "selected"], false], 0.95,
             ["boolean", ["feature-state", "hover"], false], 1.0,
-            0.85,
+            m === "bureaux" ? 0.92 : 0.85,
           ]);
         }
       }

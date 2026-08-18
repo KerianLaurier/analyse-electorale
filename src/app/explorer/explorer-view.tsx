@@ -899,6 +899,94 @@ function SelectionCoach() {
   );
 }
 
+// ─── Slider horizontal d'échelle géographique ────────────────────────────────
+
+/**
+ * Sélecteur de maille façon « curseur » : piste horizontale avec marqueurs
+ * cliquables pour chaque échelle disponible (Région → Bureau de vote).
+ * L'échelle active est remplie et légèrement agrandie ; les autres restent
+ * discrètes. Tooltip au survol avec le libellé complet.
+ */
+function MailleSlider({
+  maille,
+  mailles,
+  onChange,
+}: {
+  maille: Maille;
+  mailles: Maille[];
+  onChange: (m: Maille) => void;
+}) {
+  const activeIndex = mailles.indexOf(maille);
+  return (
+    <div className="flex flex-col gap-2 py-1" role="radiogroup" aria-label="Échelle géographique">
+      {/* Piste */}
+      <div className="relative flex h-6 items-center">
+        {/* Ligne de fond */}
+        <div className="absolute left-0 right-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-foreground/10" />
+        {/* Progression jusqu'au curseur actif */}
+        <div
+          className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-primary transition-all duration-300"
+          style={{ width: `${(activeIndex / (mailles.length - 1)) * 100}%` }}
+        />
+        {/* Marqueurs */}
+        <div className="relative flex w-full justify-between">
+          {mailles.map((m, i) => {
+            const active = m === maille;
+            const past = i < activeIndex;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                title={`${MAILLE_LABELS[m]} — ${fmtInt(MAILLE_COUNTS[m])} territoires`}
+                onClick={() => onChange(m)}
+                className={cn(
+                  "group relative grid h-6 w-6 place-items-center rounded-full transition-all duration-200",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                )}
+              >
+                <span
+                  className={cn(
+                    "block rounded-full border-2 transition-all duration-200",
+                    active
+                      ? "h-3.5 w-3.5 border-primary bg-primary"
+                      : past
+                        ? "h-2.5 w-2.5 border-primary/60 bg-primary/60 group-hover:bg-primary/80"
+                        : "h-2.5 w-2.5 border-foreground/25 bg-surface group-hover:border-foreground/50 group-hover:bg-foreground/10",
+                  )}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {/* Labels sous les marqueurs — uniquement premier, courant et dernier pour éviter le fouillis */}
+      <div className="flex justify-between text-[10px] font-medium text-muted-foreground">
+        {mailles.map((m, i) => {
+          const isFirst = i === 0;
+          const isLast = i === mailles.length - 1;
+          const isActive = m === maille;
+          if (!isFirst && !isLast && !isActive) {
+            return <span key={m} className="w-6 text-center opacity-0" aria-hidden>·</span>;
+          }
+          return (
+            <span
+              key={m}
+              className={cn(
+                "w-12 truncate text-center transition-colors",
+                isActive ? "font-semibold text-foreground" : "",
+              )}
+            >
+              {MAILLE_LABELS[m]}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Panneau de contrôle (gauche) ─────────────────────────────────────────────
 
 const ControlsPanel = memo(function ControlsPanel({
@@ -993,25 +1081,9 @@ const ControlsPanel = memo(function ControlsPanel({
       </Section>
 
       <Section title="Échelle géographique">
-        <div className="flex flex-col gap-1">
-          {mailles.map((m) => (
-            <button
-              key={m}
-              onClick={() => update({ maille: m, code: null })}
-              className={cn(
-                "flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition-colors",
-                maille === m ? "bg-primary text-primary-foreground" : "hover:bg-foreground/[0.04]",
-              )}
-            >
-              <span>{MAILLE_LABELS[m]}</span>
-              <span className={cn("text-[10px] tabular-nums", maille === m ? "text-primary-foreground/60" : "text-muted-foreground")}>
-                {fmtInt(MAILLE_COUNTS[m])}
-              </span>
-            </button>
-          ))}
-        </div>
+        <MailleSlider maille={maille} mailles={mailles} onChange={(m) => update({ maille: m, code: null })} />
         <p className="mt-1 text-[10.5px] leading-snug text-muted-foreground/80">
-          Plus l’échelle est fine, plus le détail est précis — et plus l’affichage
+          Plus l&rsquo;échelle est fine, plus le détail est précis — et plus l&rsquo;affichage
           demande de zoom pour être lisible.
         </p>
       </Section>
