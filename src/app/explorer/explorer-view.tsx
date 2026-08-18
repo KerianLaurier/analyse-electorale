@@ -2,7 +2,7 @@
 
 import {
   memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore,
-  type RefObject,
+  type KeyboardEvent, type RefObject,
 } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -906,6 +906,9 @@ function SelectionCoach() {
  * cliquables pour chaque échelle disponible (Région → Bureau de vote).
  * L'échelle active est remplie et légèrement agrandie ; les autres restent
  * discrètes. Tooltip au survol avec le libellé complet.
+ *
+ * Sémantique radiogroup complète : flèches / Home / End déplacent la sélection,
+ * et seul le marqueur actif est dans l'ordre de tabulation (roving tabindex).
  */
 function MailleSlider({
   maille,
@@ -916,9 +919,34 @@ function MailleSlider({
   mailles: Maille[];
   onChange: (m: Maille) => void;
 }) {
-  const activeIndex = mailles.indexOf(maille);
+  const btnRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  // `maille` peut transitoirement ne pas appartenir à `mailles` (recalage après
+  // changement de scrutin) : on borne pour éviter index -1 → largeur négative.
+  const activeIndex = Math.max(0, mailles.indexOf(maille));
+  // Une seule maille (Sociologie, Potentiel) : pas de progression (évite 0/0 = NaN).
+  const progressPct = mailles.length > 1 ? (activeIndex / (mailles.length - 1)) * 100 : 0;
+
+  const select = (i: number) => {
+    const next = mailles[i];
+    if (!next || next === maille) return;
+    onChange(next);
+    btnRefs.current[i]?.focus();
+  };
+  const onKeyDown = (e: KeyboardEvent) => {
+    const last = mailles.length - 1;
+    const target =
+      e.key === "ArrowRight" || e.key === "ArrowDown" ? Math.min(activeIndex + 1, last)
+      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? Math.max(activeIndex - 1, 0)
+      : e.key === "Home" ? 0
+      : e.key === "End" ? last
+      : null;
+    if (target === null) return;
+    e.preventDefault();
+    select(target);
+  };
+
   return (
-    <div className="flex flex-col gap-2 py-1" role="radiogroup" aria-label="Échelle géographique">
+    <div className="flex flex-col gap-2 py-1" role="radiogroup" aria-label="Échelle géographique" onKeyDown={onKeyDown}>
       {/* Piste */}
       <div className="relative flex h-6 items-center">
         {/* Ligne de fond */}
@@ -926,7 +954,7 @@ function MailleSlider({
         {/* Progression jusqu'au curseur actif */}
         <div
           className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-primary transition-all duration-300"
-          style={{ width: `${(activeIndex / (mailles.length - 1)) * 100}%` }}
+          style={{ width: `${progressPct}%` }}
         />
         {/* Marqueurs */}
         <div className="relative flex w-full justify-between">
@@ -936,11 +964,13 @@ function MailleSlider({
             return (
               <button
                 key={m}
+                ref={(el) => { btnRefs.current[i] = el; }}
                 type="button"
                 role="radio"
                 aria-checked={active}
+                tabIndex={active ? 0 : -1}
                 title={`${MAILLE_LABELS[m]} — ${fmtInt(MAILLE_COUNTS[m])} territoires`}
-                onClick={() => onChange(m)}
+                onClick={() => select(i)}
                 className={cn(
                   "group relative grid h-6 w-6 place-items-center rounded-full transition-all duration-200",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -961,21 +991,24 @@ function MailleSlider({
           })}
         </div>
       </div>
-      {/* Labels sous les marqueurs — uniquement premier, courant et dernier pour éviter le fouillis */}
-      <div className="flex justify-between text-[10px] font-medium text-muted-foreground">
+      {/* Labels sous les marqueurs — uniquement premier, courant et dernier pour
+          éviter le fouillis. Tous les libellés (visibles ou non) font la même
+          largeur (w-12) et le rang déborde de -mx-3 : le centre de chaque
+          libellé tombe ainsi exactement sous le centre de son marqueur (w-6). */}
+      <div className="-mx-3 flex justify-between text-[10px] font-medium text-muted-foreground">
         {mailles.map((m, i) => {
           const isFirst = i === 0;
           const isLast = i === mailles.length - 1;
           const isActive = m === maille;
-          if (!isFirst && !isLast && !isActive) {
-            return <span key={m} className="w-6 text-center opacity-0" aria-hidden>·</span>;
-          }
+          const hidden = !isFirst && !isLast && !isActive;
           return (
             <span
               key={m}
+              aria-hidden={hidden || undefined}
               className={cn(
                 "w-12 truncate text-center transition-colors",
-                isActive ? "font-semibold text-foreground" : "",
+                hidden && "opacity-0",
+                isActive && "font-semibold text-foreground",
               )}
             >
               {MAILLE_LABELS[m]}

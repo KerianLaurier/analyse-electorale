@@ -42,27 +42,18 @@ type TileConfig = {
   minzoom: number;
   maxzoom: number;
   color: string;
+  /** Mention de source affichée par le contrôle d'attribution MapLibre. */
+  attribution: string;
 };
 
-/**
- * URL du proxy PMTiles (Cloudflare Worker) qui ajoute les headers CORS
- * manquants de object.files.data.gouv.fr.
- *
- * En dev, on pointe directement vers data.gouv.fr (CORS non bloquant pour
- * certains navigateurs en localhost, ou via extension). En prod, définir
- * NEXT_PUBLIC_PMTILES_PROXY=https://pmtiles-proxy.<compte>.workers.dev
- *
- * Le proxy attend le chemin sans le préfixe /data-pipeline-open :
- *   {proxy}/reu/reu-france-entiere-2022-06-01-v2.pmtiles
- */
-const PMTILES_PROXY = process.env.NEXT_PUBLIC_PMTILES_PROXY?.replace(/\/$/, "") ?? "";
-
-function bureauxTilesUrl(): string {
-  const upstreamPath = "/reu/reu-france-entiere-2022-06-01-v2.pmtiles";
-  if (PMTILES_PROXY) return `${PMTILES_PROXY}${upstreamPath}`;
-  // Fallback direct (CORS peut bloquer selon navigateur/origine).
-  return `https://object.files.data.gouv.fr/data-pipeline-open${upstreamPath}`;
-}
+// Attribution des contours administratifs (tuiles générées par build-tiles.sh
+// depuis france-geojson, données IGN/INSEE, Licence Ouverte). MapLibre dédoublonne
+// les chaînes identiques : une seule mention à l'écran pour les 4 mailles.
+const ADMIN_ATTRIBUTION =
+  'Contours © <a href="https://www.insee.fr">INSEE</a> / <a href="https://www.ign.fr">IGN</a>';
+// Contours des bureaux de vote : Etalab / REU (Licence Ouverte 2.0).
+const BUREAUX_ATTRIBUTION =
+  'Bureaux de vote © <a href="https://www.data.gouv.fr/fr/datasets/proposition-de-contours-des-bureaux-de-vote/">Etalab / REU</a>';
 
 export const TILES: Record<Maille, TileConfig> = {
   regions: {
@@ -72,6 +63,7 @@ export const TILES: Record<Maille, TileConfig> = {
     minzoom: 0,
     maxzoom: 8,
     color: "#6366f1",
+    attribution: ADMIN_ATTRIBUTION,
   },
   departements: {
     path: "/tiles/departements.pmtiles",
@@ -80,6 +72,7 @@ export const TILES: Record<Maille, TileConfig> = {
     minzoom: 0,
     maxzoom: 9,
     color: "#8b5cf6",
+    attribution: ADMIN_ATTRIBUTION,
   },
   circonscriptions: {
     path: "/tiles/circonscriptions.pmtiles",
@@ -88,27 +81,38 @@ export const TILES: Record<Maille, TileConfig> = {
     minzoom: 0,
     maxzoom: 11,
     color: "#0ea5e9",
+    attribution: ADMIN_ATTRIBUTION,
   },
   communes: {
     path: "/tiles/communes.pmtiles",
     sourceLayer: "communes",
     promoteId: "code",
-    minzoom: 5,   // avant : 6 — apparition plus précoce
+    // ⚠ Doit rester ≥ au min_zoom de l'archive PMTiles déployée (6 aujourd'hui,
+    // cf. build-tiles.sh) : en dessous, MapLibre demande des tuiles qui
+    // n'existent pas et n'affiche RIEN. Pour une apparition plus précoce,
+    // rebuild `communes` avec un minimum-zoom plus bas PUIS réuploader le
+    // storage avant d'abaisser cette valeur.
+    minzoom: 6,
     maxzoom: 13,
     color: "#14b8a6",
+    attribution: ADMIN_ATTRIBUTION,
   },
   // Contours officiels des bureaux de vote (Etalab / REU INSEE), PMTiles servi
-  // via le proxy CORS Cloudflare (object.files.data.gouv.fr n'envoie pas
-  // Access-Control-Allow-Origin → blocage navigateur). Le code de jointure
-  // `codeBureauVote` (« 01001_0001 ») correspond aux agrégats
+  // directement par data.gouv.fr — pas de copie locale (351 Mo). CORS vérifié
+  // 2026-08-18 : GET + préflight OPTIONS (Range) renvoient bien
+  // Access-Control-Allow-Origin (origine reflétée). Un proxy-cache Cloudflare
+  // (workers/pmtiles-proxy, supprimé, cf. historique git) reste une option si
+  // les 502 intermittents de data.gouv.fr devenaient gênants. Le code de
+  // jointure `codeBureauVote` (« 01001_0001 ») correspond aux agrégats
   // public/electoral/agg/{scrutin}_bureaux_*.parquet. Cf. scripts/pipeline/sources.json.
   bureaux: {
-    path: bureauxTilesUrl(),
+    path: "https://object.files.data.gouv.fr/data-pipeline-open/reu/reu-france-entiere-2022-06-01-v2.pmtiles",
     sourceLayer: "repertoire-unique-electoral-polygons",
     promoteId: "codeBureauVote",
     minzoom: 9,
     maxzoom: 14,
     color: "#db2777",
+    attribution: BUREAUX_ATTRIBUTION,
   },
 };
 

@@ -3,10 +3,9 @@
 Choroplèthes figées (précalcul des agrégats électoraux).
 
 Sort les coloriages de carte du chemin DuckDB-WASM : pour chaque scrutin
-électoral × maille « fine » servie par la carte (regions, departements,
-circonscriptions, communes — PAS les bureaux, trop volumineux et chargés au
-zoom), on fige en JSON statique les trois métriques que `explorer-view`
-calculait à la volée côté navigateur :
+électoral × maille servie par la carte (regions, departements,
+circonscriptions, communes, bureaux), on fige en JSON statique les trois
+métriques que `explorer-view` calculait à la volée côté navigateur :
 
   public/electoral/choro/{scrutin}_{maille}.json
     {
@@ -36,18 +35,21 @@ INSEE = PUBLIC / "insee"
 ELECT = PUBLIC / "electoral"
 OUT = PUBLIC / "electoral" / "choro"
 
-# Scrutins électoraux × mailles à figer (miroir de SCRUTIN_META côté app, hors
-# « bureaux »). Présidentielles + législatives : 4 mailles ; municipales : pas
-# de circonscriptions.
-WITH_CIRCO = ["regions", "departements", "circonscriptions", "communes"]
+# Scrutins électoraux × mailles à figer (miroir de SCRUTIN_META côté app).
+# Présidentielles + législatives : 5 mailles ; européennes : nationales de liste
+# (pas de circo) mais résultats par bureau ; municipales : ni circo ni bureaux.
+# Les agrégats bureaux vivent dans des Parquet séparés
+# ({scrutin}_bureaux_*.parquet, cf. build-bureaux.py) — résolus dans main().
+WITH_BUREAUX = ["regions", "departements", "circonscriptions", "communes", "bureaux"]
+NATIONAL_BUREAUX = ["regions", "departements", "communes", "bureaux"]
 NO_CIRCO = ["regions", "departements", "communes"]
 SCRUTINS: dict[str, list[str]] = {
-    "presid-2017-t1": WITH_CIRCO, "presid-2017-t2": WITH_CIRCO,
-    "presid-2022-t1": WITH_CIRCO, "presid-2022-t2": WITH_CIRCO,
-    "legis-2017-t1": WITH_CIRCO, "legis-2017-t2": WITH_CIRCO,
-    "legis-2022-t1": WITH_CIRCO, "legis-2022-t2": WITH_CIRCO,
-    "legis-2024-t1": WITH_CIRCO, "legis-2024-t2": WITH_CIRCO,
-    "euro-2019-t1": NO_CIRCO, "euro-2024-t1": NO_CIRCO,
+    "presid-2017-t1": WITH_BUREAUX, "presid-2017-t2": WITH_BUREAUX,
+    "presid-2022-t1": WITH_BUREAUX, "presid-2022-t2": WITH_BUREAUX,
+    "legis-2017-t1": WITH_BUREAUX, "legis-2017-t2": WITH_BUREAUX,
+    "legis-2022-t1": WITH_BUREAUX, "legis-2022-t2": WITH_BUREAUX,
+    "legis-2024-t1": WITH_BUREAUX, "legis-2024-t2": WITH_BUREAUX,
+    "euro-2019-t1": NATIONAL_BUREAUX, "euro-2024-t1": NATIONAL_BUREAUX,
     "municipales-2026-t1": NO_CIRCO, "municipales-2026-t2": NO_CIRCO,
 }
 
@@ -207,12 +209,15 @@ def main() -> int:
 
     keys: list[str] = []
     for scrutin, mailles in SCRUTINS.items():
-        cand = AGG / f"{scrutin}_candidats.parquet"
-        terr = AGG / f"{scrutin}_territoires.parquet"
-        if not cand.exists() or not terr.exists():
-            print(f"  ⚠ {scrutin}: agrégats manquants, ignoré")
-            continue
         for m in mailles:
+            # Les agrégats bureaux vivent dans des Parquet dédiés (schéma « long »
+            # identique, maille='bureaux') produits par build-bureaux.py.
+            stem = f"{scrutin}_bureaux" if m == "bureaux" else scrutin
+            cand = AGG / f"{stem}_candidats.parquet"
+            terr = AGG / f"{stem}_territoires.parquet"
+            if not cand.exists() or not terr.exists():
+                print(f"  ⚠ {scrutin}_{m}: agrégats manquants ({stem}_*.parquet), ignoré")
+                continue
             payload = {
                 "vainqueur": winner(con, cand, m),
                 "participation": metric(con, terr, m, "votants"),

@@ -70,8 +70,3 @@ next-env.d.ts
 # python caches
 __pycache__/
 *.pyc
-
-# Cloudflare Workers
-workers/*/node_modules/
-workers/*/package-lock.json
-workers/*/.wrangler/
