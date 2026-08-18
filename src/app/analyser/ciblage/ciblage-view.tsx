@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, Crosshair, Loader2, MapPin, Info, Plus, Check } from "lucide-react";
@@ -246,7 +246,7 @@ function Row({ b, rank, blocMode }: { b: TargetBureau; rank: number; blocMode: b
         {b.winnerNuance ? (
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full" style={{ background: nuanceColor(b.winnerNuance) }} />
-            <span className="truncate" style={{ color: nuanceColor(b.winnerNuance) }}>{nuanceLabel(b.winnerNuance)}</span>
+            <span className="nuance-text truncate" style={{ "--nuance-color": nuanceColor(b.winnerNuance) } as CSSProperties}>{nuanceLabel(b.winnerNuance)}</span>
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>

@@ -2,7 +2,7 @@
 
 import {
   memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore,
-  type KeyboardEvent, type RefObject,
+  type CSSProperties, type KeyboardEvent, type RefObject,
 } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -1600,7 +1600,10 @@ function ResultsBlock({ detail }: { detail: ScrutinDetail }) {
             <span className="text-[26px] font-semibold leading-none tracking-tight">
               {fmtPct(winner.pct)}
             </span>
-            <span className="truncate text-[13px] font-medium" style={{ color: nuanceColor(winner.nuance) }}>
+            <span
+              className="nuance-text truncate text-[13px] font-medium"
+              style={{ "--nuance-color": nuanceColor(winner.nuance) } as CSSProperties}
+            >
               {winner.label || nuanceLabel(winner.nuance)}
             </span>
           </div>

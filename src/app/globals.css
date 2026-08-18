@@ -348,3 +348,21 @@
   border-color: var(--border);
   color: var(--foreground);
 }
+
+/* ── Nuance politique employée comme COULEUR DE TEXTE ─────────────────────────
+   Les couleurs de nuance sont calibrées pour des aplats (carte, pastilles,
+   barres) sur fond clair. Employées en texte sur une surface sombre, les plus
+   foncées deviennent illisibles : RN (#13294b) tombe à 1,26:1 sur la fiche,
+   COM 2,83, REC 2,91, FI 3,79 — toutes sous le seuil AA de 4,5.
+
+   On ne touche pas aux aplats (l'identité politique doit rester exacte) : seul
+   le texte est éclairci en thème sombre, en conservant la teinte. Le mélange
+   50 % ramène les 4 nuances fautives au-dessus de 4,5:1.
+
+   Usage : className="nuance-text" + style={{ "--nuance-color": couleur }}. */
+.nuance-text {
+  color: var(--nuance-color);
+}
+.dark .nuance-text {
+  color: color-mix(in srgb, var(--nuance-color) 50%, white);
+}

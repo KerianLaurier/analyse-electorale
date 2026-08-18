@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Map as MapIcon, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -112,7 +113,7 @@ export function PersonneFiche({
               </p>
               <h1 className="truncate text-[22px] font-semibold tracking-tight">{fullName}</h1>
               <p className="text-[13px] text-muted-foreground">
-                <span style={{ color: nuanceColor(target.nuance) }}>{nuanceLabel(target.nuance)}</span>
+                <span className="nuance-text" style={{ "--nuance-color": nuanceColor(target.nuance) } as CSSProperties}>{nuanceLabel(target.nuance)}</span>
                 {(() => {
                   const sexe = depute?.sexe ?? personne?.sexe;
                   return sexe ? <span> · {sexe === "F" ? "Femme" : "Homme"}</span> : null;
