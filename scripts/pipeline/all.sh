@@ -6,6 +6,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 
 bash "$here/download.sh" "$@"
 bash "$here/build-tiles.sh"
+python3 "$here/build-france-mask.py"
+python3 "$here/build-france-cities.py"
 python3 "$here/build-parquet.py"
 python3 "$here/build-aggregates.py"
 python3 "$here/build-choropleths.py"
