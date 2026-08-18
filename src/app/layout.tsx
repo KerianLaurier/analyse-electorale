@@ -110,15 +110,16 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {/* Résolution anticipée des connexions externes (gros gain de latence
-            sur mobile) : fond de carte, tuiles bureaux, glyphes. Le WASM DuckDB
-            est self-hosté (cf. scripts/copy-duckdb.mjs) → plus de CDN tiers.
+            sur mobile) : tuiles des bureaux de vote + glyphes de la carte. Le
+            WASM DuckDB est self-hosté (cf. scripts/copy-duckdb.mjs) → plus de
+            CDN tiers. Les fonds raster CARTO et demotiles.maplibre.org ne sont
+            plus chargés depuis le passage au style « masque France » (fond uni,
+            aucune tuile raster) : leurs indices ont été retirés, ils ouvraient
+            des connexions vers des hôtes jamais sollicités.
             Rendus dans l'arbre : React 19 les hisse dans <head>. */}
-        <link rel="preconnect" href="https://a.basemaps.cartocdn.com" />
-        <link rel="dns-prefetch" href="https://b.basemaps.cartocdn.com" />
-        <link rel="dns-prefetch" href="https://c.basemaps.cartocdn.com" />
-        <link rel="dns-prefetch" href="https://d.basemaps.cartocdn.com" />
         <link rel="dns-prefetch" href="https://object.files.data.gouv.fr" />
-        <link rel="dns-prefetch" href="https://demotiles.maplibre.org" />
+        {/* Glyphes des labels de villes (police Noto Sans du style de carte). */}
+        <link rel="preconnect" href="https://protomaps.github.io" crossOrigin="" />
         {/* Origine Supabase : elle sert TOUTES les données (choroplèthes, tuiles,
             détails) ET l'authentification. C'était la seule origine critique sans
             préconnexion — on économise DNS + TCP + TLS avant la première requête. */}
