@@ -42,7 +42,24 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p public/electoral/agg public/electoral/trends public/insee
-          dl() { curl -fsS -o "public/$1" "$DATA_BASE/$1" && echo "↓ $1"; }
+          missing_req=""
+          missing_opt=""
+          # `dl` = source REQUISE (son absence fait échouer l'étape, en fin de
+          # parcours seulement : on télécharge tout d'abord pour lister TOUS les
+          # manques d'un coup au lieu de s'arrêter au premier).
+          dl() {
+            if curl -fsS -o "public/$1" "$DATA_BASE/$1"; then echo "↓ $1"
+            else echo "✗ REQUIS absent : $1"; missing_req="$missing_req $1"; rm -f "public/$1"; fi
+          }
+          # `dl_opt` = source OPTIONNELLE : build-choropleths.py saute proprement
+          # une source absente, et upload-storage.mjs ne pousse que les fichiers
+          # LOCAUX (il n'efface jamais le distant) → le JSON déjà en ligne
+          # survit. Un dataset manquant ne doit donc pas bloquer la
+          # régénération de tous les autres.
+          dl_opt() {
+            if curl -fsS -o "public/$1" "$DATA_BASE/$1"; then echo "↓ $1"
+            else echo "⚠ optionnel absent : $1"; missing_opt="$missing_opt $1"; rm -f "public/$1"; fi
+          }
           for s in presid-2017-t1 presid-2017-t2 presid-2022-t1 presid-2022-t2 \
                    legis-2017-t1 legis-2017-t2 \
                    legis-2022-t1 legis-2022-t2 legis-2024-t1 legis-2024-t2 \
@@ -51,8 +68,9 @@ jobs:
             dl "electoral/agg/${s}_candidats.parquet"
             dl "electoral/agg/${s}_territoires.parquet"
           done
-          # Agrégats au niveau bureau (détail bureau de vote) — scrutins avec bureaux.
-          # (nouveaux scrutins : produits par le workflow build-aggregates, à lancer AVANT)
+          # Agrégats au niveau bureau (détail + choroplèthes bureau de vote) —
+          # scrutins avec bureaux. (nouveaux scrutins : produits par le workflow
+          # build-aggregates, à lancer AVANT)
           for s in presid-2017-t1 presid-2017-t2 presid-2022-t1 presid-2022-t2 \
                    legis-2017-t1 legis-2017-t2 \
                    legis-2022-t1 legis-2022-t2 legis-2024-t1 legis-2024-t2 \
@@ -60,14 +78,26 @@ jobs:
             dl "electoral/agg/${s}_bureaux_candidats.parquet"
             dl "electoral/agg/${s}_bureaux_territoires.parquet"
           done
+          # Datasets thématiques : optionnels un par un (cf. dl_opt).
           for f in filosofi_2021_commune rp_2022_commune logement_2022_commune \
                    famille_2022_commune mobilite_2022_commune structpop_2022_commune \
                    bureaux_socio circo_socio; do
-            dl "insee/${f}.parquet"
+            dl_opt "insee/${f}.parquet"
           done
-          dl "electoral/potentiel_commune.parquet"
-          dl "electoral/trends/presid_2017_2022.parquet"
-          dl "electoral/trends/legis_2022_2024.parquet"
+          dl_opt "electoral/potentiel_commune.parquet"
+          dl_opt "electoral/trends/presid_2017_2022.parquet"
+          dl_opt "electoral/trends/legis_2022_2024.parquet"
+          echo
+          if [ -n "$missing_opt" ]; then
+            echo "⚠ Sources optionnelles absentes du storage :$missing_opt"
+            echo "  → leurs choroplèthes ne seront pas régénérées (les JSON déjà"
+            echo "    en ligne restent servis). Lancer le workflow amont qui les"
+            echo "    produit (build-insee / build-aggregates) pour les combler."
+          fi
+          if [ -n "$missing_req" ]; then
+            echo "✗ Sources REQUISES absentes :$missing_req"
+            exit 1
+          fi
 
       - name: Précalculer les choroplèthes
         run: python3 scripts/pipeline/build-choropleths.py
