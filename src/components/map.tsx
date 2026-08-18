@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useTheme } from "next-themes";
 import maplibregl, {
   type Map as MapLibreMap,
   type MapLayerMouseEvent,
@@ -37,32 +36,25 @@ function registerPmtilesProtocol() {
   protocolRegistered = true;
 }
 
-const CARTO_ATTRIBUTION =
-  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>';
-
-function basemapTiles(variant: "light_nolabels" | "dark_nolabels"): string[] {
-  return ["a", "b", "c", "d"].map(
-    (s) => `https://${s}.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}.png`,
-  );
-}
-
+/**
+ * Style inspiré de projetelections.onrender.com :
+ *   — fond blanc (aucune tuile raster),
+ *   — « monde entier moins France » masqué en blanc opaque (GeoJSON statique),
+ *   — pas de traits de séparation entre territoires : `line-width: 0`,
+ *   — villes repères (grandes villes / préfectures / sous-préfectures),
+ *   — seule la bordure France et le hover blanc sont visibles.
+ */
 function buildStyle(): StyleSpecification {
   const sources: StyleSpecification["sources"] = {
-    // Fonds raster CARTO — sobres, peu d'infos. Les deux variantes (claire et
-    // sombre) sont déclarées d'emblée ; on bascule la visibilité selon le thème
-    // (cf. effet `resolvedTheme`) sans toucher aux couches data ni aux
-    // feature-states.
-    "basemap-light": {
-      type: "raster",
-      tiles: basemapTiles("light_nolabels"),
-      tileSize: 256,
-      attribution: CARTO_ATTRIBUTION,
+    // Masque + contour France (générés par scripts/pipeline/build-france-mask.py)
+    "france-contour": {
+      type: "geojson",
+      data: "/france_contour.geojson",
     },
-    "basemap-dark": {
-      type: "raster",
-      tiles: basemapTiles("dark_nolabels"),
-      tileSize: 256,
-      attribution: CARTO_ATTRIBUTION,
+    // Points villes (générés par scripts/pipeline/build-france-cities.py)
+    "france-cities": {
+      type: "geojson",
+      data: "/france_cities.geojson",
     },
   };
 
@@ -79,70 +71,134 @@ function buildStyle(): StyleSpecification {
   }
 
   const layers: StyleSpecification["layers"] = [
-    { id: "basemap-light", type: "raster", source: "basemap-light" },
+    // 1. Fond blanc — remplace le basemap raster.
     {
-      id: "basemap-dark",
-      type: "raster",
-      source: "basemap-dark",
-      layout: { visibility: "none" },
+      id: "background",
+      type: "background",
+      paint: { "background-color": "#ffffff" },
     },
   ];
 
+  // 2. Fills électoraux (une couche par maille, sans bordure visible).
   for (const maille of MAILLE_ORDER) {
     const cfg = TILES[maille];
+    layers.push({
+      id: `${maille}-fill`,
+      type: "fill",
+      source: maille,
+      "source-layer": cfg.sourceLayer,
+      minzoom: cfg.minzoom,
+      maxzoom: cfg.maxzoom + 1,
+      paint: {
+        // Default fill (no data) — gris très clair, pas de teinte « couleur ».
+        "fill-color": "#f0f0f0",
+        "fill-opacity": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false], 0.95,
+          ["boolean", ["feature-state", "hover"], false], 1.0,
+          0.85,
+        ],
+      },
+      layout: {
+        visibility: maille === "regions" ? "visible" : "none",
+      },
+    });
+    // 3. Contours de séparation : invisibles par défaut (line-width: 0).
+    //    On garde une couche `line` pour le hover / selected (bordure blanche).
+    layers.push({
+      id: `${maille}-line`,
+      type: "line",
+      source: maille,
+      "source-layer": cfg.sourceLayer,
+      minzoom: cfg.minzoom,
+      maxzoom: cfg.maxzoom + 1,
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false], 3,
+          ["boolean", ["feature-state", "hover"], false], 2,
+          0,
+        ],
+        "line-opacity": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false], 1,
+          ["boolean", ["feature-state", "hover"], false], 0.9,
+          0,
+        ],
+      },
+      layout: {
+        visibility: maille === "regions" ? "visible" : "none",
+      },
+    });
+  }
+
+  // 4. Masque « monde moins France » — posé APRÈS les fills pour cacher les
+  //    pays voisins, mais AVANT les villes pour ne pas les masquer.
+  layers.push({
+    id: "france-masque",
+    type: "fill",
+    source: "france-contour",
+    filter: ["==", ["get", "masque"], true],
+    paint: { "fill-color": "#ffffff", "fill-opacity": 1 },
+  });
+
+  // 5. Points + labels villes (3 niveaux de zoom).
+  const cityRankConfigs = [
+    { rank: 1, minzoom: 5, textSize: 11, circleRadius: 3, haloWidth: 1.5, color: "#222222" },
+    { rank: 3, minzoom: 7, textSize: 9,  circleRadius: 2, haloWidth: 1.2, color: "#333333" },
+    { rank: 4, minzoom: 9, textSize: 8,  circleRadius: 2, haloWidth: 1,   color: "#555555" },
+  ] as const;
+  for (const cfg of cityRankConfigs) {
     layers.push(
       {
-        id: `${maille}-fill`,
-        type: "fill",
-        source: maille,
-        "source-layer": cfg.sourceLayer,
+        id: `city-dots-rank${cfg.rank}`,
+        type: "circle",
+        source: "france-cities",
         minzoom: cfg.minzoom,
-        maxzoom: cfg.maxzoom + 1,
+        filter: ["==", ["get", "rank"], cfg.rank],
         paint: {
-          // Default fill (no data) — light tint of the layer color.
-          "fill-color": cfg.color,
-          "fill-opacity": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], 0.3,
-            ["boolean", ["feature-state", "hover"], false], 0.4,
-            0.08,
-          ],
-        },
-        layout: {
-          visibility: maille === "regions" ? "visible" : "none",
+          "circle-radius": cfg.circleRadius,
+          "circle-color": cfg.color,
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#ffffff",
         },
       },
       {
-        id: `${maille}-line`,
-        type: "line",
-        source: maille,
-        "source-layer": cfg.sourceLayer,
+        id: `city-labels-rank${cfg.rank}`,
+        type: "symbol",
+        source: "france-cities",
         minzoom: cfg.minzoom,
-        maxzoom: cfg.maxzoom + 1,
-        paint: {
-          "line-color": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], "#0f172a",
-            cfg.color,
-          ],
-          "line-width": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], 2.5,
-            ["boolean", ["feature-state", "hover"], false], 2,
-            0.6,
-          ],
-          "line-opacity": 0.9,
-        },
+        filter: ["==", ["get", "rank"], cfg.rank],
         layout: {
-          visibility: maille === "regions" ? "visible" : "none",
+          "text-field": ["get", "nom"],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": cfg.textSize,
+          "text-anchor": "left",
+          "text-offset": [0.5, 0],
+          "text-allow-overlap": false,
+        },
+        paint: {
+          "text-color": cfg.color,
+          "text-halo-color": "rgba(255,255,255,0.9)",
+          "text-halo-width": cfg.haloWidth,
         },
       },
     );
   }
 
+  // 6. Bordure France — la seule ligne vraiment visible hors hover.
+  layers.push({
+    id: "france-contour-line",
+    type: "line",
+    source: "france-contour",
+    filter: ["!", ["has", "masque"]],
+    paint: { "line-color": "#888888", "line-width": 1 },
+  });
+
   return {
     version: 8,
-    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
     sources,
     layers,
   };
@@ -186,7 +242,6 @@ export function Map({
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const { resolvedTheme } = useTheme();
   const styleLoadedRef = useRef(false);
   const hoveredFeatureRef = useRef<{
     source: string;
@@ -315,19 +370,6 @@ export function Map({
     };
   }, [maille]);
 
-  // Fond de carte accordé au thème (clair / sombre).
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !resolvedTheme) return;
-    const dark = resolvedTheme === "dark";
-    const apply = () => {
-      map.setLayoutProperty("basemap-light", "visibility", dark ? "none" : "visible");
-      map.setLayoutProperty("basemap-dark", "visibility", dark ? "visible" : "none");
-    };
-    if (styleLoadedRef.current || map.isStyleLoaded()) apply();
-    else map.once("load", apply);
-  }, [resolvedTheme]);
-
   // Maille visibility.
   useEffect(() => {
     const map = mapRef.current;
@@ -375,15 +417,15 @@ export function Map({
           const paint: DataDrivenPropertyValueSpecification<string> = [
             "case",
             ["==", ["feature-state", choropleth.stateKey], null],
-            cfg.color,
+            "#f0f0f0",
             choropleth.paint,
           ] as DataDrivenPropertyValueSpecification<string>;
           map.setPaintProperty(fillLayer, "fill-color", paint);
           map.setPaintProperty(fillLayer, "fill-opacity", [
             "case",
             ["boolean", ["feature-state", "selected"], false], 0.95,
-            ["boolean", ["feature-state", "hover"], false], 0.85,
-            0.65,
+            ["boolean", ["feature-state", "hover"], false], 1.0,
+            0.85,
           ]);
 
           // Application des feature-states. Pour les grosses mailles (bureaux,
@@ -419,12 +461,12 @@ export function Map({
             fsRafRef.current = requestAnimationFrame(step);
           }
         } else {
-          map.setPaintProperty(fillLayer, "fill-color", cfg.color);
+          map.setPaintProperty(fillLayer, "fill-color", "#f0f0f0");
           map.setPaintProperty(fillLayer, "fill-opacity", [
             "case",
-            ["boolean", ["feature-state", "selected"], false], 0.3,
-            ["boolean", ["feature-state", "hover"], false], 0.4,
-            0.08,
+            ["boolean", ["feature-state", "selected"], false], 0.95,
+            ["boolean", ["feature-state", "hover"], false], 1.0,
+            0.85,
           ]);
         }
       }

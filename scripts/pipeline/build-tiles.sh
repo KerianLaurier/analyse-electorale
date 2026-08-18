@@ -38,6 +38,8 @@ build() {
     --maximum-zoom="$maxz" \
     --simplification=1 \
     --no-line-simplification \
+    --detect-shared-borders \
+    --no-simplification-of-shared-nodes \
     --read-parallel \
     --output="$mbtiles" \
     "$src"
