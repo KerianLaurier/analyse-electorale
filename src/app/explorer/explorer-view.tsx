@@ -991,25 +991,30 @@ function MailleSlider({
           })}
         </div>
       </div>
-      {/* Labels sous les marqueurs — uniquement premier, courant et dernier pour
-          éviter le fouillis. Tous les libellés (visibles ou non) font la même
-          largeur (w-12) et le rang déborde de -mx-3 : le centre de chaque
-          libellé tombe ainsi exactement sous le centre de son marqueur (w-6). */}
-      <div className="-mx-3 flex justify-between text-[10px] font-medium text-muted-foreground">
+      {/* Libellés — positionnés en pourcentage SOUS le marqueur correspondant.
+          La piste est encadrée de `mx-3` (demi-marqueur) pour que 0 % et 100 %
+          tombent sur les centres des marqueurs extrêmes ; `translateX(-pct%)`
+          cale le libellé à gauche au départ, centré au milieu, à droite à la
+          fin — il reste donc toujours dans le cadre, sans troncature.
+          Une largeur fixe tronquait auparavant « Bureau de vote » en
+          « Bureau d… ». On n'affiche que l'échelle courante et les deux
+          extrémités, et on masque une extrémité quand la courante la jouxte
+          (leurs libellés se chevaucheraient). */}
+      <div className="relative mx-3 h-4 text-[10px] font-medium text-muted-foreground">
         {mailles.map((m, i) => {
-          const isFirst = i === 0;
-          const isLast = i === mailles.length - 1;
           const isActive = m === maille;
-          const hidden = !isFirst && !isLast && !isActive;
+          const last = mailles.length - 1;
+          const show = isActive || (i === 0 && activeIndex > 1) || (i === last && activeIndex < last - 1);
+          if (!show) return null;
+          const pct = last > 0 ? (i / last) * 100 : 0;
           return (
             <span
               key={m}
-              aria-hidden={hidden || undefined}
               className={cn(
-                "w-12 truncate text-center transition-colors",
-                hidden && "opacity-0",
+                "absolute top-0 whitespace-nowrap transition-colors",
                 isActive && "font-semibold text-foreground",
               )}
+              style={{ left: `${pct}%`, transform: `translateX(-${pct}%)` }}
             >
               {MAILLE_LABELS[m]}
             </span>

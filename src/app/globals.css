@@ -308,3 +308,43 @@
   .legal-prose strong { font-weight: 600; }
   .legal-prose address { font-style: normal; }
 }
+
+/* ── Contrôles MapLibre en thème sombre ───────────────────────────────────────
+   maplibre-gl.css est importé par <Map> SANS couche CSS : des règles en
+   `@layer` perdraient contre lui quel que soit l'ordre. On reste donc hors
+   couche et on s'appuie sur la spécificité — le préfixe `.dark` suffit à
+   dépasser ses sélecteurs (`.maplibregl-ctrl.maplibregl-ctrl-attrib`, 0-2-0).
+
+   Le thème clair garde volontairement les styles d'origine (contrôles blancs
+   sur fond de carte clair : déjà cohérent). Seul le sombre est repris, où
+   MapLibre imposait des fonds blancs et des icônes `fill="#333"` — bandeau
+   d'échelle et pavé d'attribution ressortaient en blanc sur la carte noire,
+   et les icônes seraient devenues invisibles une fois le fond assombri. */
+.dark .maplibregl-ctrl-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.dark .maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+/* Icônes : data-URI en #333, illisibles sur surface sombre → on les éclaircit. */
+.dark .maplibregl-ctrl button .maplibregl-ctrl-icon,
+.dark .maplibregl-ctrl-attrib-button {
+  filter: invert(1) brightness(1.6);
+}
+.dark .maplibregl-ctrl button:not(:disabled):hover {
+  background-color: rgba(250, 250, 248, 0.08);
+}
+.dark .maplibregl-ctrl.maplibregl-ctrl-attrib,
+.dark .maplibregl-ctrl-attrib.maplibregl-compact {
+  background-color: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--muted-foreground);
+}
+.dark .maplibregl-ctrl-attrib a {
+  color: var(--foreground);
+}
+.dark .maplibregl-ctrl-scale {
+  background-color: color-mix(in srgb, var(--surface) 85%, transparent);
+  border-color: var(--border);
+  color: var(--foreground);
+}
