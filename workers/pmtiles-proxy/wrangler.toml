@@ -1,0 +1,8 @@
+name = "pmtiles-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# Domaine personnalisé (optionnel, à configurer dans le dashboard Cloudflare)
+# [routes]
+# pattern = "tiles.mouvancia.fr/*"
+# zone_name = "mouvancia.fr"

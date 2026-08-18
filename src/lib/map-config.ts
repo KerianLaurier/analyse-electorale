@@ -44,6 +44,26 @@ type TileConfig = {
   color: string;
 };
 
+/**
+ * URL du proxy PMTiles (Cloudflare Worker) qui ajoute les headers CORS
+ * manquants de object.files.data.gouv.fr.
+ *
+ * En dev, on pointe directement vers data.gouv.fr (CORS non bloquant pour
+ * certains navigateurs en localhost, ou via extension). En prod, définir
+ * NEXT_PUBLIC_PMTILES_PROXY=https://pmtiles-proxy.<compte>.workers.dev
+ *
+ * Le proxy attend le chemin sans le préfixe /data-pipeline-open :
+ *   {proxy}/reu/reu-france-entiere-2022-06-01-v2.pmtiles
+ */
+const PMTILES_PROXY = process.env.NEXT_PUBLIC_PMTILES_PROXY?.replace(/\/$/, "") ?? "";
+
+function bureauxTilesUrl(): string {
+  const upstreamPath = "/reu/reu-france-entiere-2022-06-01-v2.pmtiles";
+  if (PMTILES_PROXY) return `${PMTILES_PROXY}${upstreamPath}`;
+  // Fallback direct (CORS peut bloquer selon navigateur/origine).
+  return `https://object.files.data.gouv.fr/data-pipeline-open${upstreamPath}`;
+}
+
 export const TILES: Record<Maille, TileConfig> = {
   regions: {
     path: "/tiles/regions.pmtiles",
@@ -78,11 +98,12 @@ export const TILES: Record<Maille, TileConfig> = {
     color: "#14b8a6",
   },
   // Contours officiels des bureaux de vote (Etalab / REU INSEE), PMTiles servi
-  // directement par data.gouv.fr — pas de copie locale (282 Mo). Le code de
-  // jointture `codeBureauVote` (« 01001_0001 ») correspond aux agrégats
+  // via le proxy CORS Cloudflare (object.files.data.gouv.fr n'envoie pas
+  // Access-Control-Allow-Origin → blocage navigateur). Le code de jointure
+  // `codeBureauVote` (« 01001_0001 ») correspond aux agrégats
   // public/electoral/agg/{scrutin}_bureaux_*.parquet. Cf. scripts/pipeline/sources.json.
   bureaux: {
-    path: "https://object.files.data.gouv.fr/data-pipeline-open/reu/reu-france-entiere-2022-06-01-v2.pmtiles",
+    path: bureauxTilesUrl(),
     sourceLayer: "repertoire-unique-electoral-polygons",
     promoteId: "codeBureauVote",
     minzoom: 9,
