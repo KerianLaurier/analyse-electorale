@@ -55,6 +55,10 @@ type MapPalette = {
   cityHalo: string;
   /** Liseré des points villes. */
   cityStroke: string;
+  /** Épaisseur du trait de séparation entre territoires (hors survol/sélection). */
+  separatorWidth: number;
+  /** Opacité de ce trait. */
+  separatorOpacity: number;
 };
 
 const PALETTES: Record<"light" | "dark", MapPalette> = {
@@ -65,6 +69,10 @@ const PALETTES: Record<"light" | "dark", MapPalette> = {
     city: { 1: "#222222", 3: "#333333", 4: "#555555" },
     cityHalo: "rgba(255,255,255,0.9)",
     cityStroke: "#ffffff",
+    // Fond clair : les aplats se détachent seuls, séparation par la couleur
+    // uniquement (parti pris du style projetelections).
+    separatorWidth: 0,
+    separatorOpacity: 0,
   },
   dark: {
     background: "#0a0a0c",
@@ -73,10 +81,31 @@ const PALETTES: Record<"light" | "dark", MapPalette> = {
     city: { 1: "#e4e4e7", 3: "#c0c0c8", 4: "#9c9ca4" },
     cityHalo: "rgba(10,10,12,0.9)",
     cityStroke: "#0a0a0c",
+    // Fond sombre : les nuances les plus foncées (RN #13294b) tombent à ~1,3:1
+    // de contraste avec le fond — de vastes zones rurales se lisaient comme du
+    // vide. Aucun fond ne règle ça (toute teinte sombre reste proche du marine),
+    // d'où un liseré clair qui délimite les territoires quelle que soit la
+    // couleur de remplissage.
+    separatorWidth: 0.5,
+    separatorOpacity: 0.35,
   },
 };
 
 const CITY_RANKS = [1, 3, 4] as const;
+
+/** Épaisseur du trait : survol/sélection priment sur la séparation de base. */
+const lineWidthExpr = (p: MapPalette) => [
+  "case",
+  ["boolean", ["feature-state", "selected"], false], 3,
+  ["boolean", ["feature-state", "hover"], false], 2,
+  p.separatorWidth,
+];
+const lineOpacityExpr = (p: MapPalette) => [
+  "case",
+  ["boolean", ["feature-state", "selected"], false], 1,
+  ["boolean", ["feature-state", "hover"], false], 0.9,
+  p.separatorOpacity,
+];
 
 /**
  * Style inspiré de projetelections.onrender.com :
@@ -149,8 +178,9 @@ function buildStyle(palette: MapPalette): StyleSpecification {
         visibility: maille === "regions" ? "visible" : "none",
       },
     });
-    // 3. Contours de séparation : invisibles par défaut (line-width: 0).
-    //    On garde une couche `line` pour le hover / selected (bordure blanche).
+    // 3. Contours de séparation : invisibles en thème clair (line-width: 0, la
+    //    couleur suffit à séparer), hairline en thème sombre (cf. palette).
+    //    Cette couche porte aussi la bordure blanche du survol / de la sélection.
     layers.push({
       id: `${maille}-line`,
       type: "line",
@@ -160,18 +190,8 @@ function buildStyle(palette: MapPalette): StyleSpecification {
       maxzoom: cfg.maxzoom + 1,
       paint: {
         "line-color": "#ffffff",
-        "line-width": [
-          "case",
-          ["boolean", ["feature-state", "selected"], false], 3,
-          ["boolean", ["feature-state", "hover"], false], 2,
-          0,
-        ],
-        "line-opacity": [
-          "case",
-          ["boolean", ["feature-state", "selected"], false], 1,
-          ["boolean", ["feature-state", "hover"], false], 0.9,
-          0,
-        ],
+        "line-width": lineWidthExpr(palette) as unknown as number,
+        "line-opacity": lineOpacityExpr(palette) as unknown as number,
       },
       layout: {
         visibility: maille === "regions" ? "visible" : "none",
@@ -371,6 +391,13 @@ export function Map({
       set("background", "background-color", palette.background);
       set("france-masque", "fill-color", palette.background);
       set("france-contour-line", "line-color", palette.contour);
+      // Trait de séparation : présent en sombre, nul en clair.
+      for (const m of MAILLE_ORDER) {
+        const line = `${m}-line`;
+        if (!map.getLayer(line)) continue;
+        map.setPaintProperty(line, "line-width", lineWidthExpr(palette) as unknown as number);
+        map.setPaintProperty(line, "line-opacity", lineOpacityExpr(palette) as unknown as number);
+      }
       for (const rank of CITY_RANKS) {
         set(`city-dots-rank${rank}`, "circle-color", palette.city[rank]);
         set(`city-dots-rank${rank}`, "circle-stroke-color", palette.cityStroke);

@@ -2,7 +2,7 @@
 
 import {
   memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore,
-  type KeyboardEvent, type RefObject,
+  type CSSProperties, type KeyboardEvent, type RefObject,
 } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -991,25 +991,30 @@ function MailleSlider({
           })}
         </div>
       </div>
-      {/* Labels sous les marqueurs — uniquement premier, courant et dernier pour
-          éviter le fouillis. Tous les libellés (visibles ou non) font la même
-          largeur (w-12) et le rang déborde de -mx-3 : le centre de chaque
-          libellé tombe ainsi exactement sous le centre de son marqueur (w-6). */}
-      <div className="-mx-3 flex justify-between text-[10px] font-medium text-muted-foreground">
+      {/* Libellés — positionnés en pourcentage SOUS le marqueur correspondant.
+          La piste est encadrée de `mx-3` (demi-marqueur) pour que 0 % et 100 %
+          tombent sur les centres des marqueurs extrêmes ; `translateX(-pct%)`
+          cale le libellé à gauche au départ, centré au milieu, à droite à la
+          fin — il reste donc toujours dans le cadre, sans troncature.
+          Une largeur fixe tronquait auparavant « Bureau de vote » en
+          « Bureau d… ». On n'affiche que l'échelle courante et les deux
+          extrémités, et on masque une extrémité quand la courante la jouxte
+          (leurs libellés se chevaucheraient). */}
+      <div className="relative mx-3 h-4 text-[10px] font-medium text-muted-foreground">
         {mailles.map((m, i) => {
-          const isFirst = i === 0;
-          const isLast = i === mailles.length - 1;
           const isActive = m === maille;
-          const hidden = !isFirst && !isLast && !isActive;
+          const last = mailles.length - 1;
+          const show = isActive || (i === 0 && activeIndex > 1) || (i === last && activeIndex < last - 1);
+          if (!show) return null;
+          const pct = last > 0 ? (i / last) * 100 : 0;
           return (
             <span
               key={m}
-              aria-hidden={hidden || undefined}
               className={cn(
-                "w-12 truncate text-center transition-colors",
-                hidden && "opacity-0",
+                "absolute top-0 whitespace-nowrap transition-colors",
                 isActive && "font-semibold text-foreground",
               )}
+              style={{ left: `${pct}%`, transform: `translateX(-${pct}%)` }}
             >
               {MAILLE_LABELS[m]}
             </span>
@@ -1315,7 +1320,11 @@ const MapBottomLegend = memo(function MapBottomLegend({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute bottom-3 left-3 z-20 max-w-[300px] rounded-xl bg-surface/90 p-3 shadow-card backdrop-blur transition-[left] duration-300",
+        // `bottom-9` sur petit écran : la légende y occupe presque toute la largeur
+        // et recouvrait sinon la bande basse de la carte (échelle MapLibre à
+        // gauche, attribution à droite). En `lg` la place est suffisante, on
+        // garde le calage bas d'origine.
+        "pointer-events-none absolute bottom-9 left-3 z-20 max-w-[340px] rounded-xl bg-surface/90 p-3 shadow-card backdrop-blur transition-[left] duration-300 lg:bottom-3",
         shiftedRight ? "lg:left-[19.5rem]" : "lg:left-3",
         hiddenOnMobile && "max-lg:hidden",
       )}
@@ -1393,7 +1402,11 @@ function NuanceMiniLegend({ rows }: { rows: WinningNuanceRow[] }) {
       {present.map(([nuance]) => (
         <div key={nuance} className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: nuanceColor(nuance) }} />
-          <span className="truncate text-[11px] text-foreground">{nuanceLabel(nuance)}</span>
+          {/* `title` en filet de sécurité : « Rassemblement National » est le
+              libellé le plus long et frôlait la troncature à 300 px. */}
+          <span className="truncate text-[11px] text-foreground" title={nuanceLabel(nuance)}>
+            {nuanceLabel(nuance)}
+          </span>
         </div>
       ))}
     </div>
@@ -1587,7 +1600,10 @@ function ResultsBlock({ detail }: { detail: ScrutinDetail }) {
             <span className="text-[26px] font-semibold leading-none tracking-tight">
               {fmtPct(winner.pct)}
             </span>
-            <span className="truncate text-[13px] font-medium" style={{ color: nuanceColor(winner.nuance) }}>
+            <span
+              className="nuance-text truncate text-[13px] font-medium"
+              style={{ "--nuance-color": nuanceColor(winner.nuance) } as CSSProperties}
+            >
               {winner.label || nuanceLabel(winner.nuance)}
             </span>
           </div>

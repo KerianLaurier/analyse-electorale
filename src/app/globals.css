@@ -308,3 +308,61 @@
   .legal-prose strong { font-weight: 600; }
   .legal-prose address { font-style: normal; }
 }
+
+/* ── Contrôles MapLibre en thème sombre ───────────────────────────────────────
+   maplibre-gl.css est importé par <Map> SANS couche CSS : des règles en
+   `@layer` perdraient contre lui quel que soit l'ordre. On reste donc hors
+   couche et on s'appuie sur la spécificité — le préfixe `.dark` suffit à
+   dépasser ses sélecteurs (`.maplibregl-ctrl.maplibregl-ctrl-attrib`, 0-2-0).
+
+   Le thème clair garde volontairement les styles d'origine (contrôles blancs
+   sur fond de carte clair : déjà cohérent). Seul le sombre est repris, où
+   MapLibre imposait des fonds blancs et des icônes `fill="#333"` — bandeau
+   d'échelle et pavé d'attribution ressortaient en blanc sur la carte noire,
+   et les icônes seraient devenues invisibles une fois le fond assombri. */
+.dark .maplibregl-ctrl-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.dark .maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+/* Icônes : data-URI en #333, illisibles sur surface sombre → on les éclaircit. */
+.dark .maplibregl-ctrl button .maplibregl-ctrl-icon,
+.dark .maplibregl-ctrl-attrib-button {
+  filter: invert(1) brightness(1.6);
+}
+.dark .maplibregl-ctrl button:not(:disabled):hover {
+  background-color: rgba(250, 250, 248, 0.08);
+}
+.dark .maplibregl-ctrl.maplibregl-ctrl-attrib,
+.dark .maplibregl-ctrl-attrib.maplibregl-compact {
+  background-color: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--muted-foreground);
+}
+.dark .maplibregl-ctrl-attrib a {
+  color: var(--foreground);
+}
+.dark .maplibregl-ctrl-scale {
+  background-color: color-mix(in srgb, var(--surface) 85%, transparent);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+/* ── Nuance politique employée comme COULEUR DE TEXTE ─────────────────────────
+   Les couleurs de nuance sont calibrées pour des aplats (carte, pastilles,
+   barres) sur fond clair. Employées en texte sur une surface sombre, les plus
+   foncées deviennent illisibles : RN (#13294b) tombe à 1,26:1 sur la fiche,
+   COM 2,83, REC 2,91, FI 3,79 — toutes sous le seuil AA de 4,5.
+
+   On ne touche pas aux aplats (l'identité politique doit rester exacte) : seul
+   le texte est éclairci en thème sombre, en conservant la teinte. Le mélange
+   50 % ramène les 4 nuances fautives au-dessus de 4,5:1.
+
+   Usage : className="nuance-text" + style={{ "--nuance-color": couleur }}. */
+.nuance-text {
+  color: var(--nuance-color);
+}
+.dark .nuance-text {
+  color: color-mix(in srgb, var(--nuance-color) 50%, white);
+}
