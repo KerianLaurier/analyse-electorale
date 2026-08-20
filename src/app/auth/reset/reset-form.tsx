@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Alert, AlertTitle, AlertIcon } from "@appica/ui-react/alert";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/auth-errors";
 
@@ -87,7 +90,7 @@ export function ResetForm() {
 
           {phase === "checking" && (
             <p className="mt-4 inline-flex items-center gap-2 text-[13px] text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Vérification du lien…
+              <Spinner currentColor className="size-4" aria-label="Vérification du lien" /> Vérification du lien…
             </p>
           )}
 
@@ -96,20 +99,17 @@ export function ResetForm() {
               <p className="mt-1.5 text-[13px] text-muted-foreground">
                 Ce lien de réinitialisation est invalide ou a expiré. Vous pouvez en demander un nouveau.
               </p>
-              <Link
-                href="/auth/forgot"
-                className="mt-5 inline-flex items-center justify-center rounded-pill bg-primary px-5 py-2.5 text-[14px] font-medium text-primary-foreground hover:opacity-90"
-              >
+              <Button size="lg" nativeButton={false} className="mt-5 rounded-pill" render={<Link href="/auth/forgot" />}>
                 Demander un nouveau lien
-              </Link>
+              </Button>
             </>
           )}
 
           {phase === "done" && (
-            <div className="mt-4 flex items-start gap-2 rounded-md bg-success/10 px-3 py-2.5 text-[12.5px] text-success">
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>Mot de passe mis à jour. Redirection…</span>
-            </div>
+            <Alert variant="success" className="mt-4 text-[12.5px]">
+              <AlertIcon><CheckCircle2 className="h-3.5 w-3.5" /></AlertIcon>
+              <AlertTitle>Mot de passe mis à jour. Redirection…</AlertTitle>
+            </Alert>
           )}
 
           {(phase === "ready" || phase === "saving") && (
@@ -120,22 +120,16 @@ export function ResetForm() {
                 <Field label="Confirmer le mot de passe" name="confirm" />
 
                 {error && (
-                  <div className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2.5 text-[12px] text-destructive">
-                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>{error}</span>
-                  </div>
+                  <Alert variant="error" className="text-[12px]">
+                    <AlertIcon><AlertCircle className="h-3.5 w-3.5" /></AlertIcon>
+                    <AlertTitle>{error}</AlertTitle>
+                  </Alert>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={phase === "saving"}
-                  className={cn(
-                    "mt-1 inline-flex items-center justify-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[14px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60",
-                  )}
-                >
-                  {phase === "saving" && <Loader2 className="h-4 w-4 animate-spin" />}
+                <Button type="submit" size="lg" disabled={phase === "saving"} className="mt-1 gap-2 rounded-pill">
+                  {phase === "saving" && <Spinner currentColor className="size-4" aria-label="Enregistrement" />}
                   Enregistrer le mot de passe
-                </button>
+                </Button>
               </form>
             </>
           )}
@@ -149,13 +143,13 @@ function Field({ label, name }: { label: string; name: string }) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-[12px] font-medium text-foreground/80">{label}</span>
-      <input
+      <Input
         name={name}
         type="password"
         required
         autoComplete="new-password"
         placeholder="••••••••"
-        className="rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-foreground outline-none transition-shadow placeholder:text-muted-foreground/60 focus:border-warm focus:ring-2 focus:ring-warm/20"
+        className="text-[13px]"
       />
     </label>
   );

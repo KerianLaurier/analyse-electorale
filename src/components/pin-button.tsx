@@ -1,6 +1,7 @@
 "use client";
 
 import { Star, Users, User, X } from "lucide-react";
+import { Button, buttonVariants } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import {
   useIsPinned,
@@ -17,12 +18,14 @@ import {
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu";
+} from "@appica/ui-react/dropdown-menu";
 
 type PinInput = Omit<Pin, "addedAt" | "shared" | "mine">;
 
-const BASE =
-  "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors outline-none";
+// Gabarit commun aux deux formes du bouton (bascule simple / déclencheur de
+// menu) : la pilule est portée ici, l'état épinglé colore le fond.
+const BASE = "gap-1.5 rounded-pill text-[12px]";
+const tone = (pinned: boolean) => (pinned ? "bg-warm/15 text-foreground" : undefined);
 
 /** Bouton d'épinglage (persistance serveur). Avec une équipe : menu perso / partagé. */
 export function PinButton({ pin, className }: { pin: PinInput; className?: string }) {
@@ -33,20 +36,18 @@ export function PinButton({ pin, className }: { pin: PinInput; className?: strin
   // Sans équipe : simple bascule personnelle.
   if (!teamId) {
     return (
-      <button
+      <Button
         type="button"
+        variant="soft"
+        size="sm"
         onClick={() => togglePin(pin)}
         aria-pressed={pinned}
         title={pinned ? "Retirer des épingles" : "Ajouter aux épingles"}
-        className={cn(
-          BASE,
-          pinned ? "bg-warm/15 text-foreground" : "bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08]",
-          className,
-        )}
+        className={cn(BASE, tone(pinned), className)}
       >
         <Star className={cn("h-3.5 w-3.5", pinned && "fill-warm text-warm")} />
         {pinned ? "Épinglé" : "Épingler"}
-      </button>
+      </Button>
     );
   }
 
@@ -63,11 +64,14 @@ export function PinButton({ pin, className }: { pin: PinInput; className?: strin
 
   return (
     <DropdownMenu>
+      {/* Le déclencheur du menu doit ressembler au bouton simple : on lui
+          applique les mêmes classes de variante, générées par `buttonVariants`. */}
       <DropdownMenuTrigger
         title="Épingler ou partager avec l'équipe"
         className={cn(
+          buttonVariants({ variant: "soft", size: "sm" }),
           BASE,
-          pinned ? "bg-warm/15 text-foreground" : "bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08]",
+          tone(pinned),
           className,
         )}
       >

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound, Sparkles, MonitorDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand-mark";
@@ -12,19 +12,25 @@ import { canPromptInstall, onInstallChange, promptInstall } from "@/lib/pwa-inst
 import { initials } from "@/lib/team";
 import { useNotifications, dismissNotification, dismissAll, type AppNotification } from "@/lib/notifications";
 import { ThemeSwitch } from "@/components/theme-switch";
+import { Button } from "@appica/ui-react/button";
+import { Badge } from "@appica/ui-react/badge";
+import { Navigation, NavigationList, NavigationItem } from "@appica/ui-react/navigation";
+import { NavigationLink } from "@appica/ui-react/navigation";
+import { Popover, PopoverTrigger, PopoverContent } from "@appica/ui-react/popover";
+import { Separator } from "@appica/ui-react/separator";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuGroupLabel,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@appica/ui-react/dropdown-menu";
 
 const PRIMARY_NAV = [
   { href: "/explorer", label: "Explorer" },
   { href: "/analyser", label: "Analyser" },
-  { href: "/suivre", label: "Suivre" },
   { href: "/espace", label: "Mon QG" },
 ] as const;
 
@@ -99,24 +105,42 @@ export function AppHeader() {
     window.dispatchEvent(event);
   }
 
-  const navPill = (item: (typeof PRIMARY_NAV)[number]) => {
-    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-    return (
-      <Link
-        key={item.href}
-        href={item.href}
-        aria-current={active ? "page" : undefined}
+  // Section active : `/analyser/simulateur` doit allumer « Analyser ».
+  const activeHref =
+    PRIMARY_NAV.find((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))?.href ?? null;
+
+  // Nav pill d'Appica : c'est lui qui pose `aria-current="page"` sur le lien dont
+  // le `value` correspond à `activeLink`, et qui porte les états actif/survol.
+  const navLinks = PRIMARY_NAV.map((item) => (
+    <NavigationItem key={item.href}>
+      <NavigationLink
+        value={item.href}
         className={cn(
-          "relative rounded-pill px-3.5 py-1.5 font-medium transition-all duration-200 ease-out before:absolute before:-inset-y-2 before:inset-x-0 before:content-['']",
-          active
-            ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(10,10,12,0.18)]"
-            : "text-foreground/70 hover:text-foreground hover:bg-surface/60",
+          // ⚠ Appica pose rayon et paddings DERRIÈRE le préfixe
+          // `data-[orientation=horizontal]:` (rounded-sm px-3 py-2 en taille sm).
+          // Deux conditions pour les remplacer, sinon l'onglet actif ressort en
+          // rectangle : reprendre le MÊME préfixe (tailwind-merge compare les
+          // modificateurs), et utiliser `rounded-full` plutôt que notre
+          // `rounded-pill` — `pill` est une clé maison que le tailwind-merge
+          // interne d'Appica ne rattache pas au groupe « border-radius », donc
+          // il ne déduplique pas. Rendu identique (999px vs 9999px).
+          "font-medium",
+          "data-[orientation=horizontal]:rounded-full",
+          "data-[orientation=horizontal]:px-3.5 data-[orientation=horizontal]:py-1.5",
+          // Section active : pilule noire MOUVANCIA. La variante `pill`
+          // d'Appica se contente d'un fond `background-muted` très discret —
+          // trop faible pour signaler la section courante dans cette identité.
+          "data-active:bg-primary data-active:text-primary-foreground",
+          "data-active:shadow-[0_1px_2px_rgba(10,10,12,0.18)] data-active:before:bg-transparent",
+          // Zone tactile étendue verticalement (WCAG 2.5.8) sans grossir le rendu.
+          "after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']",
         )}
+        render={<Link href={item.href} />}
       >
         {item.label}
-      </Link>
-    );
-  };
+      </NavigationLink>
+    </NavigationItem>
+  ));
 
   return (
     <>
@@ -134,45 +158,56 @@ export function AppHeader() {
         </Link>
 
         {/* Nav pill (desktop, en haut au centre) */}
-        <nav
-          className="hidden items-center gap-1 rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] lg:inline-flex lg:justify-self-center"
+        <Navigation
+          variant="pill"
+          size="sm"
+          activeLink={activeHref}
           aria-label="Sections principales"
+          className="hidden rounded-pill bg-surface-soft/70 p-1 text-[13px] shadow-[0_0_0_1px_rgba(10,10,12,0.06)] lg:block lg:justify-self-center"
         >
-          {PRIMARY_NAV.map(navPill)}
-        </nav>
+          <NavigationList className="gap-1">{navLinks}</NavigationList>
+        </Navigation>
 
         {/* Utilities — sur mobile : recherche + notifications + compte (les
            raccourcis épingles/réglages restent dans le menu compte). */}
         <div className="flex shrink-0 items-center gap-1.5 lg:justify-self-end">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={openPalette}
             aria-label="Rechercher"
             title="Recherche universelle (⌘K)"
-            className={cn("grid h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95", HIT_AREA)}
+            className={cn("active:scale-95", HIT_AREA)}
           >
             <Search className="h-4 w-4" />
-          </button>
-          <Link
-            href="/espace?tab=pins"
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             aria-label="Mes épingles"
             title="Mes épingles"
-            className={cn("hidden h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95 sm:grid", HIT_AREA)}
+            nativeButton={false}
+            className={cn("hidden active:scale-95 sm:inline-flex", HIT_AREA)}
+            render={<Link href="/espace?tab=pins" />}
           >
             <Star className="h-4 w-4" />
-          </Link>
+          </Button>
           <NotificationsBell
             notifs={notifs}
             onOpen={(href) => router.push(href)}
           />
-          <Link
-            href="/auth/team"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             aria-label="Paramètres de l'équipe"
             title="Équipe & abonnement"
-            className={cn("hidden h-8 w-8 place-items-center rounded-md text-foreground/70 transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95 sm:grid", HIT_AREA)}
+            nativeButton={false}
+            className={cn("hidden active:scale-95 sm:inline-flex", HIT_AREA)}
+            render={<Link href="/auth/team" />}
           >
             <Settings2 className="h-4 w-4" />
-          </Link>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Compte"
@@ -181,10 +216,12 @@ export function AppHeader() {
               {avatarInitials}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="flex flex-col">
-                <span className="truncate font-semibold">{displayName ?? "Compte"}</span>
-                {fullName && email && <span className="truncate text-[11px] font-normal text-muted-foreground">{email}</span>}
-              </DropdownMenuLabel>
+              <DropdownMenuGroup>
+                <DropdownMenuGroupLabel className="flex flex-col">
+                  <span className="truncate font-semibold">{displayName ?? "Compte"}</span>
+                  {fullName && email && <span className="truncate text-[11px] font-normal text-muted-foreground">{email}</span>}
+                </DropdownMenuGroupLabel>
+              </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => router.push("/auth/team")}>
                 <UserRound className="h-4 w-4" />
@@ -244,12 +281,15 @@ export function AppHeader() {
         className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pt-2 lg:hidden"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" }}
       >
-        <nav
-          className="pointer-events-auto inline-flex items-center gap-1 rounded-pill bg-surface/95 p-1 text-[13px] shadow-floating ring-1 ring-foreground/10 backdrop-blur"
+        <Navigation
+          variant="pill"
+          size="sm"
+          activeLink={activeHref}
           aria-label="Sections principales"
+          className="pointer-events-auto rounded-pill bg-surface/95 p-1 text-[13px] shadow-floating ring-1 ring-foreground/10 backdrop-blur"
         >
-          {PRIMARY_NAV.map(navPill)}
-        </nav>
+          <NavigationList className="gap-1">{navLinks}</NavigationList>
+        </Navigation>
       </div>
     </>
   );
@@ -274,90 +314,85 @@ function NotificationsBell({
   onOpen: (href: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
   const count = notifs.length;
 
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onEsc(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [open]);
-
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
+    // Popover d'Appica : il porte le clic-extérieur, l'échappement, le
+    // positionnement et le piège de focus — trois écouteurs `document` posés à
+    // la main en moins, et le même comportement que les autres surfaces
+    // flottantes de l'app.
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
         aria-label={`Notifications${count > 0 ? ` (${count})` : ""}`}
-        className={cn("grid h-8 w-8 place-items-center rounded-md text-foreground/70 outline-none transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95", HIT_AREA)}
+        className={cn(
+          "relative grid h-8 w-8 place-items-center rounded-md text-foreground/70 outline-none",
+          "transition-all duration-150 hover:bg-surface-soft hover:text-foreground active:scale-95",
+          HIT_AREA,
+        )}
       >
         <Bell className="h-4 w-4" />
         {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-white">
+          <Badge
+            variant="error"
+            size="xs"
+            className="absolute -right-0.5 -top-0.5 min-w-4 justify-center rounded-full px-1 text-[9px]"
+          >
             {count > 9 ? "9+" : count}
-          </span>
+          </Badge>
         )}
-      </button>
+      </PopoverTrigger>
 
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-foreground/10 bg-surface shadow-[0_8px_30px_rgba(10,10,12,0.18)]">
-          <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-[12px] font-semibold">Notifications</span>
-            {count > 0 && (
-              <button
-                type="button"
-                onClick={() => dismissAll(notifs.map((n) => n.id))}
-                className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-              >
-                <CheckCheck className="h-3.5 w-3.5" /> Tout lire
-              </button>
-            )}
-          </div>
-          <div className="h-px bg-border" />
-          {count === 0 ? (
-            <p className="px-3 py-8 text-center text-[12.5px] text-muted-foreground">Aucune notification</p>
-          ) : (
-            <div className="max-h-[60vh] overflow-y-auto p-1">
-              {notifs.map((n) => {
-                const Icon = NOTIF_ICON[n.kind];
-                return (
-                  <div key={n.id} className="group flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-surface-soft">
-                    <button
-                      type="button"
-                      onClick={() => { onOpen(n.href); setOpen(false); }}
-                      className="flex min-w-0 flex-1 items-start gap-2 text-left"
-                    >
-                      <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", NOTIF_TONE[n.tone])} />
-                      <span className="min-w-0">
-                        <span className="block text-[12.5px] font-medium leading-snug">{n.title}</span>
-                        {n.detail && <span className="block truncate text-[11px] text-muted-foreground">{n.detail}</span>}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => dismissNotification(n.id)}
-                      aria-label="Marquer comme lu"
-                      className="relative mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors before:absolute before:-inset-1.5 before:content-[''] hover:bg-foreground/[0.06] hover:text-foreground"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+      <PopoverContent align="end" className="w-80 overflow-hidden p-0">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-[12px] font-semibold">Notifications</span>
+          {count > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => dismissAll(notifs.map((n) => n.id))}
+              className="gap-1 text-[11px]"
+            >
+              <CheckCheck className="h-3.5 w-3.5" /> Tout lire
+            </Button>
           )}
         </div>
-      )}
-    </div>
+        <Separator />
+        {count === 0 ? (
+          <p className="px-3 py-8 text-center text-[12.5px] text-muted-foreground">Aucune notification</p>
+        ) : (
+          <div className="max-h-[60vh] overflow-y-auto p-1">
+            {notifs.map((n) => {
+              const Icon = NOTIF_ICON[n.kind];
+              return (
+                <div key={n.id} className="group flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-surface-soft">
+                  <button
+                    type="button"
+                    onClick={() => { onOpen(n.href); setOpen(false); }}
+                    className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                  >
+                    <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", NOTIF_TONE[n.tone])} />
+                    <span className="min-w-0">
+                      <span className="block text-[12.5px] font-medium leading-snug">{n.title}</span>
+                      {n.detail && <span className="block truncate text-[11px] text-muted-foreground">{n.detail}</span>}
+                    </span>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => dismissNotification(n.id)}
+                    aria-label="Marquer comme lu"
+                    className="mt-0.5 h-6 w-6 shrink-0"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { LayoutDashboard, ListTodo, StickyNote, Star, Users, Megaphone, Contact, CalendarClock, DoorOpen, MapPin, Phone } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import type { WsContext } from "@/app/espace/types";
 import { EspaceOverview } from "@/app/espace/espace-overview";
@@ -77,7 +78,7 @@ export function EspaceView({ ctx }: { ctx: WsContext }) {
             const Icon = t.icon;
             const active = tab === t.id;
             return (
-              <button
+              <Button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
@@ -87,10 +88,9 @@ export function EspaceView({ ctx }: { ctx: WsContext }) {
                   active
                     ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(10,10,12,0.18)]"
                     : "text-foreground/70 hover:bg-surface/60 hover:text-foreground",
-                )}
-              >
+                )} variant="ghost" size="sm">
                 <Icon className="h-3.5 w-3.5 shrink-0" /> {t.label}
-              </button>
+              </Button>
             );
           })}
         </nav>

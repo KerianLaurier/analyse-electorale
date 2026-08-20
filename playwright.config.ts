@@ -4,7 +4,7 @@ import { defineConfig } from "@playwright/test";
  * Tests E2E (Playwright) — deux suites :
  *  - e2e/public.spec.ts : parcours sans compte (landing, gating, erreurs auth
  *    en français). Tourne partout, y compris sans vraie instance Supabase.
- *  - e2e/authentifie.spec.ts : parcours connectés (Explorer, Briefing, QG).
+ *  - e2e/authentifie.spec.ts : parcours connectés (Explorer, QG).
  *    Nécessite un compte de test : E2E_EMAIL / E2E_PASSWORD (+ les variables
  *    NEXT_PUBLIC_SUPABASE_* réelles) — ignorée sinon.
  *

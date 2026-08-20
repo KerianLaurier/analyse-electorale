@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import { SOCIO_INDICATORS, useSocioFeaturesCirco, type SocioUnit } from "@/lib/analysis";
 import { fmtInt } from "@/lib/format";
@@ -45,7 +45,7 @@ export function CircoSocioProfile({ code, className }: { code: string; className
   if (features.isLoading) {
     return (
       <p className={cn("inline-flex items-center gap-1.5 text-[12px] text-muted-foreground", className)}>
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement du profil sociologique…
+        <Spinner currentColor className="size-3.5" /> Chargement du profil sociologique…
       </p>
     );
   }

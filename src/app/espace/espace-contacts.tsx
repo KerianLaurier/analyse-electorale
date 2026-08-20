@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Users, Loader2, Contact as ContactIcon } from "lucide-react";
+import { Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Users, Contact as ContactIcon } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Checkbox } from "@appica/ui-react/checkbox";
+import { Textarea } from "@appica/ui-react/textarea";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import {
   useContacts,
@@ -32,7 +38,7 @@ const SUPPORT_CLASS: Record<ContactSupport, string> = {
 };
 
 const field =
-  "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
+  "text-[13px]";
 
 export function EspaceContacts({ ctx }: { ctx: WsContext }) {
   const contacts = useContacts();
@@ -71,20 +77,18 @@ export function EspaceContacts({ ctx }: { ctx: WsContext }) {
         })}
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
+          <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher…"
-            className={cn(field, "w-44 pl-8")}
-          />
+            className={cn(field, "w-44 pl-8")} />
         </div>
-        <button
+        <Button
           type="button"
           onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90"
-        >
+          className="gap-1.5 rounded-pill text-[12px]" size="sm">
           <Plus className="h-3.5 w-3.5" /> Nouveau contact
-        </button>
+        </Button>
       </div>
 
       <p className="text-[12px] text-muted-foreground">
@@ -117,16 +121,15 @@ export function EspaceContacts({ ctx }: { ctx: WsContext }) {
 
 function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       className={cn(
         "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
         active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
-      )}
-    >
+      )} variant="ghost" size="sm">
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -177,42 +180,47 @@ function ContactForm({
   return (
     <form onSubmit={submit} className="flex flex-col gap-2.5 rounded-lg border border-border/60 bg-surface p-4 shadow-card">
       <div className="grid gap-2 sm:grid-cols-2">
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom *" className={cn(field, "font-medium")} />
-        <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Fonction / organisation" className={field} />
+        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom *" className={cn(field, "font-medium")} />
+        <Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Fonction / organisation" className={field} />
       </div>
       <div className="grid gap-2 sm:grid-cols-4">
-        <select value={kind} onChange={(e) => setKind(e.target.value as ContactKind)} className={field}>
-          {KINDS.map((k) => <option key={k} value={k}>{CONTACT_KIND_LABELS[k]}</option>)}
-        </select>
-        <select value={support} onChange={(e) => setSupport(e.target.value as ContactSupport)} className={field}>
-          {SUPPORTS.map((s) => <option key={s} value={s}>{CONTACT_SUPPORT_LABELS[s]}</option>)}
-        </select>
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Téléphone" className={field} />
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" className={field} />
+        <Select value={kind} onValueChange={(appicaValue) => setKind(String(appicaValue ?? "") as ContactKind)} size="sm">
+          <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+          <SelectContent>
+          {KINDS.map((k) => <SelectItem key={k} value={k}>{CONTACT_KIND_LABELS[k]}</SelectItem>)}
+        </SelectContent>
+        </Select>
+        <Select value={support} onValueChange={(appicaValue) => setSupport(String(appicaValue ?? "") as ContactSupport)} size="sm">
+          <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+          <SelectContent>
+          {SUPPORTS.map((s) => <SelectItem key={s} value={s}>{CONTACT_SUPPORT_LABELS[s]}</SelectItem>)}
+        </SelectContent>
+        </Select>
+        <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Téléphone" className={field} />
+        <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" className={field} />
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <input value={locality} onChange={(e) => setLocality(e.target.value)} placeholder="Secteur / quartier / commune" className={field} />
+        <Input value={locality} onChange={(e) => setLocality(e.target.value)} placeholder="Secteur / quartier / commune" className={field} />
         {!initial && <ContextSelect value={context} onChange={setContext} className={field} />}
       </div>
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes…" rows={2} className={cn(field, "resize-y")} />
+      <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes…" rows={2} className={cn(field, "resize-y")} />
       <div className="flex flex-wrap items-center gap-3">
         {ctx.teamId && (
           <label className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
-            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="accent-[var(--warm,#c8743c)]" />
+            <Checkbox checked={shared} onCheckedChange={setShared} />
             <Users className="h-3.5 w-3.5" /> Partagé avec l’équipe
           </label>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onDone} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">
+          <Button type="button" onClick={onDone} className="rounded-pill text-[12.5px]" variant="ghost" size="sm">
             Annuler
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             disabled={!name.trim() || busy}
-            className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-          >
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {initial ? "Enregistrer" : "Ajouter"}
-          </button>
+            className="gap-1.5 rounded-pill text-[12.5px]" size="sm">
+            {busy && <Spinner currentColor className="size-3.5" />} {initial ? "Enregistrer" : "Ajouter"}
+          </Button>
         </div>
       </div>
     </form>
@@ -239,14 +247,12 @@ function ContactCard({ contact, ctx }: { contact: Contact; ctx: WsContext }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
-        <select
-          value={contact.support}
-          onChange={(e) => updateContact(contact.id, { support: e.target.value as ContactSupport })}
-          className={cn("rounded-pill border-0 px-2 py-0.5 text-[11px] font-medium outline-none", SUPPORT_CLASS[contact.support])}
-          title="Niveau de soutien"
-        >
-          {SUPPORTS.map((s) => <option key={s} value={s}>{CONTACT_SUPPORT_LABELS[s]}</option>)}
-        </select>
+        <Select value={contact.support} onValueChange={(appicaValue) => updateContact(contact.id, { support: String(appicaValue ?? "") as ContactSupport })} size="sm">
+          <SelectTrigger className={cn("rounded-pill border-0 px-2 py-0.5 text-[11px] font-medium outline-none", SUPPORT_CLASS[contact.support])}><SelectValue /></SelectTrigger>
+          <SelectContent>
+          {SUPPORTS.map((s) => <SelectItem key={s} value={s}>{CONTACT_SUPPORT_LABELS[s]}</SelectItem>)}
+        </SelectContent>
+        </Select>
         {contact.phone && (
           <a href={`tel:${contact.phone}`} className="inline-flex items-center gap-1 text-foreground/80 hover:text-warm">
             <Phone className="h-3.5 w-3.5" /> {contact.phone}
@@ -274,12 +280,12 @@ function ContactCard({ contact, ctx }: { contact: Contact; ctx: WsContext }) {
         )}
         {contact.mine && (
           <div className="ml-auto flex items-center gap-1">
-            <button type="button" onClick={() => setEditing(true)} aria-label="Modifier" className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-surface-soft hover:text-foreground">
+            <Button type="button" onClick={() => setEditing(true)} aria-label="Modifier" className="h-6 w-6 rounded" variant="soft" size="icon-sm">
               <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button type="button" onClick={() => void deleteContact(contact.id)} aria-label="Supprimer" className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-red-50 hover:text-red-600">
+            </Button>
+            <Button type="button" onClick={() => void deleteContact(contact.id)} aria-label="Supprimer" className="h-6 w-6 rounded hover:bg-red-50 hover:text-red-600" variant="ghost" size="icon-sm">
               <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import * as Sentry from "@sentry/nextjs";
+import { Button } from "@appica/ui-react/button";
 import "./globals.css";
 
 /**
@@ -30,13 +31,9 @@ export default function GlobalError({
             L&apos;application a rencontré un problème inattendu. Vous pouvez recharger la page ; si le
             problème persiste, réessayez un peu plus tard.
           </p>
-          <button
-            type="button"
-            onClick={reset}
-            className="mt-1 inline-flex items-center rounded-pill bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
+          <Button type="button" onClick={reset} className="mt-1 rounded-pill text-[13px]">
             Recharger
-          </button>
+          </Button>
         </div>
       </body>
     </html>

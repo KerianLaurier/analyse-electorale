@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Slider } from "@appica/ui-react/slider";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import type { Choropleth } from "@/components/map";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
@@ -72,23 +75,30 @@ export function MarginaliteView() {
           <h1 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight">Sièges marginaux</h1>
           <p className="mt-0.5 text-[12px] text-muted-foreground">Circonscriptions les plus disputées — écart entre le 1er et le 2e.</p>
         </div>
-        {q.isFetching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {q.isFetching && <Spinner currentColor className="size-4 text-muted-foreground" />}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface p-4 shadow-card">
-        <select
-          value={scrutin}
-          onChange={(e) => setScrutin(e.target.value as Scrutin)}
-          className="rounded-pill bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground outline-none"
-        >
+        <Select value={scrutin} onValueChange={(appicaValue) => setScrutin(String(appicaValue ?? "") as Scrutin)} size="sm">
+          <SelectTrigger className="rounded-pill bg-primary text-[12px] font-medium text-primary-foreground"><SelectValue /></SelectTrigger>
+          <SelectContent>
           {LEGIS.map((s) => (
-            <option key={s} value={s} className="bg-surface text-foreground">{SCRUTIN_META[s].short}</option>
+            <SelectItem key={s} value={s} className="bg-surface text-foreground">{SCRUTIN_META[s].short}</SelectItem>
           ))}
-        </select>
+        </SelectContent>
+        </Select>
         <span className="mx-1 h-5 w-px bg-border" />
         <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
           Marge cible ≤ <span className="font-semibold text-foreground tabular-nums">{seuil} pts</span>
-          <input type="range" min={1} max={30} value={seuil} onChange={(e) => setSeuil(Number(e.target.value))} className="w-40 accent-[color:var(--warm)]" />
+          <Slider
+            min={1}
+            max={30}
+            value={seuil}
+            onValueChange={(v: number | readonly number[]) => setSeuil(Array.isArray(v) ? v[0] : (v as number))}
+            className="w-40"
+            aria-label="Marge cible"
+            thumbAriaLabel="Marge cible en points"
+          />
         </label>
       </div>
 

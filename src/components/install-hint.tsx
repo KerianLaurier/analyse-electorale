@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MonitorDown, Share } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import {
   canPromptInstall,
   isIosSafari,
@@ -52,13 +53,13 @@ export function InstallHint() {
         </div>
       </div>
       {mode === "prompt" && (
-        <button
+        <Button
           type="button"
           onClick={() => void promptInstall()}
-          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-pill bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 sm:self-center"
+          className="shrink-0 gap-1.5 self-start rounded-pill text-[12.5px] sm:self-center"
         >
           <MonitorDown className="h-3.5 w-3.5" /> Installer
-        </button>
+        </Button>
       )}
     </section>
   );

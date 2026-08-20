@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowLeft, RotateCcw, Loader2 } from "lucide-react";
+import { ArrowLeft, RotateCcw } from "lucide-react";
+import { Slider } from "@appica/ui-react/slider";
+import { Button } from "@appica/ui-react/button";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import type { Choropleth } from "@/components/map";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
@@ -83,15 +86,14 @@ export function SimulateurView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {matrix.isFetching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          {matrix.isFetching && <Spinner currentColor className="size-4 text-muted-foreground" />}
           {national && (
-            <button
+            <Button
               type="button"
               onClick={() => setTargets({ ...national })}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-foreground/80 hover:bg-surface-soft"
-            >
+              className="gap-1.5 rounded-md border text-[12px]" variant="soft" size="sm">
               <RotateCcw className="h-3.5 w-3.5" /> Réinitialiser
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -120,11 +122,17 @@ export function SimulateurView() {
                       </span>
                     </span>
                   </div>
-                  <input
-                    type="range" min={0} max={0.6} step={0.005} value={val}
-                    onChange={(e) => setTargets({ ...effectiveTargets, [b.id]: Number(e.target.value) })}
+                  <Slider
+                    min={0}
+                    max={0.6}
+                    step={0.005}
+                    value={val}
+                    onValueChange={(v: number | readonly number[]) =>
+                      setTargets({ ...effectiveTargets, [b.id]: Array.isArray(v) ? v[0] : (v as number) })
+                    }
                     className="w-full"
-                    style={{ accentColor: b.color }}
+                    aria-label={`Score visé · ${b.label}`}
+                    thumbAriaLabel={`Score visé · ${b.label}`}
                   />
                 </div>
               );

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@appica/ui-react/spinner";
 import { useTerritoryBounds, type LngLatBounds } from "@/lib/queries";
 import type { Choropleth } from "@/components/map";
 import type { Sector, CampaignTarget } from "@/lib/campaign";
@@ -12,7 +12,7 @@ const Map = dynamic(() => import("@/components/map").then((m) => m.Map), {
   ssr: false,
   loading: () => (
     <div className="flex h-[440px] items-center justify-center rounded-lg border border-foreground/5 bg-surface text-[13px] text-muted-foreground">
-      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement de la carte…
+      <Spinner currentColor className="size-4 mr-2" /> Chargement de la carte…
     </div>
   ),
 });

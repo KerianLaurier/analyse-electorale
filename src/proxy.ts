@@ -46,7 +46,6 @@ function isPublic(pathname: string): boolean {
 const APP_PREFIXES = [
   "/explorer",
   "/analyser",
-  "/suivre",
   "/espace",
   "/bienvenue",
   "/offline",

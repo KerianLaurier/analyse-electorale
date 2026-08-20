@@ -10,7 +10,6 @@ import {
   ExternalLink,
   Gauge,
   Layers,
-  Loader2,
   PieChart,
   Search,
   SlidersHorizontal,
@@ -18,6 +17,7 @@ import {
   TrendingUp,
   Users2,
 } from "lucide-react";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import { SCRUTIN_META, parseScrutin, type ScrutinFamily } from "@/lib/url-state";
 import { BLOCS, blocById, marginDiagnostic, type BlocId } from "@/lib/analysis";
@@ -158,7 +158,7 @@ function TerritoryAnalysis({ sel }: { sel: TerritorySel }) {
     return (
       <div className="grid min-h-[320px] place-items-center rounded-lg bg-surface shadow-card">
         <p className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Analyse de {sel.label}…
+          <Spinner currentColor className="size-4" /> Analyse de {sel.label}…
         </p>
       </div>
     );
@@ -429,7 +429,7 @@ function SocioPotentielSection({ sel }: { sel: TerritorySel }) {
         </div>
         {socio.isLoading ? (
           <p className="inline-flex items-center gap-1.5 py-4 text-[12px] text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement du profil…
+            <Spinner currentColor className="size-3.5" /> Chargement du profil…
           </p>
         ) : socio.data && socio.data.length > 0 ? (
           <div className="grid gap-x-6 sm:grid-cols-2">
@@ -479,7 +479,7 @@ function SocioPotentielSection({ sel }: { sel: TerritorySel }) {
         </div>
         {potLoading ? (
           <p className="inline-flex items-center gap-1.5 py-4 text-[12px] text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Calcul du potentiel…
+            <Spinner currentColor className="size-3.5" /> Calcul du potentiel…
           </p>
         ) : potRows ? (
           <div className="flex flex-col">

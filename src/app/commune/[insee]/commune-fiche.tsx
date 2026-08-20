@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Map as MapIcon } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import type { ScrutinFamily } from "@/lib/url-state";
 import {
@@ -356,7 +357,7 @@ function TabButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       disabled={disabled}
@@ -367,11 +368,10 @@ function TabButton({
           : active
             ? "text-foreground"
             : "text-muted-foreground hover:text-foreground",
-      )}
-    >
+      )} variant="ghost" size="sm">
       {children}
       {active && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-warm" />}
-    </button>
+    </Button>
   );
 }
 

@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowLeft, Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Spinner } from "@appica/ui-react/spinner";
 import type { Choropleth } from "@/components/map";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
 import {
@@ -115,27 +117,29 @@ export function PotentielView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          {isLoading && <Spinner currentColor className="size-4 text-muted-foreground" />}
           {model.rows.length > 0 && <ExportButton onClick={exportCsv} label="Exporter le ciblage" />}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface p-4 shadow-card">
-        <select
-          value={scrutin}
-          onChange={(e) => setScrutin(e.target.value as Scrutin)}
-          className="rounded-pill bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground outline-none"
-        >
+        <Select value={scrutin} onValueChange={(appicaValue) => setScrutin(String(appicaValue ?? "") as Scrutin)} size="sm">
+          <SelectTrigger className="rounded-pill bg-primary text-[12px] font-medium text-primary-foreground"><SelectValue /></SelectTrigger>
+          <SelectContent>
           {ELECTIONS.map((s) => (
-            <option key={s} value={s} className="bg-surface text-foreground">{SCRUTIN_META[s].short}</option>
+            <SelectItem key={s} value={s} className="bg-surface text-foreground">{SCRUTIN_META[s].short}</SelectItem>
           ))}
-        </select>
+        </SelectContent>
+        </Select>
         <span className="mx-1 h-5 w-px bg-border" />
         <div className="inline-flex items-center gap-2 rounded-pill border border-border bg-surface px-2.5 py-1">
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: bloc.color }} />
-          <select value={blocId} onChange={(e) => setBlocId(e.target.value as BlocId)} className="bg-transparent text-[12px] font-medium text-foreground/80 outline-none">
-            {BLOCS.map((b) => <option key={b.id} value={b.id} className="bg-surface text-foreground">{b.label}</option>)}
-          </select>
+          <Select value={blocId} onValueChange={(appicaValue) => setBlocId(String(appicaValue ?? "") as BlocId)} size="sm">
+            <SelectTrigger className="bg-transparent text-[12px] font-medium text-foreground/80"><SelectValue /></SelectTrigger>
+            <SelectContent>
+            {BLOCS.map((b) => <SelectItem key={b.id} value={b.id} className="bg-surface text-foreground">{b.label}</SelectItem>)}
+          </SelectContent>
+          </Select>
         </div>
       </div>
 

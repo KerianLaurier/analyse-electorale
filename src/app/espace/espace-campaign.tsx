@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Target, MapPin, Users, Plus, Trash2, Sparkles, Flag, Megaphone, Wand2, Loader2, Info } from "lucide-react";
+import { Target, MapPin, Users, Plus, Trash2, Sparkles, Flag, Megaphone, Wand2, Info } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { usePins } from "@/lib/pins";
 import { useScrutinDetail, fetchTerritoryBureaux } from "@/lib/queries";
@@ -34,7 +38,7 @@ const pctToFrac = (s: string) => {
 const fracToPct = (f: number | null) => (f == null ? "" : String(Math.round(f * 1000) / 10));
 
 const field =
-  "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
+  "text-[13px]";
 
 export function EspaceCampaign() {
   const { loaded, error, retry } = useLoadState();
@@ -121,9 +125,9 @@ function TerritoryCard({ campaign }: { campaign: Campaign | null }) {
           <Target className="h-3.5 w-3.5" /> Territoire de campagne
         </h2>
         {target && !editing && (
-          <button type="button" onClick={() => setEditing(true)} className="text-[11.5px] font-medium text-warm hover:underline">
+          <Button type="button" onClick={() => setEditing(true)} className="text-[11.5px] text-warm hover:underline" variant="ghost" size="sm">
             Changer
-          </button>
+          </Button>
         )}
       </div>
 
@@ -145,25 +149,31 @@ function TerritoryCard({ campaign }: { campaign: Campaign | null }) {
           ) : (
             <label className="flex flex-col gap-1">
               <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Territoire visé</span>
-              <select value={target ? `${target.type}:${target.id}` : ""} onChange={(e) => pickTarget(e.target.value)} className={field}>
-                <option value="">Choisir parmi mes épingles…</option>
+              <Select
+                value={target ? `${target.type}:${target.id}` : ""}
+                onValueChange={(appicaValue) => pickTarget(String(appicaValue ?? ""))}
+                size="sm"
+              >
+                <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                <SelectItem value="">Choisir parmi mes épingles…</SelectItem>
                 {targets.map((p) => (
-                  <option key={`${p.type}:${p.id}`} value={`${p.type}:${p.id}`}>
+                  <SelectItem key={`${p.type}:${p.id}`} value={`${p.type}:${p.id}`}>
                     {p.type === "circo" ? "Circo" : "Commune"} · {p.label}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
+              </SelectContent>
+              </Select>
             </label>
           )}
           <label className="flex flex-col gap-1">
             <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Scrutin / intitulé</span>
-            <input
+            <Input
               key={`el-${campaign?.election ?? ""}`}
               defaultValue={campaign?.election ?? ""}
               onBlur={(e) => saveCampaign({ election: e.target.value.trim() || null })}
               placeholder="ex. Législatives 2027 — 1er tour"
-              className={field}
-            />
+              className={field} />
           </label>
         </div>
       )}
@@ -198,50 +208,46 @@ function ObjectiveCard({
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Inscrits</span>
-          <input
+          <Input
             key={`reg-${reg ?? ""}`}
             type="number"
             inputMode="numeric"
             defaultValue={reg ?? ""}
             onBlur={(e) => saveCampaign({ registered: e.target.value ? Math.round(Number(e.target.value)) : null })}
             placeholder="—"
-            className={field}
-          />
+            className={field} />
           {canPrefill && (
-            <button
+            <Button
               type="button"
               onClick={() => saveCampaign({ registered: dataRegistered })}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-warm hover:underline"
-            >
+              className="gap-1 text-[11px] text-warm hover:underline" variant="ghost" size="sm">
               <Sparkles className="h-3 w-3" /> Pré-remplir : {fmtInt(dataRegistered!)} (Légis. 2024)
-            </button>
+            </Button>
           )}
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Participation cible</span>
           <div className="relative">
-            <input
+            <Input
               key={`to-${campaign?.turnoutTarget ?? ""}`}
               type="number"
               defaultValue={fracToPct(campaign?.turnoutTarget ?? null)}
               onBlur={(e) => saveCampaign({ turnoutTarget: pctToFrac(e.target.value) })}
               placeholder="ex. 65"
-              className={cn(field, "w-full pr-7")}
-            />
+              className={cn(field, "w-full pr-7")} />
             <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground">%</span>
           </div>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Score cible</span>
           <div className="relative">
-            <input
+            <Input
               key={`sc-${campaign?.scoreTarget ?? ""}`}
               type="number"
               defaultValue={fracToPct(campaign?.scoreTarget ?? null)}
               onBlur={(e) => saveCampaign({ scoreTarget: pctToFrac(e.target.value) })}
               placeholder="ex. 35"
-              className={cn(field, "w-full pr-7")}
-            />
+              className={cn(field, "w-full pr-7")} />
             <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground">%</span>
           </div>
         </label>
@@ -346,26 +352,24 @@ function SectorsCard({
       </div>
 
       <form onSubmit={add} className="mt-3 flex flex-wrap items-center gap-2">
-        <input
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Ajouter un secteur (ex. Bureau 12 — Jean Jaurès)"
-          className={cn(field, "min-w-[240px] flex-1")}
-        />
-        <button type="submit" className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90">
+          className={cn(field, "min-w-[240px] flex-1")} />
+        <Button type="submit" className="gap-1.5 rounded-pill text-[12px]" size="sm">
           <Plus className="h-3.5 w-3.5" /> Ajouter
-        </button>
+        </Button>
         {canGenerate && (
-          <button
+          <Button
             type="button"
             onClick={generate}
             disabled={generating}
             title="Créer un secteur par bureau de vote du territoire"
-            className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3.5 py-1.5 text-[12px] font-medium text-foreground/80 hover:bg-surface-soft disabled:opacity-60"
-          >
-            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+            className="gap-1.5 rounded-pill text-[12px]" variant="outline" size="sm">
+            {generating ? <Spinner currentColor className="size-3.5" /> : <Wand2 className="h-3.5 w-3.5" />}
             Générer depuis les bureaux
-          </button>
+          </Button>
         )}
       </form>
 
@@ -436,53 +440,48 @@ function SectorRow({ sector }: { sector: Sector }) {
       <td className="px-2 py-2">
         <span className="inline-flex items-center gap-1.5">
           <span className={cn("h-2 w-2 rounded-full", STATUS_DOT[sector.status])} />
-          <select
-            value={sector.status}
-            onChange={(e) => updateSector(sector.id, { status: e.target.value as SectorStatus })}
-            className="rounded border border-border/60 bg-surface px-1.5 py-0.5 text-[11.5px] outline-none"
-          >
+          <Select value={sector.status} onValueChange={(appicaValue) => updateSector(sector.id, { status: String(appicaValue ?? "") as SectorStatus })} size="sm">
+            <SelectTrigger className="rounded border-border/60 text-[11.5px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
             {(["todo", "doing", "done"] as SectorStatus[]).map((st) => (
-              <option key={st} value={st}>{SECTOR_STATUS_LABELS[st]}</option>
+              <SelectItem key={st} value={st}>{SECTOR_STATUS_LABELS[st]}</SelectItem>
             ))}
-          </select>
+          </SelectContent>
+          </Select>
         </span>
       </td>
       <td className="px-2 py-2 text-right">
-        <input
+        <Input
           type="number"
           defaultValue={sector.registered ?? ""}
           onBlur={(e) => updateSector(sector.id, { registered: e.target.value ? Math.round(Number(e.target.value)) : null })}
           className={numCell}
-          placeholder="—"
-        />
+          placeholder="—" />
       </td>
       <td className="px-2 py-2 text-right">
-        <input
+        <Input
           type="number"
           defaultValue={sector.contacted}
           key={`c-${sector.contacted}`}
           onBlur={(e) => updateSector(sector.id, { contacted: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
-          className={numCell}
-        />
+          className={numCell} />
       </td>
       <td className="px-2 py-2 text-right">
-        <input
+        <Input
           type="number"
           defaultValue={sector.favorable}
           key={`f-${sector.favorable}`}
           onBlur={(e) => updateSector(sector.id, { favorable: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
-          className={numCell}
-        />
+          className={numCell} />
       </td>
       <td className="py-2 pl-2 text-right">
-        <button
+        <Button
           type="button"
           onClick={() => deleteSector(sector.id)}
           aria-label="Supprimer le secteur"
-          className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-red-50 hover:text-red-600"
-        >
+          className="h-6 w-6 rounded hover:bg-red-50 hover:text-red-600" variant="ghost" size="icon-sm">
           <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </td>
     </tr>
   );

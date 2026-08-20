@@ -6,14 +6,14 @@ import {
   ArrowRight,
   Map as MapIcon,
   Megaphone,
-  Activity,
   Check,
 } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 
 const DISPLAY = "[font-family:var(--font-display)]";
 
-type TabId = "explorer" | "campagne" | "suivre";
+type TabId = "explorer" | "campagne";
 
 const TABS: {
   id: TabId;
@@ -60,27 +60,11 @@ const TABS: {
     cta: "Créer mon QG",
     href: (authed) => (authed ? "/espace" : "/auth/signup"),
   },
-  {
-    id: "suivre",
-    icon: Activity,
-    tab: "Suivre l’actualité",
-    kicker: "Anticiper",
-    title: "L’actualité institutionnelle, en veille continue.",
-    desc: "Sondages de la Commission, scrutins de l’Assemblée, agenda électoral et veille presse territoriale — rassemblés et rafraîchis chaque jour.",
-    features: [
-      "Sondages classés par scrutin (Commission des sondages)",
-      "Votes et dossiers législatifs de l’Assemblée nationale",
-      "Agenda électoral 2027 et prochaines échéances",
-      "Veille presse ciblée sur votre territoire",
-    ],
-    cta: "Voir le briefing",
-    href: () => "/suivre",
-  },
 ];
 
 /**
  * Vitrine produit à onglets : dissocie clairement les deux métiers de la
- * plateforme (intelligence électorale / pilotage de campagne) plus la veille.
+ * plateforme — intelligence électorale et pilotage de campagne.
  * Chaque onglet = un bénéfice, une liste de fonctionnalités, un aperçu et un CTA.
  */
 export function LandingShowcase({ authed }: { authed: boolean }) {
@@ -101,7 +85,7 @@ export function LandingShowcase({ authed }: { authed: boolean }) {
           const on = t.id === active;
           const TIcon = t.icon;
           return (
-            <button
+            <Button
               key={t.id}
               role="tab"
               id={`${base}-tab-${t.id}`}
@@ -122,11 +106,10 @@ export function LandingShowcase({ authed }: { authed: boolean }) {
                 on
                   ? "bg-primary text-primary-foreground shadow-card"
                   : "text-foreground/65 hover:bg-surface hover:text-foreground",
-              )}
-            >
+              )} variant="ghost" size="sm">
               <TIcon className="h-4 w-4" />
               {t.tab}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -171,7 +154,6 @@ export function LandingShowcase({ authed }: { authed: boolean }) {
         <div key={`${current.id}-mock`} className="anim-fade-in">
           {active === "explorer" && <ExplorerMock />}
           {active === "campagne" && <CampagneMock />}
-          {active === "suivre" && <SuivreMock />}
         </div>
       </div>
     </div>
@@ -295,45 +277,3 @@ function CampagneMock() {
   );
 }
 
-/** Aperçu veille : dernier sondage, prochaine échéance, scrutin AN. */
-function SuivreMock() {
-  const poll = [
-    { name: "Candidat·e A", pct: 27 },
-    { name: "Candidat·e B", pct: 24 },
-    { name: "Candidat·e C", pct: 18 },
-  ];
-  return (
-    <MockFrame url="mouvancia.fr/suivre" tag="Briefing du jour">
-      <div className="space-y-3 p-4">
-        <div className="rounded-xl border border-border/70 p-3.5">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Dernier sondage · présidentielle</p>
-            <span className="rounded-pill bg-surface-soft px-2 py-0.5 text-[9px] text-muted-foreground">Ifop · 2 j</span>
-          </div>
-          <div className="mt-2.5 space-y-2">
-            {poll.map((p, i) => (
-              <div key={p.name} className="flex items-center gap-2.5">
-                <span className="w-20 shrink-0 truncate text-[11px] text-foreground/70">{p.name}</span>
-                <span className="h-2 flex-1 overflow-hidden rounded-pill bg-surface-soft">
-                  <span className="block h-full rounded-pill" style={{ width: `${p.pct * 3}%`, background: i === 0 ? "var(--warm)" : "var(--muted-foreground)" }} />
-                </span>
-                <span className="w-8 shrink-0 text-right text-[11px] font-semibold tabular-nums">{p.pct}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-border/70 p-3.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Prochaine échéance</p>
-            <p className={cn(DISPLAY, "mt-1 text-[15px] font-bold leading-tight")}>Municipales<br />mars 2026</p>
-          </div>
-          <div className="rounded-xl border border-border/70 p-3.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Assemblée · scrutin</p>
-            <p className={cn(DISPLAY, "mt-1 text-[15px] font-bold leading-tight text-success")}>Adopté</p>
-            <p className="text-[10px] text-muted-foreground">347 pour · 191 contre</p>
-          </div>
-        </div>
-      </div>
-    </MockFrame>
-  );
-}

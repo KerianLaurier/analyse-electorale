@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, Search, Info, Users, UserPlus, Copy, CheckCircle2, Check, X, Loader2, RefreshCw } from "lucide-react";
+import { ShieldCheck, Search, Info, Users, UserPlus, Copy, CheckCircle2, Check, X, RefreshCw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Checkbox } from "@appica/ui-react/checkbox";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
@@ -50,7 +55,9 @@ const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—";
 const dateInput = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : "");
 
-const field = "rounded-md border border-border bg-surface px-2 py-1 text-[12px] outline-none focus:border-warm";
+// Les champs Appica portent leur propre cadre (bordure, fond, focus) :
+// il ne reste ici que l'échelle typographique du contexte.
+const field = "text-[12px]";
 
 export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[]; meId: string }) {
   const [accounts, setAccounts] = useState(initial);
@@ -162,13 +169,12 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
             </h1>
             <p className="mt-1.5 text-[13px] text-muted-foreground">Gestion des comptes, abonnements et accès super-admin.</p>
           </div>
-          <button
+          <Button
             type="button"
             onClick={() => { setShowCreate((v) => !v); setCreated(null); }}
-            className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground hover:opacity-90"
-          >
+            className="gap-1.5 rounded-pill text-[13px]" size="md">
             <UserPlus className="h-4 w-4" /> Nouveau compte
-          </button>
+          </Button>
         </div>
 
         {notice && (
@@ -188,16 +194,15 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
               </p>
               <p className="mt-1 text-[11px] text-emerald-700/80">L’utilisateur pourra changer son mot de passe via « Mot de passe oublié » ou son compte.</p>
             </div>
-            <button
+            <Button
               type="button"
               onClick={() => { void navigator.clipboard?.writeText(`${created.email} / ${created.password}`); setCopied(true); }}
-              className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-surface/70 px-2.5 py-1 text-[11px] font-medium hover:bg-surface"
-            >
+              className="shrink-0 gap-1 rounded-pill bg-surface/70 text-[11px] hover:bg-surface" variant="ghost" size="sm">
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copié" : "Copier"}
-            </button>
-            <button type="button" onClick={() => setCreated(null)} aria-label="Fermer" className="shrink-0 text-emerald-700/70 hover:text-emerald-900">
+            </Button>
+            <Button type="button" onClick={() => setCreated(null)} aria-label="Fermer" className="shrink-0 text-emerald-700/70 hover:text-emerald-900" variant="ghost" size="sm">
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
         )}
 
@@ -222,7 +227,7 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
           ))}
           <div className="relative ml-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher (e-mail, nom, orga, équipe)…" className={cn(field, "w-72 py-1.5 pl-8")} />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher (e-mail, nom, orga, équipe)…" className={cn(field, "w-72 py-1.5 pl-8")} />
           </div>
         </div>
 
@@ -256,21 +261,23 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <select
-                      value={a.status}
-                      onChange={(e) => setSubscription(a, { status: e.target.value as AdminAccount["status"] })}
-                      className={cn("rounded-pill border-0 px-2 py-0.5 text-[11px] font-medium outline-none", STATUS_CLASS[a.status])}
-                    >
-                      {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                    </select>
+                    <Select value={a.status} onValueChange={(appicaValue) => setSubscription(a, { status: String(appicaValue ?? "") as AdminAccount["status"] })} size="sm">
+                      <SelectTrigger className={cn("rounded-pill border-0 px-2 py-0.5 text-[11px] font-medium outline-none", STATUS_CLASS[a.status])}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                      {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
+                    </SelectContent>
+                    </Select>
                     {a.status === "active" && a.cancelAt && (
                       <div className="mt-1 text-[10.5px] text-warm">↳ résilié, fin le {fmtDate(a.cancelAt)}</div>
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <select value={a.tier} onChange={(e) => setSubscription(a, { tier: e.target.value })} className={field}>
-                      {TIERS.map((t) => <option key={t} value={t}>{TIER_LABELS[t]}</option>)}
-                    </select>
+                    <Select value={a.tier} onValueChange={(appicaValue) => setSubscription(a, { tier: String(appicaValue ?? "") })} size="sm">
+                      <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                      {TIERS.map((t) => <SelectItem key={t} value={t}>{TIER_LABELS[t]}</SelectItem>)}
+                    </SelectContent>
+                    </Select>
                     {a.billingCycle && (
                       <div className="mt-1 text-[10.5px] text-muted-foreground">
                         {a.billingCycle === "yearly" ? "Annuel" : "Mensuel"}
@@ -278,7 +285,7 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <input
+                    <Input
                       type="date"
                       value={dateInput(a.trialEndsAt)}
                       onChange={(e) =>
@@ -286,17 +293,15 @@ export function AdminView({ accounts: initial, meId }: { accounts: AdminAccount[
                           trialEndsAt: e.target.value ? new Date(e.target.value + "T00:00:00").toISOString() : null,
                         })
                       }
-                      className={field}
-                    />
+                      className={field} />
                   </td>
                   <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={a.isSuperAdmin}
                       disabled={a.id === meId}
                       title={a.id === meId ? "Vous ne pouvez pas retirer votre propre accès" : undefined}
-                      onChange={(e) => setSuperAdmin(a, e.target.checked)}
-                      className="h-4 w-4 accent-[var(--warm,#c8743c)] disabled:opacity-50"
+                      onCheckedChange={(next) => setSuperAdmin(a, next)}
+                      aria-label={`Super-admin · ${a.email}`}
                     />
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">{fmtDate(a.createdAt)}</td>
@@ -376,38 +381,44 @@ function CreateAccountForm({
     <form onSubmit={submit} className="mt-4 flex flex-col gap-3 rounded-lg border border-border/60 bg-surface p-4 shadow-card">
       <p className="text-[12px] font-semibold">Créer un compte</p>
       <div className="grid gap-2 sm:grid-cols-3">
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail *" type="email" className={f} autoComplete="off" />
-        <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nom" className={f} />
-        <input value={organisation} onChange={(e) => setOrganisation(e.target.value)} placeholder="Organisation" className={f} />
+        <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail *" type="email" className={f} autoComplete="off" />
+        <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nom" className={f} />
+        <Input value={organisation} onChange={(e) => setOrganisation(e.target.value)} placeholder="Organisation" className={f} />
       </div>
       <div className="flex flex-wrap items-stretch gap-2">
         <div className="relative flex-1 min-w-[220px]">
-          <input value={password} onChange={(e) => setPassword(e.target.value)} className={cn(f, "w-full pr-9 font-mono")} />
-          <button type="button" onClick={() => setPassword(genPassword())} title="Générer" className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-surface-soft hover:text-foreground">
+          <Input value={password} onChange={(e) => setPassword(e.target.value)} className={cn(f, "w-full pr-9 font-mono")} />
+          <Button type="button" onClick={() => setPassword(genPassword())} title="Générer" className="absolute right-1.5 top-1/2 h-6 w-6 -translate-y-1/2 rounded" variant="soft" size="icon-sm">
             <RefreshCw className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
-        <select value={status} onChange={(e) => setStatus(e.target.value as AdminAccount["status"])} className={f}>
-          {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-        </select>
-        <select value={tier} onChange={(e) => setTier(e.target.value)} className={f}>
-          {TIERS.map((t) => <option key={t} value={t}>{TIER_LABELS[t]}</option>)}
-        </select>
+        <Select value={status} onValueChange={(appicaValue) => setStatus(String(appicaValue ?? "") as AdminAccount["status"])} size="sm">
+          <SelectTrigger className={f}><SelectValue /></SelectTrigger>
+          <SelectContent>
+          {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
+        </SelectContent>
+        </Select>
+        <Select value={tier} onValueChange={(appicaValue) => setTier(String(appicaValue ?? ""))} size="sm">
+          <SelectTrigger className={f}><SelectValue /></SelectTrigger>
+          <SelectContent>
+          {TIERS.map((t) => <SelectItem key={t} value={t}>{TIER_LABELS[t]}</SelectItem>)}
+        </SelectContent>
+        </Select>
         {status === "trial" && (
-          <input type="date" value={trialEndsAt} onChange={(e) => setTrialEndsAt(e.target.value)} className={f} title="Fin d’essai" />
+          <Input type="date" value={trialEndsAt} onChange={(e) => setTrialEndsAt(e.target.value)} className={f} title="Fin d’essai" />
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <label className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
-          <input type="checkbox" checked={isSuperAdmin} onChange={(e) => setIsSuperAdmin(e.target.checked)} className="h-4 w-4 accent-[var(--warm,#c8743c)]" />
+          <Checkbox checked={isSuperAdmin} onCheckedChange={setIsSuperAdmin} />
           <ShieldCheck className="h-3.5 w-3.5" /> Super-admin
         </label>
         {err && <span className="text-[12px] text-destructive">{err}</span>}
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onCancel} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
-          <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Créer le compte
-          </button>
+          <Button type="button" onClick={onCancel} className="rounded-pill text-[12.5px]" variant="ghost" size="sm">Annuler</Button>
+          <Button type="submit" disabled={busy} className="gap-1.5 rounded-pill text-[12.5px]" size="sm">
+            {busy && <Spinner currentColor className="size-3.5" />} Créer le compte
+          </Button>
         </div>
       </div>
       <p className="text-[10.5px] text-muted-foreground">Le compte est créé avec l’e-mail déjà confirmé : l’utilisateur peut se connecter immédiatement.</p>
@@ -417,15 +428,14 @@ function CreateAccountForm({
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       className={cn(
         "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
         active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
-      )}
-    >
+      )} variant="ghost" size="sm">
       {children}
-    </button>
+    </Button>
   );
 }

@@ -26,9 +26,6 @@ fichiers restent dans git.
    redéployer.
 4. **Vérifier** puis **retirer de git** (voir §Vérifier et §Retirer).
 
-> La même Action est rebranchée dans `sondages.yml` (`ONLY=sondages,suivi`) pour
-> que les données rafraîchies quotidiennement restent à jour dans le storage.
-
 ## Variante manuelle (terminal)
 
 Aucune installation préalable : le script n'a aucune dépendance (`fetch` natif,
@@ -75,9 +72,7 @@ Déployer, puis dans l'onglet réseau confirmer que :
 
 ## Retirer les données du dépôt
 
-Une fois la prod confirmée OK sur Storage, retirer les gros statiques (en gardant
-`sondages`/`suivi`, rafraîchis quotidiennement et désormais ré-uploadés par
-`sondages.yml`) :
+Une fois la prod confirmée OK sur Storage, retirer les gros statiques :
 
 ```bash
 git rm -r --cached public/electoral public/tiles public/insee public/an public/search-index.json

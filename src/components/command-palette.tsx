@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { MapPin, Building2, Map, Vote, Loader2, ArrowRight, UserRound, Star, Users } from "lucide-react";
+import { MapPin, Building2, Map, Vote, ArrowRight, UserRound, Star, Users } from "lucide-react";
+import { Spinner } from "@appica/ui-react/spinner";
 import { usePins } from "@/lib/pins";
 import { circoShortLabel } from "@/lib/territoire";
 import { toast } from "@/components/toaster";
@@ -39,13 +40,6 @@ const NAV_SHORTCUTS = [
   { href: "/explorer", label: "Ouvrir l'explorateur" },
   { href: "/analyser/simulateur", label: "Simulateur législatif" },
   { href: "/analyser/marginalite", label: "Carte des sièges marginaux" },
-  { href: "/suivre", label: "Briefing du jour" },
-  { href: "/suivre?s=medias", label: "Veille médias & territoire" },
-  { href: "/suivre?s=opinion", label: "Sondages & baromètre" },
-  { href: "/suivre?s=parlement", label: "Votes & lois (AN)" },
-  { href: "/suivre?s=echeances", label: "Agenda électoral" },
-  { href: "/suivre/parrainages", label: "Parrainages 2027" },
-  { href: "/suivre/soiree", label: "Soirée électorale" },
 ] as const;
 
 export function CommandPalette() {
@@ -197,7 +191,7 @@ export function CommandPalette() {
 
         {query.length > 0 && indexQuery.isLoading && (
           <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" /> Chargement de l&apos;index…
+            <Spinner currentColor className="size-3" /> Chargement de l&apos;index…
           </div>
         )}
 

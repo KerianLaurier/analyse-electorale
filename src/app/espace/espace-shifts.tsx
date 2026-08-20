@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, CalendarClock, MapPin, Users, Check, Trash2, Pencil, Loader2, Clock } from "lucide-react";
+import { Plus, CalendarClock, MapPin, Users, Check, Trash2, Pencil, Clock } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Checkbox } from "@appica/ui-react/checkbox";
+import { Textarea } from "@appica/ui-react/textarea";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import {
   useShifts,
@@ -25,7 +31,9 @@ const fmtDate = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 const fmtTime = (t: string | null) => (t ? t.slice(0, 5) : null);
 
-const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
+// Les champs Appica portent leur propre cadre (bordure, fond, focus) :
+// il ne reste ici que l'échelle typographique du contexte.
+const field = "text-[13px]";
 
 export function EspaceShifts({ ctx }: { ctx: WsContext }) {
   const shifts = useShifts();
@@ -53,13 +61,12 @@ export function EspaceShifts({ ctx }: { ctx: WsContext }) {
       <div className="flex flex-wrap items-center gap-2">
         <Chip active={scope === "upcoming"} onClick={() => setScope("upcoming")}>À venir</Chip>
         <Chip active={scope === "all"} onClick={() => setScope("all")}>Toutes · {shifts.length}</Chip>
-        <button
+        <Button
           type="button"
           onClick={() => setShowForm((v) => !v)}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90"
-        >
+          className="ml-auto gap-1.5 rounded-pill text-[12px]" size="sm">
           <Plus className="h-3.5 w-3.5" /> Nouveau créneau
-        </button>
+        </Button>
       </div>
 
       {showForm && <ShiftForm ctx={ctx} onDone={() => setShowForm(false)} />}
@@ -97,16 +104,15 @@ export function EspaceShifts({ ctx }: { ctx: WsContext }) {
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       className={cn(
         "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
         active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
-      )}
-    >
+      )} variant="ghost" size="sm">
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -145,32 +151,35 @@ function ShiftForm({ ctx, initial, onDone }: { ctx: WsContext; initial?: Shift; 
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2.5 rounded-lg border border-border/60 bg-surface p-4 shadow-card">
-      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Intitulé (ex. Porte-à-porte Quartier Gare)" className={cn(field, "font-medium")} />
+      <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Intitulé (ex. Porte-à-porte Quartier Gare)" className={cn(field, "font-medium")} />
       <div className="grid gap-2 sm:grid-cols-4">
-        <select value={kind} onChange={(e) => setKind(e.target.value as ShiftKind)} className={field}>
-          {KINDS.map((k) => <option key={k} value={k}>{SHIFT_KIND_LABELS[k]}</option>)}
-        </select>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
-        <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className={field} title="Début" />
-        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={field} title="Fin" />
+        <Select value={kind} onValueChange={(appicaValue) => setKind(String(appicaValue ?? "") as ShiftKind)} size="sm">
+          <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+          <SelectContent>
+          {KINDS.map((k) => <SelectItem key={k} value={k}>{SHIFT_KIND_LABELS[k]}</SelectItem>)}
+        </SelectContent>
+        </Select>
+        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
+        <Input type="time" value={start} onChange={(e) => setStart(e.target.value)} className={field} title="Début" />
+        <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={field} title="Fin" />
       </div>
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Point de RDV / lieu" className={field} />
-        <input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="Bénévoles visés" className={cn(field, "sm:w-44")} />
+        <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Point de RDV / lieu" className={field} />
+        <Input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="Bénévoles visés" className={cn(field, "sm:w-44")} />
       </div>
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (consignes, matériel…)" rows={2} className={cn(field, "resize-y")} />
+      <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (consignes, matériel…)" rows={2} className={cn(field, "resize-y")} />
       <div className="flex flex-wrap items-center gap-3">
         {ctx.teamId && (
           <label className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
-            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="accent-[var(--warm,#c8743c)]" />
+            <Checkbox checked={shared} onCheckedChange={setShared} />
             <Users className="h-3.5 w-3.5" /> Partagé avec l’équipe
           </label>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onDone} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
-          <button type="submit" disabled={!title.trim() || busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {initial ? "Enregistrer" : "Planifier"}
-          </button>
+          <Button type="button" onClick={onDone} className="rounded-pill text-[12.5px]" variant="ghost" size="sm">Annuler</Button>
+          <Button type="submit" disabled={!title.trim() || busy} className="gap-1.5 rounded-pill text-[12.5px]" size="sm">
+            {busy && <Spinner currentColor className="size-3.5" />} {initial ? "Enregistrer" : "Planifier"}
+          </Button>
         </div>
       </div>
     </form>
@@ -196,12 +205,12 @@ function ShiftCard({ shift, ctx }: { shift: Shift; ctx: WsContext }) {
           {shift.shared && <Users className="h-3.5 w-3.5 text-warm" />}
           {shift.mine && (
             <>
-              <button type="button" onClick={() => setEditing(true)} aria-label="Modifier" className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-surface-soft hover:text-foreground">
+              <Button type="button" onClick={() => setEditing(true)} aria-label="Modifier" className="h-6 w-6 rounded" variant="soft" size="icon-sm">
                 <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button type="button" onClick={() => void deleteShift(shift.id)} aria-label="Supprimer" className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-red-50 hover:text-red-600">
+              </Button>
+              <Button type="button" onClick={() => void deleteShift(shift.id)} aria-label="Supprimer" className="h-6 w-6 rounded hover:bg-red-50 hover:text-red-600" variant="ghost" size="icon-sm">
                 <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -238,17 +247,16 @@ function ShiftCard({ shift, ctx }: { shift: Shift; ctx: WsContext }) {
           })}
           {count === 0 && <span className="text-[11px] text-muted-foreground">Aucun inscrit</span>}
         </div>
-        <button
+        <Button
           type="button"
           onClick={() => (shift.joined ? leaveShift(shift.id) : joinShift(shift.id))}
           disabled={!shift.joined && full}
           className={cn(
             "inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-50",
             shift.joined ? "bg-warm/15 text-foreground" : "bg-primary text-primary-foreground hover:opacity-90",
-          )}
-        >
+          )} variant="ghost" size="sm">
           {shift.joined ? <><Check className="h-3.5 w-3.5" /> Inscrit</> : full ? "Complet" : "Je m’inscris"}
-        </button>
+        </Button>
       </div>
     </div>
   );

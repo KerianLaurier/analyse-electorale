@@ -12,9 +12,7 @@ bash scripts/pipeline/all.sh        # download → tuiles → tous les parquets
 ```
 
 `download.sh` récupère les sources brutes dans `data/raw/` (gitignoré) à partir
-des URL de `sources.json`. Le module **Suivre** (sondages, votes AN, lois,
-agenda, veille) est en plus rafraîchi quotidiennement par
-`.github/workflows/sondages.yml`. Le socle électoral + socio est *build-once* :
+des URL de `sources.json`. Le socle électoral + socio est *build-once* :
 relancer `all.sh` à chaque nouveau millésime INSEE / scrutin.
 
 ## Couche socio-démographique (commune)
@@ -50,8 +48,6 @@ relancer `all.sh` à chaque nouveau millésime INSEE / scrutin.
   `build-famille.py`, `build-mobilite.py`, `build-circo-socio.py`,
   `build-bureaux-socio.py`.
 - **Analytique** : `build-trends.py`, `build-potentiel.py`.
-- **Suivre** : `build-cncs-notices.py`, `build-cncs-parse.py`, `build-an-votes.py`,
-  `build-an-lois.py`, `build-agenda.py`, `build-veille.py`, `build-polls-2027.py`.
 - **Recherche** : `build-search-index.py`.
 
 ## Limites connues (open data FR)

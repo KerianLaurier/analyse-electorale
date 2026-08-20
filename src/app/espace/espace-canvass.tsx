@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { DoorOpen, Plus, Users, Trash2, MapPin, Loader2, Info, ClipboardList, Target, TrendingUp, LayoutGrid, Search } from "lucide-react";
+import { DoorOpen, Plus, Users, Trash2, MapPin, Info, ClipboardList, Target, TrendingUp, LayoutGrid, Search } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Textarea } from "@appica/ui-react/textarea";
+import { Input } from "@appica/ui-react/input";
+import { NumberField } from "@appica/ui-react/number-field";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { useReports, useLoadState as useCanvassLoad, addReport, deleteReport, summarize, bySector, weeklyTrend, type CanvassReport, type SectorAgg, type WeekPoint } from "@/lib/canvass";
 import { useSectors, useHasTeam, useCampaign, useLoadState as useCampaignLoad, voteGoal, updateSector, type Sector } from "@/lib/campaign";
@@ -16,7 +22,9 @@ export const fmtPct = (n: number, d = 0) =>
 export const todayISO = () => new Date().toISOString().slice(0, 10);
 export const fmtDate = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 
-export const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
+// Les champs Appica portent leur propre cadre (bordure, fond, focus) :
+// il ne reste ici que l'échelle typographique du contexte.
+export const field = "text-[13px]";
 
 export function EspaceCanvass() {
   const canvassLoad = useCanvassLoad();
@@ -195,12 +203,11 @@ function CanvassContent() {
               <Chip active={planFilter === "done"} onClick={() => { setPlanFilter("done"); setPlanExpanded(false); }}>Couvert · {statusCounts.done}</Chip>
               <div className="relative ml-auto">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <input
+                <Input
                   value={planQuery}
                   onChange={(e) => { setPlanQuery(e.target.value); setPlanExpanded(false); }}
                   placeholder="Rechercher un bureau…"
-                  className="w-52 rounded-md border border-border bg-surface py-1.5 pl-8 pr-3 text-[12.5px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-                />
+                  className="w-52 pl-8 pr-3 text-[12.5px]" />
               </div>
             </div>
 
@@ -214,13 +221,12 @@ function CanvassContent() {
                   ))}
                 </div>
                 {filteredPlan.length > PLAN_LIMIT && (
-                  <button
+                  <Button
                     type="button"
                     onClick={() => setPlanExpanded((v) => !v)}
-                    className="mt-2 text-[12px] font-medium text-warm hover:underline"
-                  >
+                    className="mt-2 text-[12px] text-warm hover:underline" variant="ghost" size="sm">
                     {planExpanded ? "Réduire la liste" : `Afficher les ${filteredPlan.length - PLAN_LIMIT} autres secteurs`}
-                  </button>
+                  </Button>
                 )}
               </>
             )}
@@ -235,9 +241,9 @@ function CanvassContent() {
             <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               <MapPin className="h-3.5 w-3.5" /> Carte de couverture
             </h2>
-            <button type="button" onClick={() => setShowMap((v) => !v)} className="text-[11.5px] font-medium text-warm hover:underline">
+            <Button type="button" onClick={() => setShowMap((v) => !v)} className="text-[11.5px] text-warm hover:underline" variant="ghost" size="sm">
               {showMap ? "Masquer la carte" : "Afficher la carte"}
-            </button>
+            </Button>
           </div>
           {showMap ? (
             <div className="mt-3">
@@ -270,9 +276,9 @@ function CanvassContent() {
           <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <ClipboardList className="h-3.5 w-3.5" /> Comptes-rendus · {reports.length}
           </h2>
-          <button type="button" onClick={() => openForm(null)} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90">
+          <Button type="button" onClick={() => openForm(null)} className="gap-1.5 rounded-pill text-[12px]" size="sm">
             <Plus className="h-3.5 w-3.5" /> Nouveau compte-rendu
-          </button>
+          </Button>
         </div>
 
         {showForm && (
@@ -310,7 +316,7 @@ function PlanRow({ sector, stat, onLog }: { sector: Sector; stat?: { sessions: n
           </span>
         )}
       </p>
-      <input
+      <Input
         key={`addr-${sector.id}-${sector.address ?? ""}`}
         defaultValue={sector.address ?? ""}
         onBlur={(e) => {
@@ -318,8 +324,7 @@ function PlanRow({ sector, stat, onLog }: { sector: Sector; stat?: { sessions: n
           if (v !== (sector.address ?? "")) updateSector(sector.id, { address: v || null });
         }}
         placeholder="Adresse / rues…"
-        className="min-w-[120px] flex-1 rounded border border-transparent bg-canvas/40 px-2 py-1 text-[11.5px] outline-none focus:border-warm focus:bg-surface"
-      />
+        className="min-w-[120px] flex-1 rounded border-transparent bg-canvas/40 text-[11.5px] focus:bg-surface" />
       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {stat ? (
           <><span className="font-medium text-foreground">{fmtInt(stat.met)}</span> renc. · {fmtInt(stat.favorable)} fav.</>
@@ -327,25 +332,24 @@ function PlanRow({ sector, stat, onLog }: { sector: Sector; stat?: { sessions: n
           "—"
         )}
       </span>
-      <button type="button" onClick={onLog} title="Saisir un compte-rendu" className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-foreground/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-foreground hover:bg-foreground/[0.08]">
+      <Button type="button" onClick={onLog} title="Saisir un compte-rendu" className="shrink-0 gap-1 rounded-pill text-[11.5px]" variant="soft" size="sm">
         <Plus className="h-3.5 w-3.5" /> CR
-      </button>
+      </Button>
     </div>
   );
 }
 
 export function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       className={cn(
         "rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
         active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
-      )}
-    >
+      )} variant="ghost" size="sm">
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -391,18 +395,21 @@ function ReportForm({ sectors, presetSector, onDone }: { sectors: Sector[]; pres
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Secteur</span>
-          <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className={field}>
-            <option value="">— Zone libre —</option>
-            {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <Select value={sectorId} onValueChange={(appicaValue) => setSectorId(String(appicaValue ?? ""))} size="sm">
+            <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+            <SelectContent>
+            <SelectItem value="">— Zone libre —</SelectItem>
+            {sectors.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          </SelectContent>
+          </Select>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Zone / adresse</span>
-          <input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="ex. Quartier Gare" className={field} />
+          <Input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="ex. Quartier Gare" className={field} />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Date</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
         </label>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -412,16 +419,16 @@ function ReportForm({ sectors, presetSector, onDone }: { sectors: Sector[]; pres
         <Num label="Neutres" value={neutral} onChange={setNeutral} />
         <Num label="Défavorables" value={unfavorable} onChange={setUnfavorable} accent="red" />
       </div>
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (sujets remontés, points d’attention…)" rows={2} className={cn(field, "resize-y")} />
+      <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (sujets remontés, points d’attention…)" rows={2} className={cn(field, "resize-y")} />
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-[11.5px] text-muted-foreground">
           <span className="font-medium text-foreground">{fmtInt(met)}</span> personnes rencontrées (= favorables + neutres + défavorables)
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onDone} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
-          <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enregistrer
-          </button>
+          <Button type="button" onClick={onDone} className="rounded-pill text-[12.5px]" variant="ghost" size="sm">Annuler</Button>
+          <Button type="submit" disabled={busy} className="gap-1.5 rounded-pill text-[12.5px]" size="sm">
+            {busy && <Spinner currentColor className="size-3.5" />} Enregistrer
+          </Button>
         </div>
       </div>
     </form>
@@ -457,9 +464,9 @@ function ReportRow({ report, sectorName }: { report: CanvassReport; sectorName: 
         </div>
       </div>
       {report.mine && (
-        <button type="button" onClick={() => void deleteReport(report.id)} aria-label="Supprimer" className="grid h-7 w-7 place-items-center rounded text-muted-foreground hover:bg-red-50 hover:text-red-600">
+        <Button type="button" onClick={() => void deleteReport(report.id)} aria-label="Supprimer" className="h-7 w-7 rounded hover:bg-red-50 hover:text-red-600" variant="ghost" size="icon-sm">
           <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       )}
     </li>
   );
@@ -471,35 +478,19 @@ export function Num({ label, value, onChange, accent }: { label: string; value: 
   return (
     <label className="flex flex-col gap-1">
       <span className={cn("text-[10.5px] font-medium uppercase tracking-wide", accent === "emerald" ? "text-emerald-600" : accent === "red" ? "text-red-600" : "text-muted-foreground")}>{label}</span>
-      {/* Compteur tactile : −/+ au pouce + saisie clavier directe. */}
-      <div className="flex items-stretch overflow-hidden rounded-md border border-border bg-surface focus-within:border-warm focus-within:ring-2 focus-within:ring-warm/20">
-        <button
-          type="button"
-          onClick={() => set(n - 1)}
-          aria-label={`Diminuer ${label}`}
-          className="grid w-10 shrink-0 place-items-center text-[18px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] active:bg-foreground/[0.08] disabled:opacity-30"
-          disabled={n <= 0}
-        >
-          −
-        </button>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={0}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="0"
-          className="w-full min-w-0 border-x border-border bg-transparent py-2 text-center text-[15px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-        />
-        <button
-          type="button"
-          onClick={() => set(n + 1)}
-          aria-label={`Augmenter ${label}`}
-          className="grid w-10 shrink-0 place-items-center text-[18px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] active:bg-foreground/[0.08]"
-        >
-          +
-        </button>
-      </div>
+      {/* Compteur tactile : le `NumberField` d'Appica fournit les incréments
+          −/+ au pouce, la saisie clavier, le maintien pour répéter, le
+          formatage local et le plancher à 0 — plus de trio bouton/champ/bouton
+          assemblé à la main. */}
+      <NumberField
+        value={n}
+        min={0}
+        step={1}
+        onValueChange={(next) => set(Math.max(0, Math.round(next ?? 0)))}
+        aria-label={label}
+        className="w-full"
+        inputProps={{ inputMode: "numeric", className: "text-center text-[15px] tabular-nums" }}
+      />
     </label>
   );
 }

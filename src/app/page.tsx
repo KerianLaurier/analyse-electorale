@@ -71,7 +71,7 @@ const USE_CASES = [
     icon: Megaphone,
     role: "Directeur·rice de campagne",
     desc: "Coordonnez le terrain, suivez l'objectif de voix et mobilisez les bénévoles — tout le monde sur la même page, en temps réel.",
-    tools: ["Mon QG", "Suivre"],
+    tools: ["Mon QG", "Analyser"],
   },
   {
     icon: Building2,
@@ -83,7 +83,7 @@ const USE_CASES = [
     icon: Briefcase,
     role: "Cabinet & consultant",
     desc: "Produisez des analyses solides et sourcées pour vos clients, du national au bureau de vote.",
-    tools: ["Explorer", "Analyser", "Suivre"],
+    tools: ["Explorer", "Analyser", "Mon QG"],
   },
 ];
 
@@ -92,7 +92,6 @@ const SOURCES = [
   "INSEE",
   "Assemblée nationale",
   "data.gouv.fr",
-  "Commission des sondages",
 ];
 
 const FAQ = [
@@ -106,7 +105,7 @@ const FAQ = [
   },
   {
     q: "D'où viennent les données et à quelle fréquence sont-elles à jour ?",
-    a: "Des sources officielles : ministère de l'Intérieur, INSEE, Assemblée nationale et Commission des sondages. L'historique des scrutins est figé ; les sondages, scrutins de l'Assemblée et la veille sont rafraîchis automatiquement chaque jour.",
+    a: "Des sources officielles : ministère de l'Intérieur, INSEE et Assemblée nationale. L'historique des scrutins et la sociologie sont figés et régénérés à chaque nouveau millésime ; la liste des députés en exercice suit l'Assemblée nationale.",
   },
   {
     q: "Faut-il des compétences techniques pour l'utiliser ?",
@@ -123,9 +122,9 @@ const FAQ = [
 ];
 
 const TRUST = [
-  { icon: Database, title: "Données ouvertes & sourcées", desc: "Ministère de l'Intérieur, INSEE, Assemblée nationale, Commission des sondages." },
+  { icon: Database, title: "Données ouvertes & sourcées", desc: "Ministère de l'Intérieur, INSEE, Assemblée nationale." },
   { icon: Clock, title: "Requêtes instantanées", desc: "Analyse exécutée dans le navigateur, sans serveur ni attente." },
-  { icon: ShieldCheck, title: "Mises à jour automatiques", desc: "Sondages, scrutins et dossiers rafraîchis chaque jour." },
+  { icon: ShieldCheck, title: "Mises à jour automatiques", desc: "Agrégats, sociologie et députés régénérés par le pipeline." },
 ];
 
 const SECURITY = [
@@ -487,7 +486,7 @@ export default async function HomePage() {
             <Logo small />
             <span className={cn(DISPLAY, "font-bold uppercase tracking-[0.12em] text-foreground/80")}>Mouvancia</span>
           </span>
-          <span>Sources · Ministère de l&apos;Intérieur · INSEE · Assemblée nationale · Commission des sondages</span>
+          <span>Sources · Ministère de l&apos;Intérieur · INSEE · Assemblée nationale</span>
           <nav className="flex flex-wrap items-center gap-x-3 gap-y-1" aria-label="Informations légales">
             <Link href="/mentions-legales" className="hover:text-foreground hover:underline">Mentions légales</Link>
             <Link href="/confidentialite" className="hover:text-foreground hover:underline">Confidentialité</Link>

@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { RotateCcw, Sparkles } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Slider } from "@appica/ui-react/slider";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { BLOCS, blocById, type BlocId } from "@/lib/analysis";
 import { SCRUTIN_META, parseScrutin, type ScrutinFamily } from "@/lib/url-state";
@@ -198,7 +201,7 @@ export function ProjectionSection({
         <SectionHeader />
         <div className="inline-flex items-center gap-0.5 rounded-pill bg-surface-soft/70 p-0.5">
           {(Object.keys(FAMILY_TARGET) as Family[]).map((f) => (
-            <button
+            <Button
               key={f}
               type="button"
               onClick={() => { setFamily(f); setScenario(null); setParticipationPct(null); }}
@@ -208,10 +211,9 @@ export function ProjectionSection({
                 family === f
                   ? "bg-surface text-foreground shadow-[0_1px_2px_rgba(10,10,12,0.06)]"
                   : "text-muted-foreground hover:text-foreground",
-              )}
-            >
+              )} variant="ghost" size="sm">
               {f === "presidentielle" ? "Présidentielle 2027" : "Législatives"}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -268,14 +270,13 @@ export function ProjectionSection({
                 Hypothèse de score national par bloc, répercutée sur le territoire (swing proportionnel).
               </p>
             </div>
-            <button
+            <Button
               type="button"
               onClick={() => { setScenario(null); setParticipationPct(null); }}
-              className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-surface-soft/70 px-2 py-1 text-[10.5px] font-medium text-muted-foreground hover:text-foreground"
-              title="Revenir au scénario tendanciel"
-            >
+              className="shrink-0 gap-1 rounded-pill bg-surface-soft/70 text-[10.5px]"
+              title="Revenir au scénario tendanciel" variant="soft" size="sm">
               <RotateCcw className="h-3 w-3" /> Tendanciel
-            </button>
+            </Button>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -285,17 +286,17 @@ export function ProjectionSection({
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: b.color }} />
                   <span className="truncate text-muted-foreground">{b.label}</span>
                 </span>
-                <input
-                  type="range"
+                <Slider
                   min={0}
                   max={50}
                   step={0.5}
                   value={effScenario[b.id]}
-                  onChange={(e) =>
-                    setScenario({ ...effScenario, [b.id]: Number(e.target.value) })
+                  onValueChange={(v: number | readonly number[]) =>
+                    setScenario({ ...effScenario, [b.id]: Array.isArray(v) ? v[0] : (v as number) })
                   }
-                  className="h-1.5 w-full accent-[var(--warm)]"
+                  className="w-full"
                   aria-label={`Score national supposé · ${b.label}`}
+                  thumbAriaLabel={`Score national supposé · ${b.label}`}
                 />
                 <span className="text-right font-medium tabular-nums">
                   {effScenario[b.id].toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %
@@ -304,15 +305,17 @@ export function ProjectionSection({
             ))}
             <label className="mt-1 grid grid-cols-[110px_1fr_44px] items-center gap-2 border-t border-border/60 pt-2 text-[11.5px]">
               <span className="text-muted-foreground">Participation</span>
-              <input
-                type="range"
+              <Slider
                 min={25}
                 max={90}
                 step={1}
                 value={Math.round(effParticipation * 100)}
-                onChange={(e) => setParticipationPct(Number(e.target.value))}
-                className="h-1.5 w-full accent-[var(--warm)]"
+                onValueChange={(v: number | readonly number[]) =>
+                  setParticipationPct(Array.isArray(v) ? v[0] : (v as number))
+                }
+                className="w-full"
                 aria-label="Hypothèse de participation"
+                thumbAriaLabel="Hypothèse de participation"
               />
               <span className="text-right font-medium tabular-nums">
                 {Math.round(effParticipation * 100)} %
@@ -322,16 +325,15 @@ export function ProjectionSection({
 
           <label className="flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-[11.5px]">
             <span className="text-muted-foreground">Mon positionnement</span>
-            <select
-              value={bloc}
-              onChange={(e) => changeBloc(e.target.value as BlocId | "")}
-              className="rounded-md border border-border bg-surface px-2 py-1 text-[12px] outline-none"
-            >
-              <option value="">—</option>
+            <Select value={bloc} onValueChange={(appicaValue) => changeBloc(String(appicaValue ?? "") as BlocId | "")} size="sm">
+              <SelectTrigger className="text-[12px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+              <SelectItem value="">—</SelectItem>
               {BLOCS.map((b) => (
-                <option key={b.id} value={b.id}>{b.label}</option>
+                <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
               ))}
-            </select>
+            </SelectContent>
+            </Select>
           </label>
         </div>
       </div>

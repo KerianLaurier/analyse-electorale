@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,7 +21,9 @@ export function InlineLoading({
         className,
       )}
     >
-      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+      {/* `currentColor` : le spinner suit la couleur du libellé plutôt que
+          l'accent primaire — un chargement discret, pas une alerte. */}
+      <Spinner currentColor className="size-4" aria-label={label} />
       {label}
     </div>
   );

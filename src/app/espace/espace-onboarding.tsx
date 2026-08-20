@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, ArrowRight, Rocket, X, Lock } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import type { WsContext } from "@/app/espace/types";
 import type { Tab } from "@/app/espace/espace-view";
@@ -110,14 +111,13 @@ export function EspaceOnboarding({
             </p>
           </div>
         </div>
-        <button
+        <Button
           type="button"
           onClick={dismiss}
           aria-label="Masquer la prise en main"
-          className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
-        >
+          className="h-6 w-6 shrink-0 rounded" variant="soft" size="icon-sm">
           <X className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
 
       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-pill bg-surface-soft/70">
@@ -174,8 +174,8 @@ function StepCta({ step, highlight }: { step: Step; highlight: boolean }) {
     );
   }
   return (
-    <button type="button" onClick={step.onClick} className={className}>
+    <Button type="button" onClick={step.onClick} className={className} variant="ghost" size="sm">
       {content}
-    </button>
+    </Button>
   );
 }

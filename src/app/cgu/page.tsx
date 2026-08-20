@@ -62,7 +62,7 @@ export default function CguPage() {
       <h2>5. Données et analyses</h2>
       <p>
         Les analyses reposent sur des données publiques agrégées (ministère de l&apos;Intérieur,
-        INSEE, Assemblée nationale, Commission des sondages). Elles sont fournies à titre indicatif :
+        INSEE, Assemblée nationale). Elles sont fournies à titre indicatif :
         une corrélation statistique ne vaut pas causalité, et les projections ne constituent pas une
         garantie de résultat. Les décisions de campagne relèvent de la seule responsabilité de
         l&apos;utilisateur.

@@ -36,18 +36,6 @@ Toutes les sources sont déclarées dans [scripts/pipeline/sources.json](../scri
 
 > france-geojson (ODbL, Grégoire David) agrège des données OSM et INSEE. Pour passer en production, on pourra basculer vers les SHP IGN ADMIN-EXPRESS-COG (officiels, mise à jour annuelle) via `ogr2ogr`.
 
-### Sondages (notices CNCS)
-
-| Dataset | Source | Sortie |
-| --- | --- | --- |
-| Notices de sondages | [Commission des sondages](https://www.commission-des-sondages.fr/notices/) (registre public) | `public/sondages/notices.json` |
-
-`build-cncs-notices.py` scrape le registre des notices de la Commission des sondages (seule source **vivante et exhaustive** ; Nsppolls est abandonné depuis 2022). Pour chaque notice : numéro, scrutin (classé via le préfixe : présidentielle / municipales / législatives / européennes / régionales…), institut (canonicalisé), date (année inférée), lien PDF officiel.
-
-> Les chiffres d'intentions sont dans les PDF (formats hétérogènes par institut). Le parsing PDF des résultats sera ajouté progressivement, institut par institut.
-
-**Mise à jour quotidienne** : le workflow [`.github/workflows/sondages.yml`](../.github/workflows/sondages.yml) relance le scraper chaque jour (cron 06:30 UTC) et commit `notices.json` s'il a changé. À activer une fois le repo sur GitHub.
-
 ### Électoral
 
 | Dataset | Niveau | Source | Taille brute → Parquet |

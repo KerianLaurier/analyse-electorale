@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Check, Circle, CircleDot, MoreHorizontal, Trash2, Users, User, CalendarClock, MapPin, Loader2 } from "lucide-react";
+import { Plus, Check, Circle, CircleDot, MoreHorizontal, Trash2, Users, User, CalendarClock, MapPin } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
+import { Input } from "@appica/ui-react/input";
+import { Checkbox } from "@appica/ui-react/checkbox";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
 import { cn } from "@/lib/utils";
 import {
   useTasks,
@@ -23,12 +28,12 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
+  DropdownMenuGroupLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@appica/ui-react/dropdown-menu";
 import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
 import { memberName, memberInitials, memberRolesOf, type WsContext } from "@/app/espace/types";
 import { RoleChips } from "@/components/role-chip";
@@ -81,23 +86,19 @@ export function EspaceTasks({ ctx }: { ctx: WsContext }) {
             {TASK_STATUS_LABELS[s]} · {counts[s]}
           </FilterChip>
         ))}
-        <button
+        <Button
           type="button"
+          variant={onlyMine ? "light" : "soft"}
+          size="sm"
+          aria-pressed={onlyMine}
           onClick={() => setOnlyMine((v) => !v)}
-          className={cn(
-            "ml-auto inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-            onlyMine ? "bg-warm/15 text-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
-          )}
+          className={cn("ml-auto gap-1.5 rounded-pill text-[12px]", onlyMine && "bg-warm/15 text-foreground")}
         >
           <User className="h-3.5 w-3.5" /> Mes actions
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90"
-        >
+        </Button>
+        <Button type="button" size="sm" onClick={() => setShowForm((v) => !v)} className="gap-1.5 rounded-pill text-[12px]">
           <Plus className="h-3.5 w-3.5" /> Nouvelle action
-        </button>
+        </Button>
       </div>
 
       <p className="-mt-2 text-[11.5px] text-muted-foreground">
@@ -125,16 +126,16 @@ export function EspaceTasks({ ctx }: { ctx: WsContext }) {
 
 function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
+    <Button
       type="button"
+      variant={active ? "primary" : "soft"}
+      size="sm"
+      aria-pressed={active}
       onClick={onClick}
-      className={cn(
-        "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
-        active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
-      )}
+      className="rounded-pill text-[12px]"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -166,67 +167,73 @@ function TaskForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
     if (ok) onDone();
   }
 
-  const field = "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
+  // Les contrôles Appica portent leur propre cadre : il ne reste que l'échelle.
+  const field = "text-[13px]";
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3 rounded-lg border border-border/60 bg-surface p-4 shadow-card">
-      <input
+      <Input
         autoFocus
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Que faut-il faire ? (ex. Imprimer 5 000 tracts, déposer le dossier de candidature)"
-        className={cn(field, "text-[14px]")}
+        className="text-[14px]"
       />
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Type</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value as TaskKind)} className={field}>
-            {KINDS.map((k) => (
-              <option key={k} value={k}>{TASK_KIND_LABELS[k]}</option>
-            ))}
-          </select>
+          <Select value={kind} onValueChange={(v) => setKind(v as TaskKind)} size="sm">
+            <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {KINDS.map((k) => (
+                <SelectItem key={k} value={k}>{TASK_KIND_LABELS[k]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Priorité</span>
-          <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={field}>
-            {(["high", "med", "low"] as TaskPriority[]).map((p) => (
-              <option key={p} value={p}>{TASK_PRIORITY_LABELS[p]}</option>
-            ))}
-          </select>
+          <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)} size="sm">
+            <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(["high", "med", "low"] as TaskPriority[]).map((pr) => (
+                <SelectItem key={pr} value={pr}>{TASK_PRIORITY_LABELS[pr]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Échéance</span>
-          <input type="date" value={dueDate} min={todayISO()} onChange={(e) => setDueDate(e.target.value)} className={field} />
+          <Input type="date" value={dueDate} min={todayISO()} onChange={(e) => setDueDate(e.target.value)} className={field} />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Assignée à</span>
-          <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className={field}>
-            <option value="">Personne</option>
-            {ctx.members.map((m) => (
-              <option key={m.id} value={m.id}>{m.id === ctx.meId ? `${m.name} (moi)` : m.name}</option>
-            ))}
-          </select>
+          <Select value={assignee} onValueChange={(v) => setAssignee(String(v ?? ""))} size="sm">
+            <SelectTrigger className={field}><SelectValue placeholder="Personne" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Personne</SelectItem>
+              {ctx.members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.id === ctx.meId ? `${m.name} (moi)` : m.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <ContextSelect value={context} onChange={setContext} className={cn(field, "min-w-[220px] flex-1")} />
         {ctx.teamId && (
           <label className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
-            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="accent-[var(--warm,#c8743c)]" />
+            <Checkbox checked={shared} onCheckedChange={setShared} />
             <Users className="h-3.5 w-3.5" /> Partagée avec l’équipe
           </label>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onDone} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">
+          <Button type="button" variant="ghost" size="sm" onClick={onDone} className="rounded-pill text-[12.5px]">
             Annuler
-          </button>
-          <button
-            type="submit"
-            disabled={!title.trim() || busy}
-            className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-          >
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Ajouter
-          </button>
+          </Button>
+          <Button type="submit" size="sm" disabled={!title.trim() || busy} className="gap-1.5 rounded-pill text-[12.5px]">
+            {busy && <Spinner currentColor className="size-3.5" aria-label="Ajout en cours" />} Ajouter
+          </Button>
         </div>
       </div>
     </form>
@@ -240,17 +247,20 @@ function TaskRow({ task, ctx }: { task: Task; ctx: WsContext }) {
 
   return (
     <div className={cn("flex items-start gap-3 rounded-lg border border-foreground/5 bg-surface p-3.5 shadow-card", done && "opacity-70")}>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-sm"
         aria-label={done ? "Marquer à faire" : "Marquer comme fait"}
+        aria-pressed={done}
         onClick={() => updateTask(task.id, { status: done ? "todo" : "done" })}
         className={cn(
-          "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors",
+          "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border p-0",
           done ? "border-emerald-500 bg-emerald-500 text-white" : "border-border text-transparent hover:border-warm",
         )}
       >
         <Check className="h-3 w-3" />
-      </button>
+      </Button>
 
       <div className="min-w-0 flex-1">
         <p className={cn("text-[14px] font-medium", done && "line-through text-muted-foreground")}>{task.title}</p>
@@ -299,8 +309,8 @@ function TaskRow({ task, ctx }: { task: Task; ctx: WsContext }) {
           <MoreHorizontal className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuLabel>Statut</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={task.status} onValueChange={(v) => void updateTask(task.id, { status: v as TaskStatus })}>
+            <DropdownMenuGroupLabel>Statut</DropdownMenuGroupLabel>
             {STATUS_ORDER.map((s) => (
               <DropdownMenuRadioItem key={s} value={s}>{TASK_STATUS_LABELS[s]}</DropdownMenuRadioItem>
             ))}

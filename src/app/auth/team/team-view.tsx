@@ -3,7 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Info, UserPlus, Mail, Building2, Copy, LogOut, Users, Loader2, Pencil, Plus, X, Tag, Crown, ArrowRight } from "lucide-react";
+import { Check, Info, UserPlus, Mail, Building2, Copy, LogOut, Users, Pencil, Plus, X, Tag, Crown, ArrowRight } from "lucide-react";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { reloadPins } from "@/lib/pins";
@@ -229,13 +232,12 @@ export function TeamView({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
                   onClick={() => { setPName(account.fullName ?? ""); setPOrg(account.organisation ?? ""); setEditingProfile((v) => !v); }}
-                  className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-foreground/80 hover:bg-surface-soft"
-                >
+                  className="gap-1.5 rounded-pill text-[12px]" variant="outline" size="sm">
                   <Pencil className="h-3.5 w-3.5" /> Modifier
-                </button>
+                </Button>
                 <SignOutButton />
               </div>
             </div>
@@ -244,17 +246,17 @@ export function TeamView({
               <form onSubmit={saveProfile} className="mt-4 grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1">
                   <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Nom complet</span>
-                  <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="ex. Kérian Laurier" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20" />
+                  <Input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="ex. Kérian Laurier" className="text-[13px]" />
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Organisation</span>
-                  <input value={pOrg} onChange={(e) => setPOrg(e.target.value)} placeholder="ex. MOUVANCIA" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20" />
+                  <Input value={pOrg} onChange={(e) => setPOrg(e.target.value)} placeholder="ex. MOUVANCIA" className="text-[13px]" />
                 </label>
                 <div className="flex items-center gap-2 sm:col-span-2">
-                  <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-                    {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enregistrer
-                  </button>
-                  <button type="button" onClick={() => setEditingProfile(false)} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
+                  <Button type="submit" disabled={busy} className="gap-1.5 rounded-pill text-[12.5px]" size="sm">
+                    {busy && <Spinner currentColor className="size-3.5" />} Enregistrer
+                  </Button>
+                  <Button type="button" onClick={() => setEditingProfile(false)} className="rounded-pill text-[12.5px]" variant="ghost" size="sm">Annuler</Button>
                 </div>
               </form>
             )}
@@ -382,14 +384,13 @@ export function TeamView({
                     {members.length} membre{members.length > 1 ? "s" : ""} · épingles partagées visibles par toute l’équipe
                   </p>
                 </div>
-                <button
+                <Button
                   type="button"
                   onClick={leaveTeam}
                   disabled={busy}
-                  className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-foreground/80 hover:bg-surface-soft disabled:opacity-60"
-                >
+                  className="gap-1.5 rounded-pill text-[12px]" variant="outline" size="sm">
                   <LogOut className="h-3.5 w-3.5" /> Quitter l’équipe
-                </button>
+                </Button>
               </div>
 
               {/* Code d'invitation */}
@@ -397,13 +398,12 @@ export function TeamView({
                 <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-[12px] text-muted-foreground">Code d’invitation</span>
                 <code className="rounded bg-surface px-2 py-0.5 text-[13px] font-semibold tracking-wider">{team.joinCode}</code>
-                <button
+                <Button
                   type="button"
                   onClick={copyCode}
-                  className="inline-flex items-center gap-1 rounded-pill px-2 py-1 text-[11.5px] font-medium text-warm hover:bg-warm/10"
-                >
+                  className="gap-1 rounded-pill text-[11.5px] text-warm hover:bg-warm/10" variant="ghost" size="sm">
                   <Copy className="h-3.5 w-3.5" /> Copier
-                </button>
+                </Button>
                 <span className="text-[11px] text-muted-foreground/80">Partagez-le pour que vos coéquipiers rejoignent l’équipe.</span>
               </div>
 
@@ -467,9 +467,9 @@ export function TeamView({
                       {r.name}
                       <span className="text-[10.5px] text-muted-foreground">· {roleMemberCount(r.id)}</span>
                       {isOwner && (
-                        <button type="button" onClick={() => void removeRole(r.id)} aria-label="Supprimer le rôle" className="ml-0.5 grid h-4 w-4 place-items-center rounded text-muted-foreground hover:text-red-600">
+                        <Button type="button" onClick={() => void removeRole(r.id)} aria-label="Supprimer le rôle" className="ml-0.5 h-4 w-4 rounded hover:text-red-600" variant="ghost" size="icon-sm">
                           <X className="h-3 w-3" />
-                        </button>
+                        </Button>
                       )}
                     </span>
                   ))}
@@ -494,7 +494,7 @@ export function TeamView({
                           {teamRoles.map((r) => {
                             const assigned = myRoleIds.includes(r.id);
                             return (
-                              <button
+                              <Button
                                 key={r.id}
                                 type="button"
                                 onClick={() => void toggleMemberRole(m.id, r.id, assigned)}
@@ -503,11 +503,10 @@ export function TeamView({
                                   "inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-[11.5px] font-medium transition-colors disabled:opacity-60",
                                   assigned ? "border-transparent text-white" : "border-border bg-surface text-foreground/70 hover:bg-surface-soft",
                                 )}
-                                style={assigned ? { background: r.color } : undefined}
-                              >
+                                style={assigned ? { background: r.color } : undefined} variant="ghost" size="sm">
                                 {assigned ? <Check className="h-3 w-3" /> : <span className="h-2 w-2 rounded-full" style={{ background: r.color }} />}
                                 {r.name}
-                              </button>
+                              </Button>
                             );
                           })}
                         </div>
@@ -535,36 +534,32 @@ export function TeamView({
               <div className="grid gap-3 sm:grid-cols-2">
                 <form onSubmit={createTeam} className="flex flex-col gap-2 rounded-lg border border-border/60 p-4">
                   <p className="text-[12px] font-semibold">Créer une équipe</p>
-                  <input
+                  <Input
                     value={teamName}
                     onChange={(e) => setTeamName(e.target.value)}
                     placeholder="Nom de l’équipe (ex. Campagne 4e circ.)"
-                    className="rounded-pill border border-border bg-surface px-3 py-2 text-[13px] outline-none placeholder:text-muted-foreground/60 focus:border-warm focus:ring-2 focus:ring-warm/20"
-                  />
-                  <button
+                    className="text-[13px]" />
+                  <Button
                     type="submit"
                     disabled={busy}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-                  >
-                    {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Créer
-                  </button>
+                    className="gap-1.5 rounded-pill text-[13px]" size="md">
+                    {busy && <Spinner currentColor className="size-3.5" />} Créer
+                  </Button>
                 </form>
 
                 <form onSubmit={joinTeam} className="flex flex-col gap-2 rounded-lg border border-border/60 p-4">
                   <p className="text-[12px] font-semibold">Rejoindre une équipe</p>
-                  <input
+                  <Input
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                     placeholder="Code d’invitation"
-                    className="rounded-pill border border-border bg-surface px-3 py-2 text-[13px] uppercase tracking-wider outline-none placeholder:text-muted-foreground/60 placeholder:normal-case placeholder:tracking-normal focus:border-warm focus:ring-2 focus:ring-warm/20"
-                  />
-                  <button
+                    className="text-[13px] uppercase tracking-wider placeholder:normal-case placeholder:tracking-normal" />
+                  <Button
                     type="submit"
                     disabled={busy || !joinCode.trim()}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-pill border border-border bg-surface px-4 py-2 text-[13px] font-medium text-foreground/80 hover:bg-surface-soft disabled:opacity-60"
-                  >
-                    {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Rejoindre
-                  </button>
+                    className="gap-1.5 rounded-pill text-[13px]" variant="outline" size="md">
+                    {busy && <Spinner currentColor className="size-3.5" />} Rejoindre
+                  </Button>
                 </form>
               </div>
             </div>
@@ -597,46 +592,42 @@ function RoleCreator({
   return (
     <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nouveau rôle…"
-          className="min-w-[180px] flex-1 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-        />
+          className="min-w-[180px] flex-1 text-[13px]" />
         <div className="flex items-center gap-1">
           {ROLE_COLORS.map((c) => (
-            <button
+            <Button
               key={c}
               type="button"
               onClick={() => setColor(c)}
               aria-label={`Couleur ${c}`}
               className={cn("h-5 w-5 rounded-full ring-offset-1 transition-all", color === c ? "ring-2 ring-foreground/40" : "ring-0")}
-              style={{ background: c }}
-            />
+              style={{ background: c }} variant="ghost" size="sm" />
           ))}
         </div>
-        <button
+        <Button
           type="button"
           disabled={busy || !name.trim()}
           onClick={() => { void onCreate(name, color); setName(""); }}
-          className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-        >
+          className="gap-1.5 rounded-pill text-[12.5px]" size="sm">
           <Plus className="h-3.5 w-3.5" /> Ajouter
-        </button>
+        </Button>
       </div>
       {suggestions.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[10.5px] text-muted-foreground">Suggestions :</span>
           {suggestions.map((s) => (
-            <button
+            <Button
               key={s.name}
               type="button"
               disabled={busy}
               onClick={() => void onCreate(s.name, s.color)}
-              className="inline-flex items-center gap-1 rounded-pill border border-dashed border-border px-2 py-0.5 text-[11px] text-foreground/70 hover:bg-surface-soft disabled:opacity-60"
-            >
+              className="gap-1 rounded-pill border-dashed text-[11px]" variant="outline" size="sm">
               <span className="h-2 w-2 rounded-full" style={{ background: s.color }} /> {s.name}
-            </button>
+            </Button>
           ))}
         </div>
       )}

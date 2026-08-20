@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { Mail, ArrowRight, Send } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
+import { Input } from "@appica/ui-react/input";
+import { Textarea } from "@appica/ui-react/textarea";
 import { cn } from "@/lib/utils";
 
 const DISPLAY = "[font-family:var(--font-display)]";
@@ -9,8 +12,9 @@ const DISPLAY = "[font-family:var(--font-display)]";
 // Adresse de contact (déjà utilisée pour la formule Cabinet des tarifs).
 const CONTACT_EMAIL = "contact@mouvancia.fr";
 
-const field =
-  "w-full rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-[14px] text-foreground outline-none transition-shadow placeholder:text-muted-foreground/60 focus:border-warm focus:ring-2 focus:ring-warm/20";
+// Les champs Appica portent leur propre cadre : il ne reste que le fond canvas
+// (la section est posée sur une surface claire) et l'échelle de texte.
+const field = "w-full bg-canvas text-[14px]";
 
 /**
  * Section « Contact » de la landing. Le formulaire compose un e-mail pré-rempli
@@ -81,27 +85,28 @@ export function LandingContact() {
         <div className="grid gap-3.5 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-[12px] font-medium text-foreground/80">Nom</span>
-            <input name="name" type="text" required autoComplete="name" placeholder="Camille Dupont" className={field} />
+            <Input name="name" type="text" required autoComplete="name" placeholder="Camille Dupont" className={field} />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[12px] font-medium text-foreground/80">Organisation</span>
-            <input name="org" type="text" autoComplete="organization" placeholder="Parti, cabinet, équipe…" className={field} />
+            <Input name="org" type="text" autoComplete="organization" placeholder="Parti, cabinet, équipe…" className={field} />
           </label>
         </div>
         <label className="flex flex-col gap-1.5">
           <span className="text-[12px] font-medium text-foreground/80">E-mail professionnel</span>
-          <input name="email" type="email" required autoComplete="email" placeholder="vous@organisation.fr" className={field} />
+          <Input name="email" type="email" required autoComplete="email" placeholder="vous@organisation.fr" className={field} />
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-[12px] font-medium text-foreground/80">Votre message</span>
-          <textarea name="message" required rows={4} placeholder="Décrivez votre besoin, votre territoire, votre échéance…" className={cn(field, "resize-y")} />
+          <Textarea name="message" required rows={4} placeholder="Décrivez votre besoin, votre territoire, votre échéance…" className={`${field} resize-y`} />
         </label>
-        <button
+        <Button
           type="submit"
-          className="mt-1 inline-flex items-center justify-center gap-2 rounded-pill bg-primary px-5 py-3 text-[14px] font-semibold text-primary-foreground transition-all hover:-translate-y-0.5 hover:opacity-95"
+          size="lg"
+          className="mt-1 gap-2 rounded-pill text-[14px] font-semibold transition-transform hover:-translate-y-0.5"
         >
           <Send className="h-4 w-4" /> Envoyer le message
-        </button>
+        </Button>
         {sent ? (
           <p className="text-[12.5px] text-success">
             Votre logiciel de messagerie s&apos;est ouvert avec le message pré-rempli. Sinon, écrivez-nous à{" "}

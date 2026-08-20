@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowRight, Hourglass, Undo2, X } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { getIdentity, onIdentityChange, type IdentitySubscription } from "@/lib/identity";
 import { billingPhase, daysLeft, formatDateFr } from "@/lib/billing";
@@ -129,13 +130,15 @@ function Shell({ tone, children }: { tone: "info" | "urgent"; children: React.Re
 
 function Dismiss({ onClick }: { onClick: () => void }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon-sm"
       onClick={onClick}
       aria-label="Masquer ce bandeau"
-      className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+      className="h-6 w-6 shrink-0"
     >
       <X className="h-3.5 w-3.5" />
-    </button>
+    </Button>
   );
 }

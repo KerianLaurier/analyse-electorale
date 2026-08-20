@@ -3,8 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Loader2, Info, AlertCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, Info, AlertCircle } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Alert, AlertTitle, AlertIcon } from "@appica/ui-react/alert";
+import { Badge } from "@appica/ui-react/badge";
+import { Separator } from "@appica/ui-react/separator";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { waitForSessionCookie } from "@/lib/session-cookie";
@@ -127,48 +132,46 @@ export function AuthForm({ mode }: { mode: Mode }) {
             />
 
             {status === "check-email" && (
-              <div className="flex items-start gap-2 rounded-md bg-warm/12 px-3 py-2.5 text-[12px] text-foreground/80">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
-                <span>
+              <Alert variant="warning" className="text-[12px]">
+                <AlertIcon><Info className="h-3.5 w-3.5" /></AlertIcon>
+                <AlertTitle>
                   Compte créé — votre essai gratuit de 14 jours est réservé. Ouvrez le lien de
                   confirmation envoyé par e-mail pour accéder à votre espace.
-                </span>
-              </div>
+                </AlertTitle>
+              </Alert>
             )}
             {status === "error" && error && (
-              <div className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2.5 text-[12px] text-destructive">
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>{error}</span>
-              </div>
+              <Alert variant="error" className="text-[12px]">
+                <AlertIcon><AlertCircle className="h-3.5 w-3.5" /></AlertIcon>
+                <AlertTitle>{error}</AlertTitle>
+              </Alert>
             )}
 
-            <button
-              type="submit"
-              disabled={status === "pending"}
-              className={cn(
-                "mt-1 inline-flex items-center justify-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[14px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60",
-              )}
-            >
-              {status === "pending" && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Button type="submit" size="lg" disabled={status === "pending"} className="mt-1 gap-2 rounded-pill">
+              {status === "pending" && <Spinner currentColor className="size-4" aria-label="Connexion en cours" />}
               {isLogin ? "Se connecter" : "Démarrer mon essai gratuit"}
-            </button>
+            </Button>
           </form>
 
+          {/* Le Separator d'Appica est un filet, pas un séparateur libellé : on
+              encadre le « ou » de deux filets plutôt que de lui passer un enfant. */}
           <div className="my-5 flex items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
+            <Separator className="flex-1" />
             ou
-            <span className="h-px flex-1 bg-border" />
+            <Separator className="flex-1" />
           </div>
 
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="lg"
             disabled
             title="Bientôt disponible"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-pill border border-border bg-surface px-5 py-2.5 text-[13px] font-medium text-foreground/70 opacity-70"
+            className="w-full gap-2 rounded-pill"
           >
             Continuer avec SSO
-            <span className="rounded-full bg-surface-soft px-2 py-0.5 text-[10px] text-muted-foreground">bientôt</span>
-          </button>
+            <Badge variant="soft" size="xs">bientôt</Badge>
+          </Button>
 
           <p className="mt-6 text-center text-[12.5px] text-muted-foreground">
             {isLogin ? (
@@ -218,13 +221,13 @@ function Field({
         {label}
         {action}
       </span>
-      <input
+      <Input
         name={name}
         type={type}
         placeholder={placeholder}
         autoComplete={autoComplete}
         required={required}
-        className="rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-foreground outline-none transition-shadow placeholder:text-muted-foreground/60 focus:border-warm focus:ring-2 focus:ring-warm/20"
+        className="text-[13px]"
       />
     </label>
   );

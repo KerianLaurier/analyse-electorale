@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Crosshair, Search, X } from "lucide-react";
+import { Input } from "@appica/ui-react/input";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import {
   searchEntries,
@@ -79,15 +81,14 @@ export function TerritoryPicker({
       <div className="relative min-w-0 flex-1 basis-60">
         <div className="flex items-center gap-2 rounded-pill border border-border bg-surface px-3 py-2">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <input
+          <Input
             value={query}
             onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
             onFocus={() => setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             placeholder="Rechercher une commune, circonscription, département, région…"
-            className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
-            aria-label="Rechercher un territoire"
-          />
+            className="w-full text-[13px] placeholder:text-muted-foreground"
+            aria-label="Rechercher un territoire" />
         </div>
         {open && results.length > 0 && (
           <ul className="absolute z-30 mt-1 max-h-80 w-full min-w-64 overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-lg">
@@ -114,7 +115,7 @@ export function TerritoryPicker({
 
       <div className="inline-flex items-center gap-0.5 rounded-pill bg-surface-soft/70 p-0.5">
         {FILTERS.map((f) => (
-          <button
+          <Button
             key={f.id}
             type="button"
             onClick={() => setFilter(f.id)}
@@ -124,15 +125,14 @@ export function TerritoryPicker({
               filter === f.id
                 ? "bg-surface text-foreground shadow-[0_1px_2px_rgba(10,10,12,0.06)]"
                 : "text-muted-foreground hover:text-foreground",
-            )}
-          >
+            )} variant="ghost" size="sm">
             {f.label}
-          </button>
+          </Button>
         ))}
       </div>
 
       {campaign && (
-        <button
+        <Button
           type="button"
           onClick={() => onChange(campaign)}
           disabled={isCampaignSelected}
@@ -142,10 +142,9 @@ export function TerritoryPicker({
               ? "bg-warm/15 text-warm"
               : "bg-primary text-primary-foreground hover:opacity-90",
           )}
-          title={campaign.label}
-        >
+          title={campaign.label} variant="ghost" size="sm">
           <Crosshair className="h-3.5 w-3.5" /> Ma cible
-        </button>
+        </Button>
       )}
 
       {value && (
@@ -155,14 +154,12 @@ export function TerritoryPicker({
             {TERRITORY_LABELS[value.type]}
           </span>
           {!isCampaignSelected && campaign && (
-            <button
+            <Button
               type="button"
               onClick={() => onChange(campaign)}
-              aria-label="Revenir à ma cible de campagne"
-              className="text-muted-foreground hover:text-foreground"
-            >
+              aria-label="Revenir à ma cible de campagne" variant="ghost" size="sm">
               <X className="h-3 w-3" />
-            </button>
+            </Button>
           )}
         </span>
       )}

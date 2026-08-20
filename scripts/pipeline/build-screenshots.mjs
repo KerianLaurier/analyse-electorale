@@ -3,7 +3,7 @@
 //   E2E_EMAIL=… E2E_PASSWORD=… node scripts/pipeline/build-screenshots.mjs [base_url]
 //
 // Produit public/screenshots/explorer-wide.png (1280×800) et
-// suivre-narrow.png (390×844) depuis un compte connecté (le gating protège
+// espace-narrow.png (390×844) depuis un compte connecté (le gating protège
 // ces vues). Base par défaut : http://localhost:3000 (dev server lancé).
 // À relancer quand l'UI change notablement ; les PNG sont versionnés.
 
@@ -46,13 +46,13 @@ try {
   await page.screenshot({ path: path.join(OUT, "explorer-wide.png") });
   console.log("✚ screenshots/explorer-wide.png (1280×800)");
 
-  // Briefing Suivre (mobile).
+  // QG de campagne (mobile).
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${BASE}/suivre`);
-  await page.getByText("Dernier sondage").waitFor({ timeout: 20_000 });
+  await page.goto(`${BASE}/espace`);
+  await page.getByRole("main").waitFor({ timeout: 20_000 });
   await page.waitForTimeout(1_000);
-  await page.screenshot({ path: path.join(OUT, "suivre-narrow.png") });
-  console.log("✚ screenshots/suivre-narrow.png (390×844)");
+  await page.screenshot({ path: path.join(OUT, "espace-narrow.png") });
+  console.log("✚ screenshots/espace-narrow.png (390×844)");
 } finally {
   await browser.close();
 }

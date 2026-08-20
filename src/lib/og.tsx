@@ -77,7 +77,7 @@ export function ogImageResponse() {
 
         {/* Pied */}
         <div style={{ display: "flex", fontSize: 24, color: MUTED }}>
-          mouvancia.fr · Ministère de l&apos;Intérieur · INSEE · Assemblée nationale · Commission des sondages
+          mouvancia.fr · Ministère de l&apos;Intérieur · INSEE · Assemblée nationale
         </div>
       </div>
     ),

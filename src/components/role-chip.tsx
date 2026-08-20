@@ -1,15 +1,22 @@
+import { Badge } from "@appica/ui-react/badge";
 import type { TeamRole } from "@/lib/team";
 import { cn } from "@/lib/utils";
 
-/** Pastille colorée d'un rôle de campagne. */
+/**
+ * Pastille colorée d'un rôle de campagne — `Badge` d'Appica UI. La couleur
+ * vient du rôle lui-même (choisie dans les réglages d'équipe), pas d'une
+ * variante : on part de la variante neutre et on peint le fond en ligne.
+ */
 export function RoleChip({ role, className }: { role: TeamRole; className?: string }) {
   return (
-    <span
-      className={cn("inline-flex items-center gap-1 rounded-pill px-1.5 py-0.5 text-[10px] font-medium text-white", className)}
+    <Badge
+      size="xs"
+      variant="soft"
+      className={cn("gap-1 rounded-pill text-[10px] text-white", className)}
       style={{ background: role.color }}
     >
       {role.name}
-    </span>
+    </Badge>
   );
 }
 
@@ -24,9 +31,9 @@ export function RoleChips({ roles, max = 3, className }: { roles: TeamRole[]; ma
         <RoleChip key={r.id} role={r} />
       ))}
       {extra > 0 && (
-        <span className="inline-flex items-center rounded-pill bg-surface-soft px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <Badge size="xs" variant="soft" className="rounded-pill text-[10px] text-muted-foreground">
           +{extra}
-        </span>
+        </Badge>
       )}
     </span>
   );

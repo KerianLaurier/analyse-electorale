@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Info } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Button } from "@appica/ui-react/button";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import type { Choropleth } from "@/components/map";
 import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
@@ -146,21 +149,20 @@ export function SociologieView() {
             Cartographie des indicateurs INSEE (revenus, CSP, âge, diplômes…) et leur corrélation avec le vote.
           </p>
         </div>
-        {isLoading && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />}
+        {isLoading && <Spinner currentColor className="size-4 shrink-0 text-muted-foreground" />}
       </div>
 
       {/* Contrôles */}
       <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface p-4 shadow-card">
         <Field label="Indicateur">
-          <select
-            value={indicator}
-            onChange={(e) => setIndicator(e.target.value as SocioIndicator)}
-            className="rounded-pill bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground outline-none"
-          >
+          <Select value={indicator} onValueChange={(appicaValue) => setIndicator(String(appicaValue ?? "") as SocioIndicator)} size="sm">
+            <SelectTrigger className="rounded-pill bg-primary text-[12px] font-medium text-primary-foreground"><SelectValue /></SelectTrigger>
+            <SelectContent>
             {SOCIO_INDICATORS.map((s) => (
-              <option key={s.id} value={s.id} className="bg-surface text-foreground">{s.label}</option>
+              <SelectItem key={s.id} value={s.id} className="bg-surface text-foreground">{s.label}</SelectItem>
             ))}
-          </select>
+          </SelectContent>
+          </Select>
         </Field>
         <Field label="Maille (carte)">
           <Segmented
@@ -170,15 +172,14 @@ export function SociologieView() {
           />
         </Field>
         <Field label="Scrutin (corrélation)">
-          <select
-            value={scrutin}
-            onChange={(e) => setScrutin(e.target.value as Scrutin)}
-            className="rounded-pill border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-foreground/80 outline-none"
-          >
+          <Select value={scrutin} onValueChange={(appicaValue) => setScrutin(String(appicaValue ?? "") as Scrutin)} size="sm">
+            <SelectTrigger className="rounded-pill text-[12px] font-medium text-foreground/80"><SelectValue /></SelectTrigger>
+            <SelectContent>
             {ELECTIONS.map((s) => (
-              <option key={s} value={s} className="bg-surface text-foreground">{SCRUTIN_META[s].short}</option>
+              <SelectItem key={s} value={s} className="bg-surface text-foreground">{SCRUTIN_META[s].short}</SelectItem>
             ))}
-          </select>
+          </SelectContent>
+          </Select>
         </Field>
       </div>
 
@@ -237,16 +238,15 @@ export function SociologieView() {
 
           <div className="rounded-lg bg-surface p-4 shadow-card">
             <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Profil sociologique</p>
-            <select
-              value={profileCode}
-              onChange={(e) => setProfileCode(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12.5px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-            >
-              <option value="">Choisir une circonscription…</option>
+            <Select value={profileCode} onValueChange={(appicaValue) => setProfileCode(String(appicaValue ?? ""))} size="sm">
+              <SelectTrigger className="mt-1.5 w-full text-[12.5px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+              <SelectItem value="">Choisir une circonscription…</SelectItem>
               {circoList.map((c) => (
-                <option key={c.code} value={c.code}>{circoLabel(c.code)}</option>
+                <SelectItem key={c.code} value={c.code}>{circoLabel(c.code)}</SelectItem>
               ))}
-            </select>
+            </SelectContent>
+            </Select>
             {profileCode ? (
               <div className="mt-3">
                 <CircoSocioProfile code={profileCode} />
@@ -318,17 +318,16 @@ function Segmented({
   return (
     <div className="inline-flex items-center gap-1 rounded-pill border border-border bg-surface p-0.5">
       {options.map((o) => (
-        <button
+        <Button
           key={o.id}
           type="button"
           onClick={() => onChange(o.id)}
           className={cn(
             "rounded-pill px-2.5 py-1 text-[12px] font-medium transition-colors",
             value === o.id ? "bg-primary text-primary-foreground" : "text-foreground/70 hover:text-foreground",
-          )}
-        >
+          )} variant="ghost" size="sm">
           {o.label}
-        </button>
+        </Button>
       ))}
     </div>
   );

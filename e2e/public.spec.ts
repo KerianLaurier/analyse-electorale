@@ -42,8 +42,8 @@ test("les routes applicatives exigent une connexion", async ({ page }) => {
   await expect(page).toHaveURL(/\/auth\/login\?next=%2Fexplorer/);
   await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
 
-  await page.goto("/suivre");
-  await expect(page).toHaveURL(/\/auth\/login\?next=%2Fsuivre/);
+  await page.goto("/espace");
+  await expect(page).toHaveURL(/\/auth\/login\?next=%2Fespace/);
 });
 
 test("un échec de connexion affiche une erreur en français", async ({ page }) => {

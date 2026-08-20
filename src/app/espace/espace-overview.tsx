@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { ListTodo, Star, StickyNote, CalendarClock, MapPin, ArrowRight, Target, DoorOpen, Contact, Clock, Users2 } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { useTasks, TASK_KIND_LABELS, useLoadState as useTasksLoad, type Task } from "@/lib/tasks";
 import { useNotes, useLoadState as useNotesLoad } from "@/lib/notes";
@@ -304,9 +305,9 @@ function Panel({
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Icon className="h-3.5 w-3.5" /> {title}
         </h2>
-        <button type="button" onClick={onSeeAll} className="inline-flex items-center gap-1 text-[11.5px] font-medium text-warm hover:underline">
+        <Button type="button" onClick={onSeeAll} className="gap-1 text-[11.5px] text-warm hover:underline" variant="ghost" size="sm">
           Tout voir <ArrowRight className="h-3 w-3" />
-        </button>
+        </Button>
       </div>
       {children}
     </section>

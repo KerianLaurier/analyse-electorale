@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
-  Loader2,
   Crosshair,
   Plus,
   Check,
@@ -13,6 +12,9 @@ import {
   TrendingUp,
   Users2,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Button } from "@appica/ui-react/button";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import {
   useCircoBureaux,
@@ -35,7 +37,7 @@ const TerritoryMap = dynamic(() => import("@/components/map").then((m) => m.Map)
   ssr: false,
   loading: () => (
     <div className="flex h-[420px] items-center justify-center rounded-2xl border border-foreground/5 bg-surface text-[13px] text-muted-foreground">
-      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement de la carte…
+      <Spinner currentColor className="size-4 mr-2" /> Chargement de la carte…
     </div>
   ),
 });
@@ -296,24 +298,23 @@ export function CircoStrategie({
             <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
               Mon positionnement
             </span>
-            <select
-              value={bloc}
-              onChange={(e) => changeBloc(e.target.value as BlocId | "")}
-              className="min-w-[200px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-            >
-              <option value="">Indifférent (générique)</option>
+            <Select value={bloc} onValueChange={(appicaValue) => changeBloc(String(appicaValue ?? "") as BlocId | "")} size="sm">
+              <SelectTrigger className="min-w-[200px] text-[13px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+              <SelectItem value="">Indifférent (générique)</SelectItem>
               {BLOCS.map((b) => (
-                <option key={b.id} value={b.id}>
+                <SelectItem key={b.id} value={b.id}>
                   {b.label}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+            </SelectContent>
+            </Select>
           </label>
         </div>
 
         {raw.isLoading ? (
           <div className="mt-4 flex items-center gap-2 text-[13px] text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Calcul des bureaux prioritaires…
+            <Spinner currentColor className="size-4" /> Calcul des bureaux prioritaires…
           </div>
         ) : bureaux.length === 0 ? (
           <p className="mt-4 rounded-2xl border border-foreground/5 bg-surface/60 p-5 text-[13px] text-muted-foreground">
@@ -356,15 +357,14 @@ export function CircoStrategie({
             {/* Import QG */}
             <div className="mt-5 flex flex-wrap items-center gap-3">
               {hasTeam ? (
-                <button
+                <Button
                   type="button"
                   onClick={pushToPlan}
                   disabled={pushing}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-warm px-4 py-2 text-[13px] font-medium text-on-dark transition-opacity hover:opacity-90 disabled:opacity-60"
-                >
-                  {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  className="gap-1.5 rounded-full bg-warm text-[13px] text-on-dark" variant="ghost" size="md">
+                  {pushing ? <Spinner currentColor className="size-4" /> : <Plus className="h-4 w-4" />}
                   Importer dans mon QG
-                </button>
+                </Button>
               ) : (
                 <Link
                   href="/auth/team"
