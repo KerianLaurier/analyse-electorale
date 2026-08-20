@@ -9,9 +9,9 @@ import {
   Vote,
   Target,
   ArrowRight,
-  Loader2,
   Crosshair,
 } from "lucide-react";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import { usePins, useLoadState as usePinsLoad } from "@/lib/pins";
 import { useCampaign, useLoadState as useCampaignLoad } from "@/lib/campaign";
@@ -189,7 +189,7 @@ function CircoSnapshot({
 
       {history.isLoading ? (
         <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyse en cours…
+          <Spinner currentColor className="size-3.5" /> Analyse en cours…
         </span>
       ) : !snapshot ? (
         <span className="text-[12px] text-muted-foreground">Données électorales indisponibles.</span>

@@ -1,6 +1,12 @@
 @import "tailwindcss";
+/* Appica UI (appica.dev) — socle de composants de la plateforme. Importé AVANT
+   les tokens MOUVANCIA : ses `:root` / `.dark` posent des valeurs par défaut
+   (bleu/gris) que les blocs `:root` / `.dark` plus bas écrasent avec l'identité
+   MOUVANCIA. La règle `@source` est obligatoire — sans elle Tailwind ne scanne
+   pas les classes du paquet et les composants sortent NON stylés. */
+@import "@appica/ui-react/styles.css";
+@source "../../node_modules/@appica/ui-react/dist";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -213,6 +219,197 @@
   --sh-ring-strong: 0 0 0 2px rgba(10, 10, 12, 0.9), 0 0 0 3px rgba(250, 250, 248, 0.18);
 }
 
+/* ── Pont MOUVANCIA → Appica UI ───────────────────────────────────────────────
+   Appica expose ses composants via une échelle sémantique propre
+   (`background-*`, `foreground-*`, `border-*`, `primary/secondary/error/
+   success/warning/info`, `focus-ring-*`). Sans ce pont, ses composants
+   arrivent avec la palette par défaut du paquet (bleu/gris) au milieu de
+   l'identité MOUVANCIA.
+
+   On ne recopie donc PAS des couleurs : on branche chaque échelle Appica sur
+   les tokens MOUVANCIA déjà définis plus haut (canvas/surface, noir profond,
+   ambre `--warm`, rouge/bleu de bloc). Ce bloc vient après `:root` et `.dark`
+   pour gagner la cascade — Appica pose ses valeurs par défaut en `:root` non
+   layerisé, seul un `:root` postérieur les écrase.
+
+   ⚠ `--background` a deux sens : côté MOUVANCIA c'était le fond de PAGE, côté
+   Appica c'est la SURFACE des cartes, dialogues, menus et champs. On garde le
+   sens Appica (surface) — le fond de page est posé explicitement en
+   `bg-canvas` (cf. `body` dans @layer base). */
+:root {
+  --background: var(--surface);
+  --background-subtle: var(--surface-alt);
+  --background-muted: var(--surface-soft);
+  --background-strong: #dcdad4;
+  --background-inverse: var(--on-dark);
+
+  /* `--foreground` (noir MOUVANCIA) reste la valeur définie plus haut : on ne
+     complète que le reste de l'échelle. */
+  --foreground-intense: #0a0a0c;
+  --foreground-emphasis: #131317;
+  --foreground-strong: #1f1f23;
+  --foreground-muted: #6f6f78;
+  --foreground-subtle: var(--muted-foreground);
+  --foreground-inverse: #fafaf8;
+
+  --border-muted: #e4e2dc;
+  --border-strong: #b4b4ba;
+  --border-emphasis: #9a9aa2;
+  --border-intense: #6f6f78;
+  --border-inverse: #1f1f23;
+  --border-overlay: #dcdad4;
+
+  /* Primaire = noir profond MOUVANCIA (CTA, pill d'en-tête). */
+  --primary-subtle: #eceae4;
+  --primary-soft: #dcdad4;
+  --primary-muted: #3a3a42;
+  --primary-strong: #000000;
+
+  /* Secondaire = gris chaud (boutons de second rang). */
+  --secondary-subtle: #f4f3ef;
+  --secondary-soft: #eceae4;
+  --secondary-muted: #dcdad4;
+  --secondary-strong: #d2d0c9;
+  --secondary-emphasis: #c8c8cc;
+  --secondary-intense: #b4b4ba;
+
+  --error: var(--destructive);
+  --error-subtle: color-mix(in srgb, var(--destructive) 10%, transparent);
+  --error-soft: color-mix(in srgb, var(--destructive) 18%, transparent);
+  --error-muted: #d98a90;
+  --error-strong: #c02c37;
+  --error-emphasis: var(--destructive);
+  --error-intense: #8f1a22;
+  --error-foreground: #ffffff;
+
+  --success-subtle: color-mix(in srgb, var(--success) 10%, transparent);
+  --success-soft: color-mix(in srgb, var(--success) 18%, transparent);
+  --success-muted: #8dbd9f;
+  --success-strong: #35935a;
+  --success-emphasis: var(--success);
+  --success-intense: #1f5c37;
+  --success-foreground: #ffffff;
+
+  /* Avertissement = accent chaud MOUVANCIA. */
+  --warning: var(--warm);
+  --warning-subtle: color-mix(in srgb, var(--warm) 12%, transparent);
+  --warning-soft: color-mix(in srgb, var(--warm) 22%, transparent);
+  --warning-muted: #f7cf8d;
+  --warning-strong: #e2900f;
+  --warning-emphasis: var(--warm);
+  --warning-intense: #b9740a;
+  --warning-foreground: #0a0a0c;
+
+  /* Information = bleu de bloc (même famille que la data viz). */
+  --info: var(--bloc-navy);
+  --info-subtle: color-mix(in srgb, var(--bloc-navy) 10%, transparent);
+  --info-soft: color-mix(in srgb, var(--bloc-navy) 18%, transparent);
+  --info-muted: #8fa2c2;
+  --info-strong: #35578f;
+  --info-emphasis: var(--bloc-navy);
+  --info-intense: #1f3557;
+  --info-foreground: #ffffff;
+
+  /* Anneaux de focus : même repère ambré que la règle `:focus-visible`. */
+  --focus-ring: var(--warm);
+  --focus-ring-input: var(--border);
+  --focus-ring-primary: rgba(10, 10, 12, 0.18);
+  --focus-ring-secondary: rgba(10, 10, 12, 0.12);
+  --focus-ring-error: color-mix(in srgb, var(--destructive) 30%, transparent);
+  --focus-ring-success: color-mix(in srgb, var(--success) 30%, transparent);
+  --focus-ring-warning: color-mix(in srgb, var(--warm) 35%, transparent);
+  --focus-ring-info: color-mix(in srgb, var(--bloc-navy) 30%, transparent);
+  --focus-ring-light: rgba(255, 255, 255, 0.25);
+
+  --shadow-color: rgba(10, 10, 12, 0.14);
+  --selection-color: rgba(10, 10, 12, 0.1);
+  --opacity-disabled: 0.55;
+}
+
+.dark {
+  --background: var(--surface);
+  --background-subtle: var(--surface-alt);
+  --background-muted: var(--surface-soft);
+  --background-strong: #2c2c34;
+  --background-inverse: #fafaf8;
+
+  --foreground-intense: #ffffff;
+  --foreground-emphasis: #f2f2ef;
+  --foreground-strong: #e4e4e0;
+  --foreground-muted: #a5a5ad;
+  --foreground-subtle: var(--muted-foreground);
+  --foreground-inverse: #0a0a0c;
+
+  --border-muted: rgba(250, 250, 248, 0.08);
+  --border-strong: rgba(250, 250, 248, 0.18);
+  --border-emphasis: rgba(250, 250, 248, 0.28);
+  --border-intense: rgba(250, 250, 248, 0.4);
+  --border-inverse: #e4e4e0;
+  --border-overlay: rgba(250, 250, 248, 0.14);
+
+  --primary-subtle: rgba(250, 250, 248, 0.1);
+  --primary-soft: rgba(250, 250, 248, 0.18);
+  --primary-muted: #d4d4d0;
+  --primary-strong: #ffffff;
+
+  --secondary-subtle: rgba(250, 250, 248, 0.06);
+  --secondary-soft: rgba(250, 250, 248, 0.12);
+  --secondary-muted: #2c2c34;
+  --secondary-strong: #34343d;
+  --secondary-emphasis: #3d3d47;
+  --secondary-intense: #4a4a55;
+
+  /* En thème sombre les accents sont clairs : le texte posé dessus repasse en
+     noir profond (sinon blanc sur ambre/vert clair = illisible). */
+  --error: var(--destructive);
+  --error-subtle: color-mix(in srgb, var(--destructive) 14%, transparent);
+  --error-soft: color-mix(in srgb, var(--destructive) 24%, transparent);
+  --error-muted: #a8393f;
+  --error-strong: #f06a72;
+  --error-emphasis: var(--destructive);
+  --error-intense: #f79098;
+  --error-foreground: #0a0a0c;
+
+  --success-subtle: color-mix(in srgb, var(--success) 14%, transparent);
+  --success-soft: color-mix(in srgb, var(--success) 24%, transparent);
+  --success-muted: #3c7a55;
+  --success-strong: #74c992;
+  --success-emphasis: var(--success);
+  --success-intense: #93d8ab;
+  --success-foreground: #0a0a0c;
+
+  --warning: var(--warm);
+  --warning-subtle: color-mix(in srgb, var(--warm) 14%, transparent);
+  --warning-soft: color-mix(in srgb, var(--warm) 24%, transparent);
+  --warning-muted: #8a5c14;
+  --warning-strong: #f5b44f;
+  --warning-emphasis: var(--warm);
+  --warning-intense: #f8c877;
+  --warning-foreground: #0a0a0c;
+
+  --info: var(--bloc-navy);
+  --info-subtle: color-mix(in srgb, var(--bloc-navy) 14%, transparent);
+  --info-soft: color-mix(in srgb, var(--bloc-navy) 24%, transparent);
+  --info-muted: #3f5a8a;
+  --info-strong: #8aa5db;
+  --info-emphasis: var(--bloc-navy);
+  --info-intense: #a6bce6;
+  --info-foreground: #0a0a0c;
+
+  --focus-ring: var(--warm);
+  --focus-ring-input: rgba(250, 250, 248, 0.16);
+  --focus-ring-primary: rgba(250, 250, 248, 0.22);
+  --focus-ring-secondary: rgba(250, 250, 248, 0.16);
+  --focus-ring-error: color-mix(in srgb, var(--destructive) 35%, transparent);
+  --focus-ring-success: color-mix(in srgb, var(--success) 35%, transparent);
+  --focus-ring-warning: color-mix(in srgb, var(--warm) 40%, transparent);
+  --focus-ring-info: color-mix(in srgb, var(--bloc-navy) 35%, transparent);
+  --focus-ring-light: rgba(255, 255, 255, 0.2);
+
+  --shadow-color: rgba(0, 0, 0, 0.6);
+  --selection-color: rgba(250, 250, 248, 0.14);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -231,7 +428,7 @@
       "Segoe UI", "Helvetica Neue", sans-serif;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-canvas text-foreground;
     font-family: inherit;
     font-feature-settings:
       "ss01" on,

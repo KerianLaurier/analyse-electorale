@@ -34,17 +34,16 @@ export default function manifest(): MetadataRoute.Manifest {
         icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
       {
-        name: "Suivre — briefing du jour",
-        url: "/suivre",
-        icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
-      },
-      {
         name: "Mon QG de campagne",
         url: "/espace",
         icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
     ],
     // Captures montrées dans l'interface d'installation (Chrome/Android).
+    // ⚠ Pas de capture `narrow` pour l'instant : c'était celle de l'onglet
+    // « Suivre », retiré. `scripts/pipeline/build-screenshots.mjs` produit
+    // désormais `espace-narrow.png` (Mon QG) — l'ajouter ici une fois le PNG
+    // régénéré (le script demande un compte : E2E_EMAIL / E2E_PASSWORD).
     screenshots: [
       {
         src: "/screenshots/explorer-wide.png",
@@ -52,13 +51,6 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/png",
         form_factor: "wide",
         label: "Carte électorale interactive, du national au bureau de vote",
-      },
-      {
-        src: "/screenshots/suivre-narrow.png",
-        sizes: "390x844",
-        type: "image/png",
-        form_factor: "narrow",
-        label: "Briefing quotidien : sondages, Assemblée, agenda 2027",
       },
     ],
   };

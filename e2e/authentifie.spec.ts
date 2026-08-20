@@ -28,15 +28,6 @@ test("l'explorateur charge la carte et ses contrôles", async ({ page }) => {
   ).toHaveAttribute("aria-current", "page");
 });
 
-test("le briefing Suivre s'affiche avec ses cartes", async ({ page }) => {
-  await login(page);
-  await page.goto("/suivre");
-  // « Briefing » existe en double (onglet + label de section) : cibler le label.
-  await expect(page.getByRole("paragraph").filter({ hasText: /^Briefing$/ })).toBeVisible();
-  await expect(page.getByText("Dernier sondage")).toBeVisible();
-  await expect(page.getByText("Prochaine échéance")).toBeVisible();
-});
-
 test("créer puis supprimer une action dans le QG", async ({ page }) => {
   await login(page);
   await page.goto("/espace?tab=tasks");

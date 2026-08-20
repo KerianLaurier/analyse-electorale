@@ -48,9 +48,8 @@ export default function MentionsLegalesPage() {
       </p>
       <p>
         Les données électorales et socio-démographiques exploitées proviennent de sources publiques
-        sous licences ouvertes : ministère de l&apos;Intérieur, INSEE, Assemblée nationale et
-        Commission des sondages. Elles restent soumises aux conditions de leurs producteurs
-        respectifs.
+        sous licences ouvertes : ministère de l&apos;Intérieur, INSEE et Assemblée nationale.
+        Elles restent soumises aux conditions de leurs producteurs respectifs.
       </p>
 
       <h2>Contact</h2>

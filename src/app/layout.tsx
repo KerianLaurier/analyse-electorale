@@ -89,7 +89,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   // Barre système accordée au thème (approximation media : le choix manuel
-  // clair/sombre de next-themes ne peut pas être reflété ici côté serveur).
+  // clair/sombre d'Appica UI ne peut pas être reflété ici côté serveur).
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f4f3ef" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
@@ -125,15 +125,10 @@ export default function RootLayout({
             préconnexion — on économise DNS + TCP + TLS avant la première requête. */}
         {origin && <link rel="preconnect" href={origin} crossOrigin="" />}
         {/* Thème : clair par défaut, sombre disponible via le sélecteur du menu
-            profil (next-themes pose `.dark` sur <html>). `enableSystem` permet
+            profil (le ThemeProvider Appica pose `.dark` sur <html>). `enableSystem` permet
             l'option « Système ». Toutes les surfaces/bordures passent par des
             tokens CSS (cf. globals.css → :root / .dark). */}
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
+        <ThemeProvider defaultTheme="light" enableSystem disableTransitionOnChange>
           <QueryProvider>
             <Suspense fallback={null}>
               <RouteProgress />

@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Info, AlertCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, Info, AlertCircle } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Alert, AlertTitle, AlertIcon } from "@appica/ui-react/alert";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/auth-errors";
 
@@ -51,41 +54,38 @@ export function ForgotForm() {
           </p>
 
           {status === "sent" ? (
-            <div className="mt-6 flex items-start gap-2 rounded-md bg-warm/12 px-3 py-2.5 text-[12.5px] text-foreground/80">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
-              <span>Si un compte existe pour cette adresse, un e-mail de réinitialisation vient d&apos;être envoyé. Vérifiez votre boîte de réception.</span>
-            </div>
+            <Alert variant="warning" className="mt-6 text-[12.5px]">
+              <AlertIcon><Info className="h-3.5 w-3.5" /></AlertIcon>
+              <AlertTitle>
+                Si un compte existe pour cette adresse, un e-mail de réinitialisation vient
+                d&apos;être envoyé. Vérifiez votre boîte de réception.
+              </AlertTitle>
+            </Alert>
           ) : (
             <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3.5">
               <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-medium text-foreground/80">E-mail professionnel</span>
-                <input
+                <Input
                   name="email"
                   type="email"
                   required
                   placeholder="vous@organisation.fr"
                   autoComplete="email"
-                  className="rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-foreground outline-none transition-shadow placeholder:text-muted-foreground/60 focus:border-warm focus:ring-2 focus:ring-warm/20"
+                  className="text-[13px]"
                 />
               </label>
 
               {status === "error" && error && (
-                <div className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2.5 text-[12px] text-destructive">
-                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>{error}</span>
-                </div>
+                <Alert variant="error" className="text-[12px]">
+                  <AlertIcon><AlertCircle className="h-3.5 w-3.5" /></AlertIcon>
+                  <AlertTitle>{error}</AlertTitle>
+                </Alert>
               )}
 
-              <button
-                type="submit"
-                disabled={status === "pending"}
-                className={cn(
-                  "mt-1 inline-flex items-center justify-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[14px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60",
-                )}
-              >
-                {status === "pending" && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Button type="submit" size="lg" disabled={status === "pending"} className="mt-1 gap-2 rounded-pill">
+                {status === "pending" && <Spinner currentColor className="size-4" aria-label="Envoi en cours" />}
                 Envoyer le lien
-              </button>
+              </Button>
             </form>
           )}
 

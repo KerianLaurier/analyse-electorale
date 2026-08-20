@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
@@ -22,16 +23,15 @@ export function SignOutButton({
     router.refresh();
   }
   return (
-    <button
+    <Button
       type="button"
+      variant="soft"
+      size="sm"
       onClick={signOut}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full bg-foreground/[0.04] px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-foreground/[0.08]",
-        className,
-      )}
+      className={cn("gap-1.5 rounded-pill text-[12px]", className)}
     >
       {icon && <LogOut className="h-3.5 w-3.5" />}
       {label}
-    </button>
+    </Button>
   );
 }

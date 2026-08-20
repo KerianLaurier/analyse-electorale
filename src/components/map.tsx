@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@appica/ui-react/hooks/use-theme";
 import maplibregl, {
   type Map as MapLibreMap,
   type MapLayerMouseEvent,
@@ -38,7 +38,7 @@ function registerPmtilesProtocol() {
 }
 
 // ── Palette par thème ─────────────────────────────────────────────────────────
-// L'app expose un thème sombre (next-themes, `.dark` sur <html>) : la carte doit
+// L'app expose un thème sombre (Appica UI, `.dark` sur <html>) : la carte doit
 // suivre, sinon elle reste un rectangle blanc éblouissant en mode sombre. Les
 // couleurs de fond/masque/villes sont alignées sur les tokens de globals.css
 // (canvas sombre #0a0a0c, cf. themeColor du layout).
@@ -153,6 +153,13 @@ function buildStyle(palette: MapPalette): StyleSpecification {
   ];
 
   // 2. Fills électoraux (une couche par maille, sans bordure visible).
+  //
+  // ⚠ Aucun `maxzoom` de COUCHE : la maille visible est pilotée par le
+  // sélecteur d'échelle, pas par le zoom. Un plafond `cfg.maxzoom + 1` masquait
+  // la couche au-delà (régions dès z9) — en revenant de « Commune » (zoomé) à
+  // « Région », la carte redevenait vide alors que les données étaient
+  // chargées. MapLibre sur-zoome nativement la dernière tuile disponible : le
+  // plafond de l'archive PMTiles n'a pas à être répété ici.
   for (const maille of MAILLE_ORDER) {
     const cfg = TILES[maille];
     layers.push({
@@ -161,7 +168,6 @@ function buildStyle(palette: MapPalette): StyleSpecification {
       source: maille,
       "source-layer": cfg.sourceLayer,
       minzoom: cfg.minzoom,
-      maxzoom: cfg.maxzoom + 1,
       paint: {
         // Default fill (no data) — gris neutre thémé, pas de teinte « couleur ».
         // Pour les bureaux (petits polygones), on force une opacité plus forte
@@ -187,7 +193,6 @@ function buildStyle(palette: MapPalette): StyleSpecification {
       source: maille,
       "source-layer": cfg.sourceLayer,
       minzoom: cfg.minzoom,
-      maxzoom: cfg.maxzoom + 1,
       paint: {
         "line-color": "#ffffff",
         "line-width": lineWidthExpr(palette) as unknown as number,
@@ -309,8 +314,8 @@ export function Map({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const styleLoadedRef = useRef(false);
-  // Thème : `resolvedTheme` vaut undefined au premier rendu (hydratation
-  // next-themes) → on démarre en clair, l'effet thème corrige juste après.
+  // Thème : `resolvedTheme` vaut undefined au premier rendu (le choix vit
+  // dans le storage) → on démarre en clair, l'effet thème corrige juste après.
   const { resolvedTheme } = useTheme();
   const palette = PALETTES[resolvedTheme === "dark" ? "dark" : "light"];
   const paletteRef = useRef(palette);
@@ -494,6 +499,20 @@ export function Map({
     };
     if (styleLoadedRef.current || map.isStyleLoaded()) apply();
     else map.once("load", apply);
+  }, [maille]);
+
+  // Plancher de zoom de la maille. Les archives PMTiles ne descendent pas
+  // indéfiniment : `communes` commence à z6, `bureaux` à z9. Sous ce niveau
+  // AUCUNE tuile n'existe — la couche n'est pas dessinée et la carte paraît
+  // vide alors que les données sont bien chargées (légende remplie, survol
+  // muet). C'était le symptôme « aucune couleur sur la carte » : depuis la vue
+  // France (z5), choisir « Commune » ou « Bureau de vote » n'affichait plus
+  // rien. On borne donc le zoom de la carte au plancher de la maille : MapLibre
+  // y remonte immédiatement si on est en dessous, et interdit d'en redescendre.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setMinZoom(TILES[maille].minzoom);
   }, [maille]);
 
   // Choropleth: applique les feature-state + ajuste le paint fill-color.

@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, RotateCw } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 
 /** Bloc d'erreur de chargement avec action « Réessayer » optionnelle. */
@@ -31,13 +32,9 @@ export function ErrorState({
         Vérifiez votre connexion puis réessayez. Si le problème persiste, les données sont peut-être momentanément indisponibles.
       </p>
       {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-1 inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
+        <Button type="button" size="sm" onClick={onRetry} className="mt-1 gap-1.5 rounded-pill text-[12.5px]">
           <RotateCw className="h-3.5 w-3.5" /> Réessayer
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Users, MapPin, Pencil, Trash2, Loader2, StickyNote } from "lucide-react";
+import { Plus, Users, MapPin, Pencil, Trash2, StickyNote } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
+import { Input } from "@appica/ui-react/input";
+import { Textarea } from "@appica/ui-react/textarea";
+import { Checkbox } from "@appica/ui-react/checkbox";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import { useNotes, useLoadState, addNote, updateNote, deleteNote, type Note } from "@/lib/notes";
 import { ContextSelect, type CtxValue } from "@/app/espace/context-select";
@@ -27,13 +32,9 @@ export function EspaceNotes({ ctx }: { ctx: WsContext }) {
         <p className="text-[13px] text-muted-foreground">
           {notes.length} note{notes.length > 1 ? "s" : ""} de terrain
         </p>
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90"
-        >
+        <Button type="button" size="sm" onClick={() => setShowForm((v) => !v)} className="gap-1.5 rounded-pill text-[12px]">
           <Plus className="h-3.5 w-3.5" /> Nouvelle note
-        </button>
+        </Button>
       </div>
 
       {showForm && <NoteForm ctx={ctx} onDone={() => setShowForm(false)} />}
@@ -60,8 +61,8 @@ export function EspaceNotes({ ctx }: { ctx: WsContext }) {
   );
 }
 
-const fieldCls =
-  "rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20";
+// Les contrôles Appica portent leur propre cadre : il ne reste que l'échelle.
+const fieldCls = "text-[13px]";
 
 function NoteForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
   const [title, setTitle] = useState("");
@@ -82,8 +83,8 @@ function NoteForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2.5 rounded-lg border border-border/60 bg-surface p-4 shadow-card">
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre (optionnel)" className={cn(fieldCls, "font-medium")} />
-      <textarea
+      <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre (optionnel)" className={cn(fieldCls, "font-medium")} />
+      <Textarea
         autoFocus
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -95,21 +96,17 @@ function NoteForm({ ctx, onDone }: { ctx: WsContext; onDone: () => void }) {
         <ContextSelect value={context} onChange={setContext} className={cn(fieldCls, "min-w-[200px] flex-1")} />
         {ctx.teamId && (
           <label className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
-            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="accent-[var(--warm,#c8743c)]" />
+            <Checkbox checked={shared} onCheckedChange={setShared} />
             <Users className="h-3.5 w-3.5" /> Partagée
           </label>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onDone} className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground">
+          <Button type="button" variant="ghost" size="sm" onClick={onDone} className="rounded-pill text-[12.5px]">
             Annuler
-          </button>
-          <button
-            type="submit"
-            disabled={!body.trim() || busy}
-            className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-          >
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enregistrer
-          </button>
+          </Button>
+          <Button type="submit" size="sm" disabled={!body.trim() || busy} className="gap-1.5 rounded-pill text-[12.5px]">
+            {busy && <Spinner currentColor className="size-3.5" aria-label="Enregistrement" />} Enregistrer
+          </Button>
         </div>
       </div>
     </form>
@@ -133,15 +130,15 @@ function NoteCard({ note, ctx }: { note: Note; ctx: WsContext }) {
   if (editing) {
     return (
       <div className="flex flex-col gap-2 rounded-lg border border-warm/40 bg-surface p-4 shadow-card sm:col-span-1">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre" className={cn(fieldCls, "font-medium")} />
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} className={cn(fieldCls, "resize-y")} />
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre" className={cn(fieldCls, "font-medium")} />
+        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} className={cn(fieldCls, "resize-y")} />
         <div className="flex items-center justify-end gap-2">
-          <button type="button" onClick={() => setEditing(false)} className="rounded-pill px-3 py-1 text-[12px] text-muted-foreground hover:text-foreground">
+          <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)} className="rounded-pill text-[12px]">
             Annuler
-          </button>
-          <button type="button" onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1 text-[12px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-            {busy && <Loader2 className="h-3 w-3 animate-spin" />} Enregistrer
-          </button>
+          </Button>
+          <Button type="button" size="sm" onClick={save} disabled={busy} className="gap-1.5 rounded-pill text-[12px]">
+            {busy && <Spinner currentColor className="size-3" aria-label="Enregistrement" />} Enregistrer
+          </Button>
         </div>
       </div>
     );
@@ -161,12 +158,12 @@ function NoteCard({ note, ctx }: { note: Note; ctx: WsContext }) {
           )}
           {note.mine && (
             <>
-              <button type="button" onClick={() => setEditing(true)} aria-label="Modifier" className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-surface-soft hover:text-foreground">
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => setEditing(true)} aria-label="Modifier" className="h-6 w-6">
                 <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button type="button" onClick={() => void deleteNote(note.id)} aria-label="Supprimer" className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-red-50 hover:text-red-600">
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => void deleteNote(note.id)} aria-label="Supprimer" className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive">
                 <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </>
           )}
         </div>

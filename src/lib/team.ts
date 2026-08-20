@@ -46,7 +46,7 @@ export const PLANS: Plan[] = [
     period: "/ mois",
     seats: "1 siège",
     tagline: "Pour un analyste indépendant.",
-    features: ["Explorer (toutes mailles)", "Suivre (sondages, agenda)", "Historique des scrutins"],
+    features: ["Explorer (toutes mailles)", "Analyser (diagnostic, prédictif)", "Historique des scrutins"],
   },
   {
     id: "equipe",

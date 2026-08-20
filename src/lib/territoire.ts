@@ -1,8 +1,7 @@
 import type { CampaignTarget } from "@/lib/campaign";
 
 /**
- * Contexte territorial dérivé de la cible de campagne du QG. Sert à
- * territorialiser l'onglet Suivre : requête presse pertinente, département,
+ * Contexte territorial dérivé de la cible de campagne du QG : département,
  * circonscription (→ député en exercice), libellé court.
  */
 

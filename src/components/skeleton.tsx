@@ -1,8 +1,12 @@
+import { Skeleton as AppicaSkeleton } from "@appica/ui-react/skeleton";
 import { cn } from "@/lib/utils";
 
-/** Bloc de chargement animé (placeholder). */
+/**
+ * Bloc de chargement animé (placeholder) — `Skeleton` d'Appica UI, dont le
+ * shimmer respecte `prefers-reduced-motion` sans règle maison.
+ */
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-foreground/[0.07]", className)} aria-hidden />;
+  return <AppicaSkeleton className={cn("rounded-md", className)} aria-hidden />;
 }
 
 /** Squelette générique d'onglet : barre de contrôles + liste de lignes. */

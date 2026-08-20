@@ -11,11 +11,12 @@ import {
   Check,
   CheckCircle2,
   Hourglass,
-  Loader2,
   ReceiptText,
   ShieldCheck,
   Undo2,
 } from "lucide-react";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { refreshIdentity } from "@/lib/identity";
@@ -566,38 +567,35 @@ function CurrentSubscription({
 
         {onPortal ? (
           <div className="flex flex-col items-end gap-1.5">
-            <button
+            <Button
               type="button"
               disabled={busy}
               onClick={onPortal}
-              className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}
+              className="gap-1.5 rounded-pill text-[12.5px]" size="md">
+              {busy ? <Spinner currentColor className="size-3.5" /> : <ReceiptText className="h-3.5 w-3.5" />}
               {phase === "canceling" ? "Reprendre mon abonnement" : "Gérer mon abonnement"}
-            </button>
+            </Button>
             <span className="text-[10.5px] text-muted-foreground/80">
               Carte, factures, formule et résiliation — portail sécurisé Stripe.
             </span>
           </div>
         ) : phase === "canceling" ? (
-          <button
+          <Button
             type="button"
             disabled={busy}
             onClick={onResume}
-            className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
+            className="gap-1.5 rounded-pill text-[12.5px]" size="md">
+            {busy ? <Spinner currentColor className="size-3.5" /> : <Undo2 className="h-3.5 w-3.5" />}
             Reprendre mon abonnement
-          </button>
+          </Button>
         ) : cancelOpen ? null : (
-          <button
+          <Button
             type="button"
             disabled={busy}
             onClick={onOpenCancel}
-            className="rounded-pill border border-border bg-surface px-4 py-2 text-[12.5px] font-medium text-foreground/70 transition-colors hover:bg-surface-soft hover:text-foreground disabled:opacity-60"
-          >
+            className="rounded-pill text-[12.5px]" variant="outline" size="md">
             Résilier l&apos;abonnement
-          </button>
+          </Button>
         )}
       </div>
 
@@ -611,23 +609,21 @@ function CurrentSubscription({
             Vos données et votre équipe sont conservées : vous pourrez réactiver plus tard.
           </p>
           <div className="mt-3 flex items-center gap-2">
-            <button
+            <Button
               type="button"
               disabled={busy}
               onClick={onCancel}
-              className="inline-flex items-center gap-1.5 rounded-pill bg-destructive px-4 py-1.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              className="gap-1.5 rounded-pill bg-destructive text-[12.5px] text-white" variant="destructive" size="sm">
+              {busy && <Spinner currentColor className="size-3.5" />}
               Résilier au {formatDateFr(renewal)}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={busy}
               onClick={onCloseCancel}
-              className="rounded-pill px-3 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground"
-            >
+              className="rounded-pill text-[12.5px]" variant="ghost" size="sm">
               Garder mon abonnement
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -646,7 +642,7 @@ function CycleToggle({ cycle, onChange }: { cycle: Cycle; onChange: (c: Cycle) =
           { id: "yearly", label: "Annuel · 2 mois offerts" },
         ] as const
       ).map((c) => (
-        <button
+        <Button
           key={c.id}
           type="button"
           aria-pressed={cycle === c.id}
@@ -654,10 +650,9 @@ function CycleToggle({ cycle, onChange }: { cycle: Cycle; onChange: (c: Cycle) =
           className={cn(
             "rounded-pill px-3 py-1.5 font-medium transition-all",
             cycle === c.id ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground/65 hover:text-foreground",
-          )}
-        >
+          )} variant="ghost" size="sm">
           {c.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -722,7 +717,7 @@ function PlanCard({
         : `Passer à ${plan.name}`
       : `Souscrire ${plan.name}`;
     cta = (
-      <button
+      <Button
         type="button"
         disabled={busy}
         onClick={onChoose}
@@ -731,10 +726,9 @@ function PlanCard({
           featured || isCurrent
             ? "bg-primary text-primary-foreground hover:opacity-90"
             : "border border-border bg-surface text-foreground/80 hover:border-foreground/30 hover:text-foreground",
-        )}
-      >
+        )} variant="ghost" size="sm">
         {label} <ArrowRight className="h-3.5 w-3.5" />
-      </button>
+      </Button>
     );
   }
 
@@ -901,27 +895,25 @@ function CheckoutPanel({
         )}
 
         <div className="mt-5 flex items-center gap-2">
-          <button
+          <Button
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[13.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            className="flex-1 gap-2 rounded-pill text-[13.5px]" size="lg">
+            {busy && <Spinner currentColor className="size-4" />}
             {provider === "stripe"
               ? "Continuer vers le paiement"
               : isChange
                 ? "Confirmer le changement"
                 : "Confirmer la souscription"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="rounded-pill px-4 py-2.5 text-[13px] text-muted-foreground hover:text-foreground"
-          >
+            className="rounded-pill text-[13px]" variant="ghost" size="lg">
             Annuler
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -934,7 +926,7 @@ function AwaitingActivationPanel() {
   return (
     <div className="mx-auto max-w-[520px] py-16 text-center" role="status" aria-live="polite">
       <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-warm/15 text-warm">
-        <Loader2 className="h-7 w-7 animate-spin" />
+        <Spinner currentColor className="size-7" />
       </span>
       <h1 className="mt-5 text-[24px] font-semibold tracking-tight">Paiement confirmé</h1>
       <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
@@ -985,13 +977,12 @@ function SuccessPanel({
         )}
       </p>
       <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
-        <button
+        <Button
           type="button"
           onClick={() => window.location.assign("/explorer")}
-          className="inline-flex items-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[13.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
+          className="gap-2 rounded-pill text-[13.5px]" size="lg">
           Accéder à mes analyses <ArrowRight className="h-4 w-4" />
-        </button>
+        </Button>
         <Link
           href="/auth/team"
           className="rounded-pill border border-border bg-surface px-4 py-2.5 text-[13px] font-medium text-foreground/80 transition-colors hover:bg-surface-soft"

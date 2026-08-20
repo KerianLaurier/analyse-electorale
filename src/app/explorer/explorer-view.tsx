@@ -7,11 +7,14 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
-  Loader2, X, Search, BadgeCheck, ArrowUpRight, Info, SlidersHorizontal, RotateCw,
-  ChevronLeft, MousePointerClick,
+  X, Search, BadgeCheck, ArrowUpRight, Info, SlidersHorizontal, RotateCw,
+  ChevronLeft,
 } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Slider } from "@appica/ui-react/slider";
 import { cn } from "@/lib/utils";
-import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
+import { type Maille, MAILLE_LABELS, TILES } from "@/lib/map-config";
 import {
   useScrutinWinner,
   useScrutinMetric,
@@ -716,19 +719,18 @@ function ExplorerView() {
       {isLoading && (
         <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Mise à jour de la carte…
+            <Spinner currentColor className="size-3.5" /> Mise à jour de la carte…
           </span>
         </div>
       )}
       {!isLoading && isError && (
         <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
-          <button
+          <Button
             type="button"
             onClick={retryLayers}
-            className="inline-flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-destructive shadow-sm backdrop-blur transition-colors hover:bg-surface"
-          >
+            className="gap-1.5 rounded-full bg-surface/95 text-[11px] text-destructive shadow-sm backdrop-blur hover:bg-surface" variant="ghost" size="sm">
             <RotateCw className="h-3.5 w-3.5" /> Données indisponibles — réessayer
-          </button>
+          </Button>
         </div>
       )}
 
@@ -836,8 +838,9 @@ function readCoachDismissed(): boolean {
 
 /**
  * Aide au premier usage : rappelle les 3 gestes de base tant que rien n'est
- * sélectionné. Une fois écartée (localStorage), il ne reste qu'une pastille
- * discrète invitant à cliquer sur la carte.
+ * sélectionné. Une fois écartée (localStorage), plus rien ne flotte au-dessus
+ * de la carte — la pastille « Cliquez sur un territoire » répétait une évidence
+ * et mangeait le haut du cadre en permanence.
  */
 function SelectionCoach() {
   // Lecture du localStorage via useSyncExternalStore : le snapshot serveur vaut
@@ -848,15 +851,7 @@ function SelectionCoach() {
   const dismissed = justDismissed || stored;
   if (dismissed === null) return null;
 
-  if (dismissed) {
-    return (
-      <div className="pointer-events-none absolute left-1/2 top-14 z-20 -translate-x-1/2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
-          <MousePointerClick className="h-3.5 w-3.5" /> Cliquez sur un territoire pour voir sa fiche
-        </span>
-      </div>
-    );
-  }
+  if (dismissed) return null;
 
   const steps = [
     "Choisissez un scrutin (ou une analyse) à gauche.",
@@ -868,7 +863,7 @@ function SelectionCoach() {
       <div className="anim-pop-in rounded-2xl border border-foreground/5 bg-surface/95 p-3.5 shadow-floating backdrop-blur-md">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[12px] font-semibold tracking-tight">Premiers pas sur la carte</p>
-          <button
+          <Button
             type="button"
             aria-label="Masquer l’aide"
             onClick={() => {
@@ -879,10 +874,9 @@ function SelectionCoach() {
               }
               setJustDismissed(true);
             }}
-            className="-mr-1 -mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
-          >
+            className="-mr-1 -mt-1 h-6 w-6 shrink-0 rounded-md" variant="soft" size="icon-sm">
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
         <ol className="mt-2 flex flex-col gap-1.5">
           {steps.map((s, i) => (
@@ -902,13 +896,30 @@ function SelectionCoach() {
 // ─── Slider horizontal d'échelle géographique ────────────────────────────────
 
 /**
- * Sélecteur de maille façon « curseur » : piste horizontale avec marqueurs
- * cliquables pour chaque échelle disponible (Région → Bureau de vote).
- * L'échelle active est remplie et légèrement agrandie ; les autres restent
- * discrètes. Tooltip au survol avec le libellé complet.
+ * Infobulle d'un marqueur d'échelle. Les archives PMTiles « communes » (z6) et
+ * « bureaux » (z9) n'existent pas au-delà : choisir ces mailles remonte le zoom
+ * de la carte (cf. plancher de zoom dans src/components/map.tsx). On l'annonce
+ * plutôt que de laisser le zoom bouger sans explication.
+ */
+function mailleHint(m: Maille): string {
+  const base = `${MAILLE_LABELS[m]} — ${fmtInt(MAILLE_COUNTS[m])} territoires`;
+  const min = TILES[m].minzoom;
+  return min > 0 ? `${base} · visible à partir du zoom ${min}` : base;
+}
+
+/**
+ * Sélecteur d'échelle géographique (Région → Bureau de vote) : le `Slider`
+ * d'Appica UI, avec un cran par maille disponible.
  *
- * Sémantique radiogroup complète : flèches / Home / End déplacent la sélection,
- * et seul le marqueur actif est dans l'ordre de tabulation (roving tabindex).
+ * Remplace un radiogroup maison dont il fallait écrire la piste, la
+ * progression, les marqueurs, le roving tabindex et les flèches / Home / End à
+ * la main. Le composant apporte le glisser, le clic sur la piste, le clavier et
+ * les attributs `aria-valuenow` / `aria-valuetext` ; il ne reste que les
+ * libellés sous la piste, propres au produit.
+ *
+ * L'infobulle de valeur est désactivée : Appica y affiche le numéro du cran,
+ * sans intérêt ici — ce sont les libellés qui portent le sens, et
+ * `thumbAriaLabel` annonce l'échelle courante aux lecteurs d'écran.
  */
 function MailleSlider({
   maille,
@@ -919,97 +930,45 @@ function MailleSlider({
   mailles: Maille[];
   onChange: (m: Maille) => void;
 }) {
-  const btnRefs = useRef<Array<HTMLButtonElement | null>>([]);
   // `maille` peut transitoirement ne pas appartenir à `mailles` (recalage après
-  // changement de scrutin) : on borne pour éviter index -1 → largeur négative.
+  // changement de scrutin) : on borne pour éviter un index -1.
   const activeIndex = Math.max(0, mailles.indexOf(maille));
-  // Une seule maille (Sociologie, Potentiel) : pas de progression (évite 0/0 = NaN).
-  const progressPct = mailles.length > 1 ? (activeIndex / (mailles.length - 1)) * 100 : 0;
-
-  const select = (i: number) => {
-    const next = mailles[i];
-    if (!next || next === maille) return;
-    onChange(next);
-    btnRefs.current[i]?.focus();
-  };
-  const onKeyDown = (e: KeyboardEvent) => {
-    const last = mailles.length - 1;
-    const target =
-      e.key === "ArrowRight" || e.key === "ArrowDown" ? Math.min(activeIndex + 1, last)
-      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? Math.max(activeIndex - 1, 0)
-      : e.key === "Home" ? 0
-      : e.key === "End" ? last
-      : null;
-    if (target === null) return;
-    e.preventDefault();
-    select(target);
-  };
+  const last = Math.max(0, mailles.length - 1);
 
   return (
-    <div className="flex flex-col gap-2 py-1" role="radiogroup" aria-label="Échelle géographique" onKeyDown={onKeyDown}>
-      {/* Piste */}
-      <div className="relative flex h-6 items-center">
-        {/* Ligne de fond */}
-        <div className="absolute left-0 right-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-foreground/10" />
-        {/* Progression jusqu'au curseur actif */}
-        <div
-          className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-primary transition-all duration-300"
-          style={{ width: `${progressPct}%` }}
-        />
-        {/* Marqueurs */}
-        <div className="relative flex w-full justify-between">
-          {mailles.map((m, i) => {
-            const active = m === maille;
-            const past = i < activeIndex;
-            return (
-              <button
-                key={m}
-                ref={(el) => { btnRefs.current[i] = el; }}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                tabIndex={active ? 0 : -1}
-                title={`${MAILLE_LABELS[m]} — ${fmtInt(MAILLE_COUNTS[m])} territoires`}
-                onClick={() => select(i)}
-                className={cn(
-                  "group relative grid h-6 w-6 place-items-center rounded-full transition-all duration-200",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                )}
-              >
-                <span
-                  className={cn(
-                    "block rounded-full border-2 transition-all duration-200",
-                    active
-                      ? "h-3.5 w-3.5 border-primary bg-primary"
-                      : past
-                        ? "h-2.5 w-2.5 border-primary/60 bg-primary/60 group-hover:bg-primary/80"
-                        : "h-2.5 w-2.5 border-foreground/25 bg-surface group-hover:border-foreground/50 group-hover:bg-foreground/10",
-                  )}
-                />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      {/* Libellés — positionnés en pourcentage SOUS le marqueur correspondant.
-          La piste est encadrée de `mx-3` (demi-marqueur) pour que 0 % et 100 %
-          tombent sur les centres des marqueurs extrêmes ; `translateX(-pct%)`
-          cale le libellé à gauche au départ, centré au milieu, à droite à la
-          fin — il reste donc toujours dans le cadre, sans troncature.
-          Une largeur fixe tronquait auparavant « Bureau de vote » en
-          « Bureau d… ». On n'affiche que l'échelle courante et les deux
-          extrémités, et on masque une extrémité quand la courante la jouxte
-          (leurs libellés se chevaucheraient). */}
-      <div className="relative mx-3 h-4 text-[10px] font-medium text-muted-foreground">
+    <div className="flex flex-col gap-2 py-1">
+      <Slider
+        aria-label="Échelle géographique"
+        thumbAriaLabel={MAILLE_LABELS[mailles[activeIndex] ?? maille]}
+        tooltipVisibility="never"
+        value={activeIndex}
+        min={0}
+        max={last}
+        step={1}
+        // Une seule maille disponible (Sociologie, Potentiel) : rien à choisir.
+        disabled={last === 0}
+        onValueChange={(v: number | readonly number[]) => {
+          const next = mailles[Array.isArray(v) ? v[0] : (v as number)];
+          if (next && next !== maille) onChange(next);
+        }}
+      />
+      {/* Libellés — positionnés en pourcentage SOUS le cran correspondant.
+          La piste est encadrée de `mx-2` (demi-curseur) pour que 0 % et 100 %
+          tombent sur les extrémités ; `translateX(-pct%)` cale le libellé à
+          gauche au départ, centré au milieu, à droite à la fin — il reste donc
+          toujours dans le cadre, sans troncature. On n'affiche que l'échelle
+          courante et les deux extrémités, et on masque une extrémité quand la
+          courante la jouxte (leurs libellés se chevaucheraient). */}
+      <div className="relative mx-2 h-4 text-[10px] font-medium text-muted-foreground">
         {mailles.map((m, i) => {
           const isActive = m === maille;
-          const last = mailles.length - 1;
           const show = isActive || (i === 0 && activeIndex > 1) || (i === last && activeIndex < last - 1);
           if (!show) return null;
           const pct = last > 0 ? (i / last) * 100 : 0;
           return (
             <span
               key={m}
+              title={mailleHint(m)}
               className={cn(
                 "absolute top-0 whitespace-nowrap transition-colors",
                 isActive && "font-semibold text-foreground",
@@ -1066,24 +1025,22 @@ const ControlsPanel = memo(function ControlsPanel({
       <div className="flex items-center justify-between">
         <h2 className="text-[13px] font-semibold tracking-tight">Explorer</h2>
         <div className="flex items-center gap-2">
-          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          <button
+          {isLoading && <Spinner currentColor className="size-3.5 text-muted-foreground" />}
+          <Button
             type="button"
             onClick={onCloseMobile}
             aria-label="Fermer les filtres"
-            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground lg:hidden"
-          >
+            className="h-7 w-7 rounded-md lg:hidden" variant="soft" size="icon-sm">
             <X className="h-4 w-4" />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onCollapse}
             aria-label="Replier le panneau pour agrandir la carte"
             title="Replier le panneau"
-            className="hidden h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground lg:grid"
-          >
+            className="hidden h-7 w-7 rounded-md lg:grid" variant="soft" size="icon-sm">
             <ChevronLeft className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1162,7 +1119,7 @@ function ScrutinPicker({
   }
 
   const familyButton = (f: ScrutinFamily) => (
-    <button
+    <Button
       key={f}
       type="button"
       onClick={() => pickFamily(f)}
@@ -1172,10 +1129,9 @@ function ScrutinPicker({
         family === f
           ? "bg-warm/15 text-foreground ring-1 ring-warm/40"
           : "bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.08]",
-      )}
-    >
+      )} variant="ghost" size="sm">
       {FAMILY_LABELS[f]}
-    </button>
+    </Button>
   );
 
   return (
@@ -1200,7 +1156,7 @@ function ScrutinPicker({
             <Section title="Tour">
               <div className="inline-flex rounded-lg bg-foreground/[0.04] p-0.5">
                 {tours.map((t) => (
-                  <button
+                  <Button
                     key={t}
                     type="button"
                     onClick={() => pickTour(t)}
@@ -1210,10 +1166,9 @@ function ScrutinPicker({
                       tour === t
                         ? "bg-primary text-primary-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
+                    )} variant="ghost" size="sm">
                     T{t}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </Section>
@@ -1242,17 +1197,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
         "rounded-full px-3 py-1 text-[11px] font-medium transition-colors",
         active ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.08]",
-      )}
-    >
+      )} variant="ghost" size="sm">
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -1272,32 +1226,30 @@ const MapTopBar = memo(function MapTopBar({
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-2 p-3">
       <div className="flex min-w-0 items-center gap-2">
-        <button
+        <Button
           onClick={onOpenFilters}
           aria-label="Ouvrir les filtres de la carte"
           title="Filtres"
           className={cn(
             "pointer-events-auto flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface/90 px-2 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-surface",
             filtersOpen && "lg:hidden",
-          )}
-        >
+          )} variant="ghost" size="sm">
           <SlidersHorizontal className="h-4 w-4" />
           <span className="hidden pr-1 text-[12px] font-medium lg:inline">Filtres</span>
-        </button>
+        </Button>
         <div className="pointer-events-auto truncate rounded-full bg-surface/90 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground shadow-sm backdrop-blur">
           <span className="lg:hidden">{SCRUTIN_META[scrutin].short}</span>
           <span className="hidden lg:inline">{SCRUTIN_META[scrutin].long}</span>
         </div>
       </div>
-      <button
+      <Button
         onClick={onOpenSearch}
         aria-label="Rechercher un territoire"
-        className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-full bg-surface/90 px-2.5 py-1.5 text-[12px] text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground sm:px-3"
-      >
+        className="pointer-events-auto flex shrink-0 gap-2 rounded-full bg-surface/90 text-[12px] shadow-sm backdrop-blur sm:px-3" variant="ghost" size="sm">
         <Search className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Rechercher un territoire</span>
         <kbd className="hidden rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[10px] sm:inline">⌘K</kbd>
-      </button>
+      </Button>
     </div>
   );
 });
@@ -1535,27 +1487,25 @@ const FicheTerritoire = memo(function FicheTerritoire({
             </Link>
           )}
         </div>
-        <button
+        <Button
           onClick={onClear}
-          className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
-        >
+          className="rounded-full p-1" variant="soft" size="sm">
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
 
       <div className="flex gap-1 border-b border-foreground/5 px-3 pt-2">
         {tabs.filter((t) => t.enabled).map((t) => (
-          <button
+          <Button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={cn(
               "relative px-2.5 pb-2 pt-1 text-[12px] font-medium transition-colors",
               tabId === t.id ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
+            )} variant="ghost" size="sm">
             {t.label}
             {tabId === t.id && <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-warm" />}
-          </button>
+          </Button>
         ))}
       </div>
 

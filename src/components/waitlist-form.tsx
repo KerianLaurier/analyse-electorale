@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Alert, AlertTitle, AlertIcon } from "@appica/ui-react/alert";
 import { cn } from "@/lib/utils";
 
 const CONTACT_EMAIL = "contact@mouvancia.fr";
@@ -45,20 +49,13 @@ export function WaitlistForm({ className }: { className?: string }) {
 
   if (state.status === "done") {
     return (
-      <div
-        className={cn(
-          "flex items-start gap-3 rounded-xl border border-success/30 bg-success/[0.07] px-4 py-3.5",
-          className,
-        )}
-      >
-        <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-success/15 text-success">
-          <Check className="h-3.5 w-3.5" />
-        </span>
-        <p className="text-[13.5px] leading-relaxed text-foreground/85">
+      <Alert variant="success" className={className}>
+        <AlertIcon><Check className="h-3.5 w-3.5" /></AlertIcon>
+        <AlertTitle className="text-[13.5px] leading-relaxed">
           <strong className="font-semibold">C&apos;est noté.</strong> Vous serez prévenu·e dès
           l&apos;ouverture de MOUVANCIA. Aucun autre e-mail ne vous sera envoyé d&apos;ici là.
-        </p>
-      </div>
+        </AlertTitle>
+      </Alert>
     );
   }
 
@@ -69,32 +66,34 @@ export function WaitlistForm({ className }: { className?: string }) {
       <div className="flex flex-col gap-2.5 sm:flex-row">
         <label className="flex-1">
           <span className="sr-only">Adresse e-mail</span>
-          <input
+          <Input
             name="email"
             type="email"
+            inputSize="lg"
             required
             autoComplete="email"
             disabled={loading}
             placeholder="vous@organisation.fr"
             aria-describedby="waitlist-rgpd"
-            className="w-full rounded-pill border border-border bg-canvas px-4 py-3 text-[14px] text-foreground outline-none transition-shadow placeholder:text-muted-foreground/60 focus:border-warm focus:ring-2 focus:ring-warm/20 disabled:opacity-60"
+            className="w-full rounded-pill bg-canvas text-[14px]"
           />
         </label>
-        <button
+        <Button
           type="submit"
+          size="lg"
           disabled={loading}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-pill bg-primary px-5 py-3 text-[14px] font-semibold text-primary-foreground transition-all hover:-translate-y-0.5 hover:opacity-95 disabled:translate-y-0 disabled:opacity-60"
+          className="shrink-0 gap-2 rounded-pill text-[14px] font-semibold transition-transform hover:-translate-y-0.5 disabled:translate-y-0"
         >
           {loading ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Inscription…
+              <Spinner currentColor className="size-4" aria-label="Inscription en cours" /> Inscription…
             </>
           ) : (
             <>
               Être prévenu·e <ArrowRight className="h-4 w-4" />
             </>
           )}
-        </button>
+        </Button>
       </div>
 
       {state.status === "error" && (

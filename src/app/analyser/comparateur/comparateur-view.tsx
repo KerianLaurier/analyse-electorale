@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Search, X } from "lucide-react";
+import { Input } from "@appica/ui-react/input";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
@@ -70,7 +72,7 @@ export function ComparateurView() {
       <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface p-4 shadow-card">
         <div className="inline-flex items-center gap-0.5 rounded-pill bg-surface-soft/70 p-0.5">
           {MAILLES.map((m) => (
-            <button
+            <Button
               key={m}
               type="button"
               onClick={() => changeMaille(m)}
@@ -80,10 +82,9 @@ export function ComparateurView() {
                 maille === m
                   ? "bg-surface text-foreground shadow-[0_1px_2px_rgba(10,10,12,0.06)]"
                   : "text-muted-foreground hover:text-foreground",
-              )}
-            >
+              )} variant="ghost" size="sm">
               {MAILLE_LABELS[m]}
-            </button>
+            </Button>
           ))}
         </div>
         <span className="mx-1 h-5 w-px bg-border" />
@@ -91,9 +92,9 @@ export function ComparateurView() {
         {code && name && (
           <span className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground">
             {name}
-            <button type="button" onClick={() => { setCode(""); setName(""); }} aria-label="Effacer">
+            <Button type="button" onClick={() => { setCode(""); setName(""); }} aria-label="Effacer" variant="ghost" size="sm">
               <X className="h-3 w-3" />
-            </button>
+            </Button>
           </span>
         )}
       </div>
@@ -150,14 +151,13 @@ function TerritorySearch({
     <div className="relative">
       <div className="inline-flex items-center gap-2 rounded-pill border border-border bg-surface px-3 py-1.5">
         <Search className="h-3.5 w-3.5 text-muted-foreground" />
-        <input
+        <Input
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           placeholder={placeholder}
-          className="w-52 bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
-        />
+          className="w-52 text-[12px] placeholder:text-muted-foreground" />
       </div>
       {open && results.length > 0 && (
         <ul className="absolute z-20 mt-1 max-h-72 w-72 overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-lg">
@@ -220,13 +220,12 @@ function ScrutinCard({ scrutin, maille, code }: { scrutin: Scrutin; maille: Mail
           </p>
         </>
       ) : detail.isError ? (
-        <button
+        <Button
           type="button"
           onClick={() => void detail.refetch()}
-          className="self-start text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        >
+          className="self-start text-[11px] underline-offset-2 hover:underline" variant="ghost" size="sm">
           Erreur — réessayer
-        </button>
+        </Button>
       ) : (
         <p className="text-[11px] text-muted-foreground">Indisponible</p>
       )}

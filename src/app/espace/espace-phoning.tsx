@@ -3,9 +3,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Phone, Plus, Users, Trash2, Loader2, Info, ArrowLeft, ListChecks, Target,
+  Phone, Plus, Users, Trash2, Info, ArrowLeft, ListChecks, Target,
   PhoneCall, ChevronRight, Upload, Check,
 } from "lucide-react";
+import { Textarea } from "@appica/ui-react/textarea";
+import { Input } from "@appica/ui-react/input";
+import { Spinner } from "@appica/ui-react/spinner";
+import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import {
   usePhoneLists, usePhoneContacts, useLoadState as usePhoningLoad, createList, deleteList, addNumbers, logCall, deleteContact,
@@ -139,9 +143,9 @@ function ListsOverview({
           <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <ListChecks className="h-3.5 w-3.5" /> Listes d’appels · {lists.length}
           </h2>
-          <button type="button" onClick={() => setCreating((v) => !v)} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90">
+          <Button type="button" onClick={() => setCreating((v) => !v)} className="gap-1.5 rounded-pill text-[12px]" size="sm">
             <Plus className="h-3.5 w-3.5" /> Nouvelle liste
-          </button>
+          </Button>
         </div>
 
         {creating && <NewListForm onDone={() => setCreating(false)} />}
@@ -198,15 +202,15 @@ function NewListForm({ onDone }: { onDone: () => void }) {
     <form onSubmit={submit} className="mt-3 flex flex-col gap-2 rounded-lg border border-border/60 bg-surface p-4 shadow-card sm:flex-row sm:items-end">
       <label className="flex flex-1 flex-col gap-1">
         <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Nom de la liste</span>
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="ex. Adhérents 2024" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20" />
+        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="ex. Adhérents 2024" className="text-[13px]" />
       </label>
       <label className="flex flex-1 flex-col gap-1">
         <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Description (optionnel)</span>
-        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ex. Sympathisants à mobiliser" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20" />
+        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ex. Sympathisants à mobiliser" className="text-[13px]" />
       </label>
-      <button type="submit" disabled={busy || !name.trim()} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-        {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Créer
-      </button>
+      <Button type="submit" disabled={busy || !name.trim()} className="gap-1.5 rounded-pill text-[12.5px]" size="sm">
+        {busy && <Spinner currentColor className="size-3.5" />} Créer
+      </Button>
     </form>
   );
 }
@@ -224,9 +228,9 @@ function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: 
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground">
+        <Button type="button" onClick={onBack} className="gap-1 text-[12px]" variant="ghost" size="sm">
           <ArrowLeft className="h-3.5 w-3.5" /> Toutes les listes
-        </button>
+        </Button>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-[20px] font-semibold tracking-tight">{list.name}</h2>
@@ -235,8 +239,6 @@ function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: 
           <ConfirmButton
             onConfirm={() => void deleteList(list.id)}
             ariaLabel={`Supprimer la liste ${list.name} et tous ses numéros`}
-            className="inline-flex items-center gap-1.5 rounded-pill bg-foreground/[0.04] px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            confirmClassName="bg-destructive/10 text-destructive"
             confirmContent={<><Trash2 className="h-3.5 w-3.5" /> Supprimer la liste et ses numéros ?</>}
           >
             <Trash2 className="h-3.5 w-3.5" /> Supprimer la liste
@@ -262,9 +264,9 @@ function ListWorkspace({ list, contacts, onBack }: { list: PhoneList; contacts: 
           <h3 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <Upload className="h-3.5 w-3.5" /> Importer des numéros
           </h3>
-          <button type="button" onClick={() => setImporting((v) => !v)} className="text-[11.5px] font-medium text-warm hover:underline">
+          <Button type="button" onClick={() => setImporting((v) => !v)} className="text-[11.5px] text-warm hover:underline" variant="ghost" size="sm">
             {importing ? "Masquer" : "Ajouter des numéros"}
-          </button>
+          </Button>
         </div>
         {importing && <ImportForm listId={list.id} onDone={() => setImporting(false)} />}
       </section>
@@ -331,21 +333,20 @@ function ImportForm({ listId, onDone }: { listId: string; onDone: () => void }) 
 
   return (
     <div className="mt-3 flex flex-col gap-2">
-      <textarea
+      <Textarea
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
         rows={5}
         placeholder={"Un numéro par ligne. Nom optionnel après une virgule :\n06 12 34 56 78, Marie Dupont\n0698765432\n+33611223344, Paul"}
-        className="rounded-md border border-border bg-surface px-2.5 py-2 text-[12.5px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-      />
+        className="text-[12.5px]" />
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-[11.5px] text-muted-foreground">
           {parsed.length > 0 ? <><span className="font-medium text-foreground">{parsed.length}</span> numéro{parsed.length > 1 ? "s" : ""} détecté{parsed.length > 1 ? "s" : ""}</> : "Collez vos numéros ci-dessus."}
         </span>
         {notice && <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700"><Check className="h-3.5 w-3.5" /> {notice}</span>}
-        <button type="button" onClick={submit} disabled={busy || parsed.length === 0} className="ml-auto inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Importer
-        </button>
+        <Button type="button" onClick={submit} disabled={busy || parsed.length === 0} className="ml-auto gap-1.5 rounded-pill text-[12.5px]" size="sm">
+          {busy && <Spinner currentColor className="size-3.5" />} Importer
+        </Button>
       </div>
     </div>
   );
@@ -369,13 +370,12 @@ function ContactRow({ contact, defaultOpen }: { contact: PhoneContact; defaultOp
           {CALL_STATUS_LABELS[contact.status]}
         </span>
         {handled ? (
-          <button
+          <Button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-foreground/[0.04] px-3 py-2 text-[12px] font-medium text-foreground hover:bg-foreground/[0.08]"
-          >
+            className="shrink-0 gap-1 rounded-pill text-[12px]" variant="soft" size="md">
             Modifier
-          </button>
+          </Button>
         ) : (
           // Mobile : compose le numéro (tel:) ET ouvre la saisie du résultat.
           <a
@@ -416,14 +416,13 @@ function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => vo
         <p className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Résultat de l’appel</p>
         <div className="flex flex-wrap gap-1.5">
           {STATUS_ORDER.map((st) => (
-            <button
+            <Button
               key={st}
               type="button"
               onClick={() => setStatus(st)}
-              className={cn("rounded-pill px-3 py-2 text-[12.5px] font-medium transition-colors", status === st ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]")}
-            >
+              className={cn("rounded-pill px-3 py-2 text-[12.5px] font-medium transition-colors", status === st ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]")} variant="ghost" size="sm">
               {CALL_STATUS_LABELS[st]}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -433,45 +432,43 @@ function CallForm({ contact, onDone }: { contact: PhoneContact; onDone: () => vo
           <p className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Opinion</p>
           <div className="flex flex-wrap gap-1.5">
             {(["favorable", "neutre", "defavorable"] as CallOpinion[]).map((op) => (
-              <button
+              <Button
                 key={op}
                 type="button"
                 onClick={() => setOpinion((v) => (v === op ? null : op))}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-pill px-3 py-2 text-[12.5px] font-medium transition-colors",
                   opinion === op ? "bg-primary text-primary-foreground" : "bg-foreground/[0.04] text-foreground/80 hover:bg-foreground/[0.08]",
-                )}
-              >
+                )} variant="ghost" size="sm">
                 <span className={cn("h-2 w-2 rounded-full", OPINION_TONE[op])} /> {CALL_OPINION_LABELS[op]}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
       )}
 
-      <textarea
+      <Textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={2}
         placeholder="Notes (objections, sujets, heure de rappel…)"
-        className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12.5px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-      />
+        className="text-[12.5px]" />
 
       <div className="flex items-center gap-2">
         <ConfirmButton
           onConfirm={() => void deleteContact(contact.id)}
           ariaLabel="Supprimer le numéro"
-          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          confirmClassName="w-auto whitespace-nowrap px-2.5 text-[12px] font-medium bg-destructive/10 text-destructive"
+          variant="ghost"
           confirmContent="Supprimer ?"
+          className="whitespace-nowrap"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </ConfirmButton>
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onDone} className="rounded-pill px-3 py-2 text-[12.5px] text-muted-foreground hover:text-foreground">Annuler</button>
-          <button type="button" onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-5 py-2 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enregistrer
-          </button>
+          <Button type="button" onClick={onDone} className="rounded-pill text-[12.5px]" variant="ghost" size="md">Annuler</Button>
+          <Button type="button" onClick={save} disabled={busy} className="gap-1.5 rounded-pill text-[12.5px]" size="md">
+            {busy && <Spinner currentColor className="size-3.5" />} Enregistrer
+          </Button>
         </div>
       </div>
     </div>

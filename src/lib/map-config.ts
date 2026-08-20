@@ -39,8 +39,12 @@ type TileConfig = {
   path: string;
   sourceLayer: string;
   promoteId: string;
+  /**
+   * Zoom minimal de l'archive PMTiles. Sert de plancher de zoom à la carte
+   * (cf. src/components/map.tsx) : en dessous, aucune tuile n'existe et la
+   * couche n'est tout simplement pas dessinée.
+   */
   minzoom: number;
-  maxzoom: number;
   color: string;
   /** Mention de source affichée par le contrôle d'attribution MapLibre. */
   attribution: string;
@@ -61,7 +65,6 @@ export const TILES: Record<Maille, TileConfig> = {
     sourceLayer: "regions",
     promoteId: "code",
     minzoom: 0,
-    maxzoom: 8,
     color: "#6366f1",
     attribution: ADMIN_ATTRIBUTION,
   },
@@ -70,7 +73,6 @@ export const TILES: Record<Maille, TileConfig> = {
     sourceLayer: "departements",
     promoteId: "code",
     minzoom: 0,
-    maxzoom: 9,
     color: "#8b5cf6",
     attribution: ADMIN_ATTRIBUTION,
   },
@@ -79,7 +81,6 @@ export const TILES: Record<Maille, TileConfig> = {
     sourceLayer: "circonscriptions",
     promoteId: "codeCirconscription",
     minzoom: 0,
-    maxzoom: 11,
     color: "#0ea5e9",
     attribution: ADMIN_ATTRIBUTION,
   },
@@ -93,7 +94,6 @@ export const TILES: Record<Maille, TileConfig> = {
     // rebuild `communes` avec un minimum-zoom plus bas PUIS réuploader le
     // storage avant d'abaisser cette valeur.
     minzoom: 6,
-    maxzoom: 13,
     color: "#14b8a6",
     attribution: ADMIN_ATTRIBUTION,
   },
@@ -110,7 +110,6 @@ export const TILES: Record<Maille, TileConfig> = {
     sourceLayer: "repertoire-unique-electoral-polygons",
     promoteId: "codeBureauVote",
     minzoom: 9,
-    maxzoom: 14,
     color: "#db2777",
     attribution: BUREAUX_ATTRIBUTION,
   },

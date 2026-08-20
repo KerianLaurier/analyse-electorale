@@ -3,7 +3,10 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ArrowLeft, Crosshair, Loader2, MapPin, Info, Plus, Check } from "lucide-react";
+import { ArrowLeft, Crosshair, MapPin, Info, Plus, Check } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import { Button } from "@appica/ui-react/button";
+import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
 import { useCircoList, useCircoBureaux, scoreBureaux, type TargetBureau, type TargetReason } from "@/lib/queries";
 import { circoLabel } from "@/lib/territoire";
@@ -99,29 +102,27 @@ export function CiblageView() {
         <div className="mt-3 flex flex-wrap gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Circonscription</span>
-            <select
-              value={circo ?? ""}
-              onChange={(e) => router.push(e.target.value ? `/analyser/ciblage?circo=${e.target.value}` : "/analyser/ciblage")}
-              className="min-w-[240px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-            >
-              <option value="">Choisir une circonscription…</option>
+            <Select value={circo ?? ""} onValueChange={(appicaValue) => router.push(String(appicaValue ?? "") ? `/analyser/ciblage?circo=${String(appicaValue ?? "")}` : "/analyser/ciblage")} size="sm">
+              <SelectTrigger className="min-w-[240px] text-[13px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+              <SelectItem value="">Choisir une circonscription…</SelectItem>
               {(list.data ?? []).map((c) => (
-                <option key={c.code} value={c.code}>{circoLabel(c.code)}</option>
+                <SelectItem key={c.code} value={c.code}>{circoLabel(c.code)}</SelectItem>
               ))}
-            </select>
+            </SelectContent>
+            </Select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Mon positionnement</span>
-            <select
-              value={bloc}
-              onChange={(e) => changeBloc(e.target.value as BlocId | "")}
-              className="min-w-[200px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-            >
-              <option value="">Indifférent (générique)</option>
+            <Select value={bloc} onValueChange={(appicaValue) => changeBloc(String(appicaValue ?? "") as BlocId | "")} size="sm">
+              <SelectTrigger className="min-w-[200px] text-[13px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+              <SelectItem value="">Indifférent (générique)</SelectItem>
               {BLOCS.map((b) => (
-                <option key={b.id} value={b.id}>{b.label}</option>
+                <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
               ))}
-            </select>
+            </SelectContent>
+            </Select>
           </label>
         </div>
       </header>
@@ -175,15 +176,14 @@ export function CiblageView() {
               {rows.length} bureaux classés{blocMeta ? ` pour ${blocMeta.label}` : ""}.
             </p>
             {hasTeam ? (
-              <button
+              <Button
                 type="button"
                 onClick={pushToPlan}
                 disabled={pushing}
-                className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-              >
-                {pushing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                className="gap-1.5 rounded-pill text-[12px]" size="sm">
+                {pushing ? <Spinner currentColor className="size-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                 Ajouter au plan de terrain
-              </button>
+              </Button>
             ) : (
               <Link href="/auth/team" className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3.5 py-1.5 text-[12px] font-medium text-foreground/80 hover:bg-surface-soft">
                 Créer une équipe pour un plan de terrain

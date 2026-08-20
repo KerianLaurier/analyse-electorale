@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { Button, type ButtonProps } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -8,13 +9,19 @@ import { cn } from "@/lib/utils";
  * (libellé de confirmation), le second exécute. Se désarme après 3 s ou à la
  * perte de focus. Remplace les `confirm()` natifs (non thémés, bloquants) par
  * un geste plus rapide, utilisable au doigt comme au clavier.
+ *
+ * Bâti sur le `Button` d'Appica UI : au repos il reste discret (`soft`), une
+ * fois armé il bascule sur la variante `destructive` — l'escalade visuelle est
+ * portée par le système de variantes, plus par des classes ad hoc.
  */
 export function ConfirmButton({
   onConfirm,
   children,
   confirmContent = "Confirmer ?",
   className,
-  confirmClassName,
+  variant = "soft",
+  confirmVariant = "destructive",
+  size = "sm",
   ariaLabel,
 }: {
   onConfirm: () => void;
@@ -23,8 +30,11 @@ export function ConfirmButton({
   /** Contenu une fois armé. */
   confirmContent?: ReactNode;
   className?: string;
-  /** Classes ajoutées (et fusionnées) une fois armé. */
-  confirmClassName?: string;
+  /** Variante Appica au repos. */
+  variant?: ButtonProps["variant"];
+  /** Variante Appica une fois armé. */
+  confirmVariant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
   ariaLabel?: string;
 }) {
   const [armed, setArmed] = useState(false);
@@ -36,8 +46,10 @@ export function ConfirmButton({
   }, [armed]);
 
   return (
-    <button
+    <Button
       type="button"
+      variant={armed ? confirmVariant : variant}
+      size={size}
       aria-label={armed ? undefined : ariaLabel}
       onClick={() => {
         if (armed) {
@@ -48,9 +60,9 @@ export function ConfirmButton({
         }
       }}
       onBlur={() => setArmed(false)}
-      className={cn(className, armed && confirmClassName)}
+      className={cn("gap-1.5 rounded-pill text-[12px]", className)}
     >
       {armed ? confirmContent : children}
-    </button>
+    </Button>
   );
 }

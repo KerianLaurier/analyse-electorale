@@ -65,11 +65,6 @@ Implémentée à l'identique de la section 5 du brief :
   /comparateur
   /simulateur
   /marginalite
-/suivre                     → redirige vers /suivre/sondages
-  /sondages
-  /parrainages
-  /agenda
-  /soiree
 /circo/[code]
 /commune/[insee]
 /candidat/[id]
@@ -83,13 +78,13 @@ Implémentée à l'identique de la section 5 du brief :
   /team
 ```
 
-Les fiches territoire `/circo/[code]` et `/commune/[insee]` et les fiches personne `/candidat/[id]` et `/elu/[id]` sont implémentées (historique multi-scrutins, sociologie INSEE, classement, enrichissement nominatif). Les sous-pages `Suivre` restantes (`/parrainages`, `/soiree`) existent encore en squelette (`<PagePlaceholder />`).
+Les fiches territoire `/circo/[code]` et `/commune/[insee]` et les fiches personne `/candidat/[id]` et `/elu/[id]` sont implémentées (historique multi-scrutins, sociologie INSEE, classement, enrichissement nominatif). L'onglet `Suivre` (sondages, Assemblée, agenda, parrainages, soirée électorale) a été retiré — le produit se concentre sur Explorer, Analyser et le QG de campagne. Tout son code reste récupérable dans l'historique git.
 
 ## Comptes & abonnement
 
 Parcours self-service complet : **inscription → essai 14 jours** (démarré
 automatiquement par le trigger `handle_new_user`, sans carte bancaire) →
-**accueil `/bienvenue`** (découverte des 4 piliers) → **bandeau d'essai**
+**accueil `/bienvenue`** (découverte des 3 piliers) → **bandeau d'essai**
 global (jours restants, pressant à ≤ 3 jours) → **souscription
 `/auth/abonnement`** (Solo 49 €/mois ou 490 €/an, Équipe 199 €/mois ou
 1 990 €/an, Cabinet sur devis) → **changement de formule/cycle, résiliation à
@@ -150,15 +145,15 @@ src/
 ## Raccourcis
 
 - `⌘K` / `Ctrl+K` : ouvre la palette de commandes (navigation + actions)
-- `F` (en dehors d'un input) : bascule le mode focus (à câbler avec une classe `.focus-mode` masquant le chrome — utile pour soirée élec et présentations)
+- `F` (en dehors d'un input) : bascule le mode focus (à câbler avec une classe `.focus-mode` masquant le chrome — utile pour les présentations)
 
 ## PWA (installation & hors-ligne)
 
 L'app est installable (écran d'accueil / dock) et garde un socle hors-ligne :
 
 - **Manifest** `src/app/manifest.ts` : icônes PNG + maskable (générées par
-  `scripts/pipeline/build-icons.mjs`, versionnées), raccourcis (Explorer,
-  Suivre, QG) et captures d'installation
+  `scripts/pipeline/build-icons.mjs`, versionnées), raccourcis (Explorer, QG)
+  et captures d'installation
   (`scripts/pipeline/build-screenshots.mjs`, compte E2E requis).
 - **Service worker** `public/sw.js` (enregistré en production par
   `src/components/pwa.tsx`) : navigations réseau-d'abord avec secours
@@ -230,7 +225,7 @@ prévisualiser sans risque.
 - **Tests unitaires** : `npm test` (Vitest, logique pure de `src/lib`).
 - **Tests E2E** : `npm run test:e2e` (Playwright). La suite publique (landing,
   gating, erreurs d'auth en français) tourne sans configuration ; la suite
-  authentifiée (Explorer, Briefing, QG) nécessite `E2E_EMAIL` / `E2E_PASSWORD`
+  authentifiée (Explorer, QG) nécessite `E2E_EMAIL` / `E2E_PASSWORD`
   (compte de test avec abonnement) + les `NEXT_PUBLIC_SUPABASE_*` réelles.
 - **CI** (`.github/workflows/ci.yml`) : lint + types + Vitest + Playwright sur
   chaque PR.

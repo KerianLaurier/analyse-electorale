@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  Activity,
   ArrowRight,
   GitCompare,
   Hourglass,
@@ -32,12 +31,6 @@ const PILLARS = [
     desc: "Swing entre scrutins, corrélations socio-vote, sièges marginaux et simulateur de projection.",
   },
   {
-    href: "/suivre",
-    icon: Activity,
-    title: "Suivre",
-    desc: "Sondages de la Commission, scrutins de l'Assemblée, agenda électoral — rafraîchis chaque jour.",
-  },
-  {
     href: "/espace",
     icon: Megaphone,
     title: "Mon QG",
@@ -57,9 +50,9 @@ const FIRST_STEPS = [
     hint: "Un clic sur la carte — ou ⌘K pour chercher un territoire, un candidat, un élu.",
   },
   {
-    href: "/suivre/sondages",
-    label: "Consultez les derniers sondages 2027",
-    hint: "Classés par scrutin, avec les courbes de tendance par candidat.",
+    href: "/analyser",
+    label: "Mesurez le rapport de force sur votre territoire",
+    hint: "Diagnostic par bloc, profil socio, projection tendancielle et voix à basculer.",
   },
   {
     href: "/espace",

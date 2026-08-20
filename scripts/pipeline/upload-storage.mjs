@@ -5,7 +5,7 @@
 // Usage :
 //   SUPABASE_URL=https://<proj>.supabase.co \
 //   SUPABASE_SERVICE_ROLE_KEY=<service_role> \
-//   [BUCKET=data] [DRY_RUN=1] [ONLY=sondages,suivi] \
+//   [BUCKET=data] [DRY_RUN=1] [ONLY=electoral,tiles] \
 //   node scripts/pipeline/upload-storage.mjs
 //
 // Idempotent (upsert). Le service_role contourne la RLS Storage — à n'utiliser
@@ -28,18 +28,16 @@ const PUBLIC = join(ROOT, "public");
 
 // Sous-dossiers/fichiers de `public/` qui constituent les DONNÉES (pas les
 // assets d'app : icônes, landing…). Doit rester aligné avec `dataUrl()` côté app.
-const DATA_DIRS = ["electoral", "tiles", "insee", "sondages", "an", "suivi", "parrainages"];
+const DATA_DIRS = ["electoral", "tiles", "insee", "an"];
 const DATA_FILES = ["search-index.json"];
 
-// Cache HTTP (Cloudflare + navigateur). Les données quotidiennes (sondages,
-// suivi, parrainages, veille) changent souvent → cache court. Le reste (agrégats
-// électoraux, socio, tuiles, choroplèthes, détail) est quasi immuable → cache
-// long, pour éviter les re-téléchargements au fil de la navigation quotidienne.
-const DAILY_DIRS = ["sondages", "suivi", "parrainages"];
-const CACHE_LONG = "86400"; // 24 h
-const CACHE_SHORT = "3600"; // 1 h
-const cacheControlFor = (key) =>
-  DAILY_DIRS.includes(key.split("/")[0]) ? CACHE_SHORT : CACHE_LONG;
+// Cache HTTP (Cloudflare + navigateur). Tout ce qui reste ici (agrégats
+// électoraux, socio, tuiles, choroplèthes, détail, députés) est quasi immuable
+// entre deux passes de pipeline → cache long, pour éviter les
+// re-téléchargements au fil de la navigation. Les flux quotidiens (sondages,
+// suivi, parrainages) qui justifiaient un cache court sont partis avec l'onglet
+// « Suivre ».
+const CACHE_CONTROL = "86400"; // 24 h
 
 const CONTENT_TYPES = {
   ".parquet": "application/vnd.apache.parquet",
@@ -51,7 +49,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BUCKET = process.env.BUCKET ?? "data";
 const DRY_RUN = process.env.DRY_RUN === "1";
-// Restreint l'upload à certains dossiers (ex. quotidien : ONLY=sondages,suivi).
+// Restreint l'upload à certains dossiers (ex. ONLY=electoral,tiles).
 const ONLY = (process.env.ONLY ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
 if (!SUPABASE_URL || !SERVICE_ROLE) {
@@ -163,7 +161,7 @@ async function main() {
   for (const full of files) {
     const key = relative(PUBLIC, full); // ex. "electoral/agg/x.parquet"
     const contentType = CONTENT_TYPES[extname(full)] ?? "application/octet-stream";
-    const cacheControl = cacheControlFor(key);
+    const cacheControl = CACHE_CONTROL;
     const body = await readFile(full);
     bytes += body.length;
     if (DRY_RUN) {

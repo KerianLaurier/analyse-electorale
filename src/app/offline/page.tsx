@@ -1,6 +1,7 @@
 "use client";
 
 import { RefreshCcw, WifiOff } from "lucide-react";
+import { Button } from "@appica/ui-react/button";
 import { BrandMark } from "@/components/brand-mark";
 
 // Page de secours hors-ligne, précachée par le service worker (public/sw.js)
@@ -23,13 +24,14 @@ export default function OfflinePage() {
         dans le cache de l&apos;application — reconnectez-vous pour retrouver les données à jour.
       </p>
 
-      <button
+      <Button
         type="button"
+        size="lg"
         onClick={() => window.location.reload()}
-        className="mt-7 inline-flex items-center gap-2 rounded-pill bg-primary px-5 py-2.5 text-[13.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+        className="mt-7 gap-2 rounded-pill text-[13.5px]"
       >
         <RefreshCcw className="h-4 w-4" /> Réessayer
-      </button>
+      </Button>
     </div>
   );
 }
