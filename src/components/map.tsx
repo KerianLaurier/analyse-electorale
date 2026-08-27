@@ -12,6 +12,15 @@ import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { type Maille, MAILLE_ORDER, TILES, communeTileIds, communeCityCode } from "@/lib/map-config";
+import {
+  type BasemapPalette,
+  BASEMAP_PALETTES,
+  BASEMAP_SOURCE,
+  basemapOverLayers,
+  basemapPaintUpdates,
+  basemapSource,
+  basemapUnderLayers,
+} from "@/lib/map-basemap";
 import { dataUrl } from "@/lib/data-url";
 
 const FRANCE_CENTER: [number, number] = [2.4, 46.6];
@@ -59,6 +68,18 @@ type MapPalette = {
   separatorWidth: number;
   /** Opacité de ce trait. */
   separatorOpacity: number;
+  /**
+   * Opacité des aplats électoraux. Volontairement < 1 : le fond de carte
+   * (routes, rivières, villages) doit rester lisible SOUS la couleur, sinon on
+   * ne sait plus où l'on est passé le niveau régional.
+   */
+  fillOpacity: number;
+  /** Territoires sans donnée : quasi transparents, on laisse voir le fond. */
+  fillOpacityNoData: number;
+  fillOpacityHover: number;
+  fillOpacitySelected: number;
+  /** Couleurs du fond de carte Plan IGN (cf. src/lib/map-basemap.ts). */
+  basemap: BasemapPalette;
 };
 
 const PALETTES: Record<"light" | "dark", MapPalette> = {
@@ -73,6 +94,11 @@ const PALETTES: Record<"light" | "dark", MapPalette> = {
     // uniquement (parti pris du style projetelections).
     separatorWidth: 0,
     separatorOpacity: 0,
+    fillOpacity: 0.62,
+    fillOpacityNoData: 0.2,
+    fillOpacityHover: 0.82,
+    fillOpacitySelected: 0.76,
+    basemap: BASEMAP_PALETTES.light,
   },
   dark: {
     background: "#0a0a0c",
@@ -88,6 +114,13 @@ const PALETTES: Record<"light" | "dark", MapPalette> = {
     // couleur de remplissage.
     separatorWidth: 0.5,
     separatorOpacity: 0.35,
+    // Un peu plus opaque qu'en clair : sur fond sombre, les nuances perdent
+    // vite leur identité quand on les dilue.
+    fillOpacity: 0.7,
+    fillOpacityNoData: 0.25,
+    fillOpacityHover: 0.88,
+    fillOpacitySelected: 0.82,
+    basemap: BASEMAP_PALETTES.dark,
   },
 };
 
@@ -108,15 +141,44 @@ const lineOpacityExpr = (p: MapPalette) => [
 ];
 
 /**
- * Style inspiré de projetelections.onrender.com :
- *   — fond uni thémé (aucune tuile raster),
+ * Opacité d'un aplat électoral. Semi-transparente pour laisser lire le fond de
+ * carte ; les territoires SANS donnée s'effacent presque complètement, ceux qui
+ * sont survolés ou sélectionnés remontent au contraire vers l'opaque.
+ *
+ * `stateKey` est la clé de feature-state de la choroplèthe courante (null quand
+ * aucune donnée n'est chargée : tout est alors « sans donnée »).
+ */
+const fillOpacityExpr = (p: MapPalette, maille: Maille, stateKey: string | null) => {
+  // Les bureaux de vote sont de tout petits polygones : un poil plus opaques,
+  // sinon ils se dissolvent dans le fond.
+  const withData = Math.min(1, p.fillOpacity + (maille === "bureaux" ? 0.05 : 0));
+  const base = stateKey
+    ? ["case", ["==", ["feature-state", stateKey], null], p.fillOpacityNoData, withData]
+    : p.fillOpacityNoData;
+  return [
+    "case",
+    ["boolean", ["feature-state", "selected"], false], p.fillOpacitySelected,
+    ["boolean", ["feature-state", "hover"], false], p.fillOpacityHover,
+    base,
+  ];
+};
+
+/**
+ * Style de la carte :
+ *   — fond uni thémé,
+ *   — matière du fond de carte Plan IGN (végétation, urbain, plans d'eau,
+ *     desserte locale) — cf. src/lib/map-basemap.ts,
+ *   — aplats électoraux SEMI-TRANSPARENTS par-dessus,
+ *   — repères du fond (cours d'eau, grands axes, toponymes) repassés au-dessus
+ *     des aplats pour rester lisibles,
  *   — « monde entier moins France » masqué opaque (GeoJSON statique),
- *   — pas de traits de séparation entre territoires : `line-width: 0`,
  *   — villes repères (grandes villes / préfectures / sous-préfectures),
- *   — seule la bordure France et le hover blanc sont visibles.
+ *   — bordure France et survol blanc au sommet.
  */
 function buildStyle(palette: MapPalette): StyleSpecification {
   const sources: StyleSpecification["sources"] = {
+    // Fond de carte de repérage (tuiles vectorielles Plan IGN, sans clé d'API)
+    [BASEMAP_SOURCE]: basemapSource,
     // Masque + contour France (générés par scripts/pipeline/build-france-mask.py)
     "france-contour": {
       type: "geojson",
@@ -144,12 +206,14 @@ function buildStyle(palette: MapPalette): StyleSpecification {
   }
 
   const layers: StyleSpecification["layers"] = [
-    // 1. Fond uni thémé — remplace le basemap raster.
+    // 1. Fond uni thémé — la « terre » sous le fond de carte.
     {
       id: "background",
       type: "background",
       paint: { "background-color": palette.background },
     },
+    // 1 bis. Fond de carte de repérage, sous les aplats électoraux.
+    ...basemapUnderLayers(palette.basemap),
   ];
 
   // 2. Fills électoraux (une couche par maille, sans bordure visible).
@@ -170,15 +234,8 @@ function buildStyle(palette: MapPalette): StyleSpecification {
       minzoom: cfg.minzoom,
       paint: {
         // Default fill (no data) — gris neutre thémé, pas de teinte « couleur ».
-        // Pour les bureaux (petits polygones), on force une opacité plus forte
-        // pour qu'ils restent visibles à zoom faible.
         "fill-color": palette.noData,
-        "fill-opacity": [
-          "case",
-          ["boolean", ["feature-state", "selected"], false], 0.95,
-          ["boolean", ["feature-state", "hover"], false], 1.0,
-          maille === "bureaux" ? 0.92 : 0.85,
-        ],
+        "fill-opacity": fillOpacityExpr(palette, maille, null) as unknown as number,
       },
       layout: {
         visibility: maille === "regions" ? "visible" : "none",
@@ -204,7 +261,12 @@ function buildStyle(palette: MapPalette): StyleSpecification {
     });
   }
 
-  // 4. Masque « monde moins France » — posé APRÈS les fills pour cacher les
+  // 4. Repères du fond (cours d'eau, grands axes, toponymes) — AU-DESSUS des
+  //    aplats, sinon la couleur les noie ; sous le masque, qui les coupe hors
+  //    de France.
+  layers.push(...basemapOverLayers(palette.basemap));
+
+  // 5. Masque « monde moins France » — posé APRÈS les fills pour cacher les
   //    pays voisins, mais AVANT les villes pour ne pas les masquer.
   layers.push({
     id: "france-masque",
@@ -214,7 +276,7 @@ function buildStyle(palette: MapPalette): StyleSpecification {
     paint: { "fill-color": palette.background, "fill-opacity": 1 },
   });
 
-  // 5. Points + labels villes (3 niveaux de zoom).
+  // 6. Points + labels villes (3 niveaux de zoom).
   const cityRankConfigs = [
     { rank: 1, minzoom: 5, textSize: 11, circleRadius: 3, haloWidth: 1.5 },
     { rank: 3, minzoom: 7, textSize: 9,  circleRadius: 2, haloWidth: 1.2 },
@@ -258,7 +320,7 @@ function buildStyle(palette: MapPalette): StyleSpecification {
     );
   }
 
-  // 6. Bordure France — la seule ligne vraiment visible hors hover.
+  // 7. Bordure France.
   layers.push({
     id: "france-contour-line",
     type: "line",
@@ -390,7 +452,7 @@ export function Map({
       // `once("load")` peut se déclencher après un démontage (la carte est alors
       // détruite) : on garde le même réflexe que les autres effets — ne toucher
       // qu'à des couches encore présentes.
-      const set = (layer: string, prop: string, value: string) => {
+      const set = (layer: string, prop: string, value: string | number) => {
         if (map.getLayer(layer)) map.setPaintProperty(layer, prop, value);
       };
       set("background", "background-color", palette.background);
@@ -408,6 +470,10 @@ export function Map({
         set(`city-dots-rank${rank}`, "circle-stroke-color", palette.cityStroke);
         set(`city-labels-rank${rank}`, "text-color", palette.city[rank]);
         set(`city-labels-rank${rank}`, "text-halo-color", palette.cityHalo);
+      }
+      // Fond de carte : eau, végétation, urbain, routes, toponymes.
+      for (const { layer, prop, value } of basemapPaintUpdates(palette.basemap)) {
+        set(layer, prop, value);
       }
     };
     if (styleLoadedRef.current || map.isStyleLoaded()) apply();
@@ -547,12 +613,7 @@ export function Map({
             choropleth.paint,
           ] as DataDrivenPropertyValueSpecification<string>;
           map.setPaintProperty(fillLayer, "fill-color", paint);
-          map.setPaintProperty(fillLayer, "fill-opacity", [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], 0.95,
-            ["boolean", ["feature-state", "hover"], false], 1.0,
-            m === "bureaux" ? 0.92 : 0.85,
-          ]);
+          map.setPaintProperty(fillLayer, "fill-opacity", fillOpacityExpr(palette, m, choropleth.stateKey));
 
           // Application des feature-states. Pour les grosses mailles (bureaux,
           // ~70k entrées), on découpe par frames pour ne pas bloquer le thread
@@ -588,12 +649,7 @@ export function Map({
           }
         } else {
           map.setPaintProperty(fillLayer, "fill-color", palette.noData);
-          map.setPaintProperty(fillLayer, "fill-opacity", [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], 0.95,
-            ["boolean", ["feature-state", "hover"], false], 1.0,
-            m === "bureaux" ? 0.92 : 0.85,
-          ]);
+          map.setPaintProperty(fillLayer, "fill-opacity", fillOpacityExpr(palette, m, null));
         }
       }
 
