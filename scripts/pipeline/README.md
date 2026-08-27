@@ -50,10 +50,43 @@ relancer `all.sh` à chaque nouveau millésime INSEE / scrutin.
 - **Analytique** : `build-trends.py`, `build-potentiel.py`.
 - **Recherche** : `build-search-index.py`.
 
+## Municipales (2020 et 2026) — ce que la donnée permet vraiment
+
+Les deux millésimes sont disponibles de la région au **bureau de vote**. Trois
+particularités du scrutin municipal, à connaître avant de lire une carte :
+
+- **Nuance politique réservée aux grandes communes.** Le ministère n'attribue
+  de nuance de liste qu'au-dessus d'un seuil de population : ~3 300 communes
+  nuancées sur 34 800 en 2026, ~3 200 en 2020. Ailleurs la nuance est vide
+  (2026) ou vaut `NC` / `LNC` (2020, ramené à NULL au build). Conséquence : les
+  colorations par **bloc** et le **vainqueur** ne couvrent que ces communes ;
+  participation et abstention, elles, couvrent tout le territoire. Les listes
+  non nuancées restent lisibles à la commune et au bureau, sous leur libellé.
+- **Panachage sous 1 000 habitants.** Le scrutin y est plurinominal : un
+  électeur coche plusieurs noms, la somme des voix dépasse donc les exprimés.
+  Ces communes n'ayant pas de nuance, elles n'entrent dans aucun agrégat par
+  bloc — mais un « % des voix » par candidat s'y lit par rapport aux votants,
+  pas comme une part de marché.
+- **Paris, Lyon, Marseille votent par secteur.** Le fichier ministériel empile
+  20 / 9 / 16 scrutins sous un seul code ville, et 2020 y orthographie chaque
+  liste différemment selon l'arrondissement. `build-aggregates.py` consolide ces
+  trois villes par nuance (libellé de la variante la plus votée) — sans quoi
+  Paris affichait 93 listes et sa première ne pesait que 24,9 % au lieu de
+  29,3 %. Les autres communes ne sont pas touchées : deux listes de même nuance
+  y sont deux offres distinctes.
+
+Les contours de bureaux de vote sont ceux du REU 2022 : **98,9 % des bureaux de
+2020** (99,1 % des inscrits) s'y raccordent, le reste ayant été redécoupé depuis.
+L'outre-mer 2020 est hors jeu — le ministère y code les départements `ZA`…`ZS`
+au lieu des codes INSEE, comme pour les présidentielles 2017/2022.
+
 ## Limites connues (open data FR)
 
 - **Pas de fichier électoral individuel** (≠ voter file US) : tout est agrégé
   (bureau / IRIS / commune).
+- **Élus municipaux non marqués en 2020** : le fichier par bureau de vote ne
+  porte pas de colonne « Élu » (contrairement à 2026) — le badge d'élu reste
+  donc vide sur ce millésime.
 - **Immigration / nationalité** : absente des bases « chiffres clés » communales
   INSEE (réservée au fichier détail individuel, non intégré). Substituée par la
   mobilité résidentielle.

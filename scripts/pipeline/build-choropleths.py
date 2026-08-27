@@ -36,21 +36,21 @@ ELECT = PUBLIC / "electoral"
 OUT = PUBLIC / "electoral" / "choro"
 
 # Scrutins électoraux × mailles à figer (miroir de SCRUTIN_META côté app).
-# Présidentielles + législatives : 5 mailles ; européennes : nationales de liste
-# (pas de circo) mais résultats par bureau ; municipales : ni circo ni bureaux.
+# Présidentielles + législatives : 5 mailles ; européennes et municipales : pas
+# de circonscription législative, mais résultats par bureau de vote.
 # Les agrégats bureaux vivent dans des Parquet séparés
 # ({scrutin}_bureaux_*.parquet, cf. build-bureaux.py) — résolus dans main().
 WITH_BUREAUX = ["regions", "departements", "circonscriptions", "communes", "bureaux"]
-NATIONAL_BUREAUX = ["regions", "departements", "communes", "bureaux"]
-NO_CIRCO = ["regions", "departements", "communes"]
+NO_CIRCO_BUREAUX = ["regions", "departements", "communes", "bureaux"]
 SCRUTINS: dict[str, list[str]] = {
     "presid-2017-t1": WITH_BUREAUX, "presid-2017-t2": WITH_BUREAUX,
     "presid-2022-t1": WITH_BUREAUX, "presid-2022-t2": WITH_BUREAUX,
     "legis-2017-t1": WITH_BUREAUX, "legis-2017-t2": WITH_BUREAUX,
     "legis-2022-t1": WITH_BUREAUX, "legis-2022-t2": WITH_BUREAUX,
     "legis-2024-t1": WITH_BUREAUX, "legis-2024-t2": WITH_BUREAUX,
-    "euro-2019-t1": NATIONAL_BUREAUX, "euro-2024-t1": NATIONAL_BUREAUX,
-    "municipales-2026-t1": NO_CIRCO, "municipales-2026-t2": NO_CIRCO,
+    "euro-2019-t1": NO_CIRCO_BUREAUX, "euro-2024-t1": NO_CIRCO_BUREAUX,
+    "municipales-2020-t1": NO_CIRCO_BUREAUX, "municipales-2020-t2": NO_CIRCO_BUREAUX,
+    "municipales-2026-t1": NO_CIRCO_BUREAUX, "municipales-2026-t2": NO_CIRCO_BUREAUX,
 }
 
 ROUND = 4  # décimales conservées pour les ratios (≈ 0,01 point de %)
@@ -66,7 +66,7 @@ BLOC_NUANCES: dict[str, tuple[str, ...]] = {
                     "LENS", "LREM", "LMDM", "LHOR", "LUDI", "LDVC", "LUDC", "LUC"),
     "bloc_droite": ("LR", "DVD", "UDD", "LLR", "LDVD", "LUDD"),
     "bloc_rn": ("RN", "UXD", "REC", "EXD", "DSV", "DLF", "FN",
-                "LRN", "LUXD", "LREC", "LEXD", "LDSV", "LFN"),
+                "LRN", "LUXD", "LREC", "LEXD", "LDSV", "LDLF", "LFN"),
 }
 
 

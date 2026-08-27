@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Building2, Map as MapIcon } from "lucide-react";
 import { useBureauHistory, useSociologieBureau, type CircoTimelinePoint, type BureauSociologie } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
-import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
+import { SCRUTIN_META, chronoFor, familiesOf, type Scrutin } from "@/lib/url-state";
 import { ExportButton } from "@/components/export-button";
 import { PinButton } from "@/components/pin-button";
 import { ErrorState } from "@/components/error-state";
@@ -14,17 +14,11 @@ import { EmptyState } from "@/components/empty-state";
 import { downloadCsv, type CsvRow } from "@/lib/export";
 import { fmtInt, fmtEuro, fmtPct } from "@/lib/format";
 
-const FAMILY_GROUPS: { family: ScrutinFamily; label: string }[] = [
-  { family: "presidentielle", label: "Présidentielles" },
-  { family: "legislative", label: "Législatives" },
-];
-
-const DISPLAY_ORDER: Scrutin[] = [
-  "presid-2017-t1", "presid-2017-t2",
-  "legis-2022-t1", "legis-2022-t2",
-  "presid-2022-t1", "presid-2022-t2",
-  "legis-2024-t1", "legis-2024-t2",
-];
+// Tous les scrutins qui descendent au bureau de vote, dans l'ordre où ils ont
+// eu lieu (cf. SCRUTINS_CHRONO — source unique, pour ne plus oublier une
+// famille entière au fil des ajouts).
+const DISPLAY_ORDER: Scrutin[] = chronoFor("bureaux");
+const FAMILY_GROUPS = familiesOf(DISPLAY_ORDER);
 
 /** « 01001_0001 » → { insee: "01001", num: "0001" } */
 function decode(code: string): { insee: string; num: string } {

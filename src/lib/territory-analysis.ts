@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { dataUrl } from "@/lib/data-url";
 import type { Maille } from "@/lib/map-config";
-import { SCRUTIN_META, isElection, parseScrutin, type Scrutin } from "@/lib/url-state";
+import { SCRUTIN_META, SCRUTINS_CHRONO, isElection, parseScrutin, type Scrutin } from "@/lib/url-state";
 import {
   fetchScrutinDetail,
   type ScrutinDetail,
@@ -44,16 +44,7 @@ export const NUANCE_TO_BLOC = new Map<string, BlocId>();
 for (const b of BLOCS) for (const c of b.codes) NUANCE_TO_BLOC.set(c, b.id);
 
 /** Ordre chronologique des scrutins disponibles (ancien → récent). */
-export const CHRONO: Scrutin[] = [
-  "presid-2017-t1", "presid-2017-t2",
-  "legis-2017-t1", "legis-2017-t2",
-  "euro-2019-t1",
-  "presid-2022-t1", "presid-2022-t2",
-  "legis-2022-t1", "legis-2022-t2",
-  "euro-2024-t1",
-  "legis-2024-t1", "legis-2024-t2",
-  "municipales-2026-t1", "municipales-2026-t2",
-];
+export const CHRONO: Scrutin[] = SCRUTINS_CHRONO;
 
 export type TerritoryPoint = ScrutinDetail & { scrutin: Scrutin };
 

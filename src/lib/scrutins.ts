@@ -29,6 +29,8 @@ export type Scrutin =
   | "legis-2024-t2"
   | "euro-2019-t1"
   | "euro-2024-t1"
+  | "municipales-2020-t1"
+  | "municipales-2020-t2"
   | "municipales-2026-t1"
   | "municipales-2026-t2"
   | "sociologie"
@@ -93,10 +95,10 @@ type ScrutinMeta = {
 
 // Scrutins disposant de résultats par bureau de vote (agrégats `*_bureaux_*`).
 const WITH_BUREAUX: Maille[] = ["regions", "departements", "circonscriptions", "communes", "bureaux"];
-const NO_CIRCO: Maille[] = ["regions", "departements", "communes"];
-// Scrutins nationaux de liste (européennes) : pas de circonscriptions, mais
-// résultats par bureau de vote disponibles.
-const NATIONAL_BUREAUX: Maille[] = ["regions", "departements", "communes", "bureaux"];
+// Européennes et municipales : pas de circonscription législative (l'une est un
+// scrutin national de liste, l'autre élit un conseil municipal), mais résultats
+// par bureau de vote disponibles.
+const NO_CIRCO_BUREAUX: Maille[] = ["regions", "departements", "communes", "bureaux"];
 
 export const SCRUTIN_META: Record<Scrutin, ScrutinMeta> = {
   "presid-2017-t1": { short: "Prés. 2017 · T1", long: "PRÉSIDENTIELLE 2017 · 1ER TOUR", family: "presidentielle", mailles: WITH_BUREAUX },
@@ -109,10 +111,12 @@ export const SCRUTIN_META: Record<Scrutin, ScrutinMeta> = {
   "legis-2022-t2": { short: "Légis. 2022 · T2", long: "LÉGISLATIVES 2022 · 2ND TOUR", family: "legislative", mailles: WITH_BUREAUX },
   "legis-2024-t1": { short: "Légis. 2024 · T1", long: "LÉGISLATIVES 2024 · 1ER TOUR", family: "legislative", mailles: WITH_BUREAUX },
   "legis-2024-t2": { short: "Légis. 2024 · T2", long: "LÉGISLATIVES 2024 · 2ND TOUR", family: "legislative", mailles: WITH_BUREAUX },
-  "euro-2019-t1": { short: "Europ. 2019", long: "EUROPÉENNES 2019", family: "europeenne", mailles: NATIONAL_BUREAUX },
-  "euro-2024-t1": { short: "Europ. 2024", long: "EUROPÉENNES 2024", family: "europeenne", mailles: NATIONAL_BUREAUX },
-  "municipales-2026-t1": { short: "Municip. 2026 · T1", long: "MUNICIPALES 2026 · 1ER TOUR", family: "municipale", mailles: NO_CIRCO },
-  "municipales-2026-t2": { short: "Municip. 2026 · T2", long: "MUNICIPALES 2026 · 2ND TOUR", family: "municipale", mailles: NO_CIRCO },
+  "euro-2019-t1": { short: "Europ. 2019", long: "EUROPÉENNES 2019", family: "europeenne", mailles: NO_CIRCO_BUREAUX },
+  "euro-2024-t1": { short: "Europ. 2024", long: "EUROPÉENNES 2024", family: "europeenne", mailles: NO_CIRCO_BUREAUX },
+  "municipales-2020-t1": { short: "Municip. 2020 · T1", long: "MUNICIPALES 2020 · 1ER TOUR", family: "municipale", mailles: NO_CIRCO_BUREAUX },
+  "municipales-2020-t2": { short: "Municip. 2020 · T2", long: "MUNICIPALES 2020 · 2ND TOUR", family: "municipale", mailles: NO_CIRCO_BUREAUX },
+  "municipales-2026-t1": { short: "Municip. 2026 · T1", long: "MUNICIPALES 2026 · 1ER TOUR", family: "municipale", mailles: NO_CIRCO_BUREAUX },
+  "municipales-2026-t2": { short: "Municip. 2026 · T2", long: "MUNICIPALES 2026 · 2ND TOUR", family: "municipale", mailles: NO_CIRCO_BUREAUX },
   "sociologie": { short: "Sociologie", long: "INSEE FILOSOFI 2021", family: "sociologie", mailles: ["communes"] },
   "tendances": { short: "Tendances", long: "DYNAMIQUES PRÉSIDENTIELLES 2017 → 2022", family: "tendances", mailles: ["regions", "departements", "circonscriptions", "communes"] },
   "potentiel": { short: "Potentiel", long: "POTENTIEL PAR BLOC (AFFINITÉ SOCIO − RÉEL)", family: "potentiel", mailles: ["communes"] },
@@ -282,4 +286,44 @@ export type BlocMetricKey = (typeof BLOC_METRIC_KEYS)[keyof typeof BLOC_METRIC_K
 /** Mailles couvertes par les données d'un scrutin. */
 export function maillesFor(scrutin: Scrutin): Maille[] {
   return SCRUTIN_META[scrutin].mailles;
+}
+
+// ─── Frise chronologique ──────────────────────────────────────────────────────
+
+/**
+ * Tous les scrutins dans l'ordre où ils ont eu lieu (ancien → récent).
+ *
+ * Source unique de vérité : les fiches (commune, circonscription, bureau) et le
+ * comparateur en gardaient chacun leur copie, et ces copies dérivaient — les
+ * européennes n'apparaissaient nulle part alors que leurs données sont là
+ * depuis longtemps, les législatives 2017 non plus, et la présidentielle 2022
+ * (avril) était affichée APRÈS les législatives 2022 (juin) par endroits.
+ * L'ordre ne se déduit pas de l'identifiant : à année égale il dépend des dates
+ * réelles du scrutin, d'où cette liste explicite. Un test vérifie qu'aucune
+ * élection du catalogue n'y manque.
+ */
+export const SCRUTINS_CHRONO: Scrutin[] = [
+  "presid-2017-t1", "presid-2017-t2",   // avril / mai 2017
+  "legis-2017-t1", "legis-2017-t2",     // juin 2017
+  "euro-2019-t1",                       // mai 2019
+  "municipales-2020-t1", "municipales-2020-t2", // mars / juin 2020
+  "presid-2022-t1", "presid-2022-t2",   // avril 2022
+  "legis-2022-t1", "legis-2022-t2",     // juin 2022
+  "euro-2024-t1",                       // juin 2024
+  "legis-2024-t1", "legis-2024-t2",     // juin / juillet 2024
+  "municipales-2026-t1", "municipales-2026-t2", // mars 2026
+];
+
+/** Scrutins couvrant une maille donnée, dans l'ordre chronologique. */
+export function chronoFor(maille: Maille): Scrutin[] {
+  return SCRUTINS_CHRONO.filter((s) => SCRUTIN_META[s].mailles.includes(maille));
+}
+
+/** Familles présentes dans une liste de scrutins, dans l'ordre du catalogue. */
+export function familiesOf(scrutins: Scrutin[]): { family: ScrutinFamily; label: string }[] {
+  const present = new Set(scrutins.map((s) => SCRUTIN_META[s].family));
+  return FAMILY_ORDER.filter((f) => present.has(f)).map((f) => ({
+    family: f,
+    label: FAMILY_LABELS[f],
+  }));
 }

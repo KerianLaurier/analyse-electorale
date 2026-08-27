@@ -8,7 +8,7 @@ import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
-import { SCRUTIN_META, maillesFor, type Scrutin } from "@/lib/url-state";
+import { SCRUTIN_META, SCRUTINS_CHRONO, maillesFor, type Scrutin } from "@/lib/url-state";
 import { useScrutinDetail } from "@/lib/queries";
 import {
   useSearchIndex,
@@ -17,14 +17,9 @@ import {
   type SearchEntryType,
 } from "@/lib/search";
 
-// Ordre chronologique des scrutins (un même territoire superposé dans le temps).
-const TIMELINE: Scrutin[] = [
-  "presid-2017-t1", "presid-2017-t2",
-  "presid-2022-t1", "presid-2022-t2",
-  "legis-2022-t1", "legis-2022-t2",
-  "legis-2024-t1", "legis-2024-t2",
-  "municipales-2026-t1", "municipales-2026-t2",
-];
+// Ordre chronologique des scrutins (un même territoire superposé dans le
+// temps) — filtré par maille juste en dessous.
+const TIMELINE: Scrutin[] = SCRUTINS_CHRONO;
 
 // Mailles disponibles dans l'index de recherche (⌘K).
 const MAILLES: Maille[] = ["regions", "departements", "circonscriptions", "communes"];

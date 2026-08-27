@@ -22,6 +22,9 @@ Sources lues :
   - législatives 2024 T1/T2    → Parquet committé public/electoral (nuance fournie)
   - présidentielle 2017 T1/T2  → txt brut data/raw/electoral (download.sh, nuance par nom)
   - législatives 2022 T1/T2    → txt brut data/raw/electoral (download.sh, nuance fournie)
+  - européennes 2019 / 2024    → brut (wide latin-1 / CSV nommé)
+  - municipales 2020 T1/T2     → txt brut « wide » (T1 tabulé, T2 point-virgule)
+  - municipales 2026 T1/T2     → CSV nommé « BV par communes » / « Bureau de vote »
 
 Seuls les agrégats (~quelques Mo) sont committés ; les fichiers bruts (~35 Mo)
 restent dans data/raw (gitignore).
@@ -74,6 +77,17 @@ EURO19_BASE = [
 EURO19_CAND = ["N°Liste", "Libellé Abrégé Liste", "Libellé Etendu Liste",
                "Nom Tête de Liste", "Voix", "% Voix/Ins", "% Voix/Exp"]
 
+# Municipales 2020 (wide) — copie du schéma de build-aggregates.py : à modifier
+# ENSEMBLE. ⚠ T1 est tabulé, T2 en point-virgule (incohérence de l'export).
+MUNI20_BASE = [
+    "Code du département", "Libellé du département", "Code de la commune",
+    "Libellé de la commune", "Code B.Vote", "Inscrits", "Abstentions", "% Abs/Ins",
+    "Votants", "% Vot/Ins", "Blancs", "% Blancs/Ins", "% Blancs/Vot",
+    "Nuls", "% Nuls/Ins", "% Nuls/Vot", "Exprimés", "% Exp/Ins", "% Exp/Vot",
+]
+MUNI20_CAND = ["N.Pan.", "Code Nuance", "Sexe", "Nom", "Prénom", "Liste", "Voix",
+               "% Voix/Ins", "% Voix/Exp"]
+
 # Libellé abrégé de liste 2019 → nuance — copie de EURO_2019_NUANCE
 # (build-aggregates.py) : à modifier ENSEMBLE.
 EURO_2019_NUANCE = {
@@ -92,6 +106,21 @@ EURO_2019_NUANCE = {
     "PRENEZ LE POUVOIR":        "RN",
     "ENSEMBLE PATRIOTES":       "EXD",
 }
+
+
+def ensure_utf8(src: Path, enc: str = "cp1252") -> Path:
+    """Copie UTF-8 idempotente (jumelle de build-aggregates.ensure_utf8) : le
+    read_csv de duckdb refuse certains exports MinInt en 'latin-1'. build-aggregates
+    produit déjà cette copie quand il tourne avant ; on la (re)fait au besoin pour
+    que ce script reste exécutable seul."""
+    out = src.with_name(src.name + ".utf8")
+    if out.exists() and out.stat().st_mtime >= src.stat().st_mtime:
+        return out
+    with open(src, encoding=enc, errors="replace") as fin, \
+         open(out, "w", encoding="utf-8", newline="") as fout:
+        for line in fin:
+            fout.write(line)
+    return out
 
 
 def utf8_variant(path: Path) -> tuple[Path, str]:
@@ -121,14 +150,18 @@ def scan_maxcols(path: Path, enc: str, sep: str = ";") -> int:
     return mx
 
 
-def read_raw_names(path: Path, enc: str, base: list[str], cand: list[str], ncand: int) -> str:
+def read_raw_names(path: Path, enc: str, base: list[str], cand: list[str], ncand: int,
+                   sep: str = ";", quoted: bool = True) -> str:
+    """`quoted=False` : voir build-aggregates.read_raw — des libellés de liste
+    municipaux contiennent des guillemets nus, qui font échouer le sniffer."""
     cols = list(base)
     for i in range(1, ncand + 1):
         for fld in cand:
             cols.append(f"{fld}__{i}")
     names = ", ".join(q(c) for c in cols)
-    return f"""read_csv('{path.as_posix()}', sep=';', encoding='{enc}', header=true,
-        names=[{names}], all_varchar=true, null_padding=true, ignore_errors=true)"""
+    qclause = "" if quoted else "quote='', "
+    return f"""read_csv('{path.as_posix()}', sep='{sep}', encoding='{enc}', header=true,
+        names=[{names}], {qclause}all_varchar=true, null_padding=true, ignore_errors=true)"""
 
 
 def num(col: str) -> str:
@@ -310,6 +343,92 @@ def euro24_raw_sql(con, path: Path):
     return header, cand
 
 
+def muni20_raw_sql(con, path: Path, sep: str):
+    """(header, cand) depuis un fichier brut municipales 2020 par bureau (wide).
+
+    « NC » / « LNC » ne sont pas des nuances mais l'absence de nuance : le
+    ministère n'en attribue qu'aux communes d'au moins 3 500 habitants. On les
+    ramène à NULL, comme le fichier 2026 le fait nativement (nuance vide) — sinon
+    elles formeraient un faux bloc politique agrégeant, dans les communes de
+    moins de 1 000 habitants, des voix de PANACHAGE (un électeur y coche
+    plusieurs noms : la somme des voix y dépasse les exprimés).
+    """
+    path = ensure_utf8(path)
+    ncand = (scan_maxcols(path, "utf-8", sep) - len(MUNI20_BASE)) // len(MUNI20_CAND)
+    src = read_raw_names(path, "utf-8", MUNI20_BASE, MUNI20_CAND, ncand, sep=sep, quoted=False)
+    commune = "lpad(\"Code du département\",2,'0') || lpad(\"Code de la commune\",3,'0')"
+    bv = "lpad(\"Code B.Vote\",4,'0')"
+    code = f"{commune} || '_' || {bv}"
+    header = f"""
+      SELECT 'bureaux' AS maille, {code} AS code,
+             'Bureau ' || any_value({bv}) || ' · ' || any_value("Libellé de la commune") AS libelle,
+             SUM({num('Inscrits')}) AS inscrits, SUM({num('Votants')}) AS votants,
+             SUM({num('Exprimés')}) AS exprimes, SUM({num('Abstentions')}) AS abstentions,
+             SUM({num('Blancs')}) AS blancs, SUM({num('Nuls')}) AS nuls
+      FROM {src} WHERE "Code de la commune" IS NOT NULL GROUP BY code
+    """
+    def label(i: int) -> str:
+        return f'coalesce(nullif(trim("Liste__{i}"), \'\'), nullif(trim("Nom__{i}"), \'\'))'
+
+    def nuance(i: int) -> str:
+        col = f"Code Nuance__{i}"
+        return (f"CASE WHEN upper(trim(\"{col}\")) IN ('NC', 'LNC', '') THEN NULL "
+                f"ELSE trim(\"{col}\") END")
+
+    unions = " UNION ALL ".join(
+        f'SELECT {code} AS code, {label(i)} AS label, {nuance(i)} AS nuance, '
+        f'{num(f"Voix__{i}")} AS voix FROM {src} '
+        f'WHERE {label(i)} IS NOT NULL AND {num(f"Voix__{i}")} IS NOT NULL'
+        for i in range(1, ncand + 1)
+    )
+    cand = f"""
+      SELECT 'bureaux' AS maille, code, label, nuance, SUM(voix) AS voix, false AS elu
+      FROM ({unions}) GROUP BY code, label, nuance
+    """
+    return header, cand
+
+
+def muni26_raw_sql(con, path: Path):
+    """(header, cand) depuis un CSV municipales 2026 par bureau (format nommé).
+
+    ⚠ Ne PAS filtrer sur la nuance comme le fait euro24_raw_sql : hors des
+    communes d'au moins 3 500 habitants, le ministère laisse la nuance vide —
+    ce filtre supprimerait 31 000 des 34 800 communes. On garde toute ligne
+    portant un nombre de voix.
+    """
+    ncand = count_named_csv(path, "utf-8", "Nuance liste")
+    src = f"""read_csv('{path.as_posix()}', sep=';', encoding='utf-8', header=true,
+        all_varchar=true, null_padding=true, ignore_errors=true)"""
+    commune = "lpad(\"Code commune\",5,'0')"
+    bv = "lpad(\"Code BV\",4,'0')"
+    code = f"{commune} || '_' || {bv}"
+    header = f"""
+      SELECT 'bureaux' AS maille, {code} AS code,
+             'Bureau ' || any_value({bv}) || ' · ' || any_value("Libellé commune") AS libelle,
+             SUM({num('Inscrits')}) AS inscrits, SUM({num('Votants')}) AS votants,
+             SUM({num('Exprimés')}) AS exprimes, SUM({num('Abstentions')}) AS abstentions,
+             SUM({num('Blancs')}) AS blancs, SUM({num('Nuls')}) AS nuls
+      FROM {src} WHERE "Code commune" IS NOT NULL GROUP BY code
+    """
+    def label(i: int) -> str:
+        return (f'coalesce(nullif(trim("Libellé abrégé de liste {i}"), \'\'), '
+                f'nullif(trim("Libellé de liste {i}"), \'\'), '
+                f'nullif(trim("Nom candidat {i}"), \'\'))')
+
+    unions = " UNION ALL ".join(
+        f'SELECT {code} AS code, {label(i)} AS label, '
+        f'nullif(trim("Nuance liste {i}"), \'\') AS nuance, {num(f"Voix {i}")} AS voix, '
+        f'(nullif(trim("Elu {i}"), \'\') IS NOT NULL) AS elu '
+        f'FROM {src} WHERE {label(i)} IS NOT NULL AND {num(f"Voix {i}")} IS NOT NULL'
+        for i in range(1, ncand + 1)
+    )
+    cand = f"""
+      SELECT 'bureaux' AS maille, code, label, nuance, SUM(voix) AS voix, bool_or(elu) AS elu
+      FROM ({unions}) GROUP BY code, label, nuance
+    """
+    return header, cand
+
+
 def legis22_raw_sql(con, path: Path):
     """(header, cand) depuis un fichier brut législatives 2022/2017 par bureau (txt)."""
     path, enc = utf8_variant(path)
@@ -352,6 +471,10 @@ SCRUTINS = [
     ("legis-2024-t2", ELECTORAL / "legislatives_2024_t2_bureau.parquet", "legis", None),
     ("euro-2019-t1", RAW / "europeennes_2019_bureau.txt", "euro19_raw", None),
     ("euro-2024-t1", RAW / "europeennes_2024_bureau.csv", "euro24_raw", None),
+    ("municipales-2020-t1", RAW / "municipales_2020_t1_bureau.txt", "muni20_tab", None),
+    ("municipales-2020-t2", RAW / "municipales_2020_t2_bureau.txt", "muni20_semi", None),
+    ("municipales-2026-t1", RAW / "municipales_2026_t1_bureau.csv", "muni26_raw", None),
+    ("municipales-2026-t2", RAW / "municipales_2026_t2_bureau.csv", "muni26_raw", None),
 ]
 
 
@@ -379,6 +502,12 @@ def main() -> int:
             header, cand = euro19_raw_sql(con, src)
         elif kind == "euro24_raw":
             header, cand = euro24_raw_sql(con, src)
+        elif kind == "muni20_tab":
+            header, cand = muni20_raw_sql(con, src, "\t")
+        elif kind == "muni20_semi":
+            header, cand = muni20_raw_sql(con, src, ";")
+        elif kind == "muni26_raw":
+            header, cand = muni26_raw_sql(con, src)
         else:  # legis_raw (2017 & 2022 : même schéma wide)
             header, cand = legis22_raw_sql(con, src)
         terr_out = OUT / f"{scrutin}_bureaux_territoires.parquet"

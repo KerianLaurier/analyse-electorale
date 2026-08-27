@@ -251,6 +251,14 @@
       "approx_size_mb": 14,
       "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
     },
+    "municipales_2026_t1_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-municipales-2026-resultats-du-premier-tour/20260320-164249/municipales-2026-resultats-bv-par-communes-2026-03-20.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "bureau",
+      "approx_size_mb": 36,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur",
+      "note": "Résultats par bureau de vote. Paris/Lyon/Marseille y figurent sous leur code VILLE (75056, 69123, 13055) ; les résultats par secteur ont leur propre fichier, non repris."
+    },
     "table_correspondance_circo": {
       "url": "https://static.data.gouv.fr/resources/circonscriptions-legislatives-table-de-correspondance-des-communes-et-des-cantons-pour-les-elections-legislatives-de-2012-et-sa-mise-a-jour-pour-les-elections-legislatives-2017/20170411-141128/Table_de_correspondance_circo_legislatives2017-1.xlsx",
       "format": "xlsx",
@@ -263,6 +271,28 @@
       "format": "csv-semicolon-utf8",
       "level": "commune",
       "approx_size_mb": 0.9,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "municipales_2026_t2_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-municipales-2026-resultats-du-scond-tour/20260323-180132/municipales-2026-resultats-bureau-de-vote-2026-03-23-16h15.csv",
+      "format": "csv-semicolon-utf8",
+      "level": "bureau",
+      "approx_size_mb": 10,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
+    },
+    "municipales_2020_t1_bureau": {
+      "url": "https://static.data.gouv.fr/resources/elections-municipales-2020-resultats/20200525-133745/2020-05-18-resultats-par-niveau-burvot-t1-france-entiere.txt",
+      "format": "txt-tab-latin1",
+      "level": "bureau",
+      "approx_size_mb": 64,
+      "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur",
+      "note": "⚠ Séparateur TABULATION (le T2 est en point-virgule) et codes non zéro-padés. Toutes les mailles 2020 dérivent de ce fichier : le ministère ne publie au niveau commune que deux fichiers séparés (« moins de 1000 » / « 1000 et plus ») aux schémas différents. Nuance « NC »/« LNC » = non attribuée (communes < 3 500 hab.), ramenée à NULL par build-aggregates.py."
+    },
+    "municipales_2020_t2_bureau": {
+      "url": "https://static.data.gouv.fr/resources/municipales-2020-resultats-2nd-tour/20200629-192438/resultats-par-niveau-burvot-t2-france-entiere.txt",
+      "format": "txt-semicolon-latin1",
+      "level": "bureau",
+      "approx_size_mb": 6.5,
       "license": "Licence Ouverte 2.0 — Ministère de l'Intérieur"
     }
   }

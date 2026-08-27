@@ -52,7 +52,9 @@ for key in presidentielle_2017_t1 presidentielle_2017_t2 \
            legislatives_2024_t1_bureau legislatives_2024_t2_bureau \
            legislatives_2024_t1_circo legislatives_2024_t2_circo \
            europeennes_2019_bureau europeennes_2024_bureau \
-           municipales_2026_t1_commune municipales_2026_t2_commune; do
+           municipales_2020_t1_bureau municipales_2020_t2_bureau \
+           municipales_2026_t1_commune municipales_2026_t2_commune \
+           municipales_2026_t1_bureau municipales_2026_t2_bureau; do
   ext=$(python3 -c "import json;f=json.load(open('scripts/pipeline/sources.json'))['electoral']['$key']['format'];print('csv' if 'csv' in f else 'txt')")
   url=$(python3 -c "import json;print(json.load(open('scripts/pipeline/sources.json'))['electoral']['$key']['url'])")
   fetch "$url" "data/raw/electoral/${key}.${ext}"
