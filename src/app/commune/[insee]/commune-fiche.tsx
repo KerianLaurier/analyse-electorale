@@ -5,7 +5,6 @@ import Link from "next/link";
 import { ArrowLeft, Map as MapIcon } from "lucide-react";
 import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
-import type { ScrutinFamily } from "@/lib/url-state";
 import {
   useCommuneHistory,
   useSociologieCommune,
@@ -16,7 +15,7 @@ import {
   type DemographieCommune,
 } from "@/lib/queries";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
-import { SCRUTIN_META, type Scrutin } from "@/lib/url-state";
+import { SCRUTIN_META, chronoFor, familiesOf, type Scrutin } from "@/lib/url-state";
 import { ExportButton } from "@/components/export-button";
 import { PinButton } from "@/components/pin-button";
 import { ErrorState } from "@/components/error-state";
@@ -28,19 +27,10 @@ import { circoLabel } from "@/lib/territoire";
 
 const FR = { revenuMedian: 22040, tauxPauvrete: 14.4 };
 
-const DISPLAY_ORDER: Scrutin[] = [
-  "presid-2017-t1", "presid-2017-t2",
-  "legis-2022-t1", "legis-2022-t2",
-  "municipales-2026-t1", "municipales-2026-t2",
-  "presid-2022-t1", "presid-2022-t2",
-  "legis-2024-t1", "legis-2024-t2",
-];
-
-const FAMILY_GROUPS: { family: ScrutinFamily; label: string }[] = [
-  { family: "presidentielle", label: "Présidentielles" },
-  { family: "legislative", label: "Législatives" },
-  { family: "municipale", label: "Municipales" },
-];
+// Scrutins couvrant la maille communes, dans l'ordre chronologique (cf.
+// SCRUTINS_CHRONO — source unique partagée avec les autres fiches).
+const DISPLAY_ORDER: Scrutin[] = chronoFor("communes");
+const FAMILY_GROUPS = familiesOf(DISPLAY_ORDER);
 
 type CommuneTab = "elections" | "population";
 

@@ -9,7 +9,7 @@ import { useCircoHistory, type CircoTimelinePoint } from "@/lib/queries";
 import { CircoStrategie } from "./circo-strategie";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { candidatSlug } from "@/lib/personnes";
-import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
+import { SCRUTIN_META, chronoFor, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 import { ExportButton } from "@/components/export-button";
 import { PinButton } from "@/components/pin-button";
 import { ErrorState } from "@/components/error-state";
@@ -55,15 +55,13 @@ export function CircoFiche({ code }: { code: string }) {
   const libelle = latestLegis?.libelle ?? (history.data ?? [])[0]?.libelle ?? null;
 
   // Ordre chronologique d'affichage (anciens → récents) pour la frise.
-  const ordered = useMemo(() => {
-    const order: Scrutin[] = [
-      "presid-2017-t1", "presid-2017-t2",
-      "legis-2022-t1", "legis-2022-t2",
-      "presid-2022-t1", "presid-2022-t2",
-      "legis-2024-t1", "legis-2024-t2",
-    ];
-    return order.map((s) => byScrutin.get(s)).filter((p): p is CircoTimelinePoint => !!p);
-  }, [byScrutin]);
+  const ordered = useMemo(
+    () =>
+      chronoFor("circonscriptions")
+        .map((s) => byScrutin.get(s))
+        .filter((p): p is CircoTimelinePoint => !!p),
+    [byScrutin],
+  );
 
   function exportCsv() {
     const rows: CsvRow[] = ordered.map((p) => {

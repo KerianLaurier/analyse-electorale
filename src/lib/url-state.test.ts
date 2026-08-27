@@ -8,6 +8,12 @@ import {
   defaultScrutinFor,
   colorationsFor,
   maillesFor,
+  chronoFor,
+  familiesOf,
+  SCRUTIN_META,
+  SCRUTINS_CHRONO,
+  isElection as isElectionScrutin,
+  type Scrutin,
 } from "@/lib/url-state";
 
 describe("parseScrutin", () => {
@@ -45,7 +51,7 @@ describe("yearsFor", () => {
     expect(yearsFor("presidentielle")).toEqual([2022, 2017]);
     expect(yearsFor("legislative")).toEqual([2024, 2022, 2017]);
     expect(yearsFor("europeenne")).toEqual([2024, 2019]);
-    expect(yearsFor("municipale")).toEqual([2026]);
+    expect(yearsFor("municipale")).toEqual([2026, 2020]);
   });
 });
 
@@ -119,11 +125,40 @@ describe("maillesFor", () => {
     expect(maillesFor("legis-2024-t1")).toContain("bureaux");
   });
 
-  it("exclut la circonscription pour les municipales", () => {
+  it("exclut la circonscription pour les municipales, mais garde les bureaux", () => {
     expect(maillesFor("municipales-2026-t1")).not.toContain("circonscriptions");
+    expect(maillesFor("municipales-2026-t1")).toContain("bureaux");
+    expect(maillesFor("municipales-2020-t1")).toContain("bureaux");
   });
 
   it("limite la sociologie à la maille communes", () => {
     expect(maillesFor("sociologie")).toEqual(["communes"]);
+  });
+});
+
+describe("SCRUTINS_CHRONO", () => {
+  // Ce test existe pour une raison précise : la frise chronologique était
+  // recopiée dans six composants, et ces copies avaient dérivé — les
+  // européennes et les législatives 2017 n'apparaissaient dans aucune fiche
+  // alors que leurs données étaient là. Ajouter un scrutin au catalogue sans
+  // l'inscrire dans la frise doit désormais casser la CI, pas passer inaperçu.
+  const elections = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(isElectionScrutin);
+
+  it("contient toutes les élections du catalogue, et rien d'autre", () => {
+    expect([...SCRUTINS_CHRONO].sort()).toEqual([...elections].sort());
+  });
+
+  it("chronoFor ne garde que les scrutins couvrant la maille", () => {
+    for (const s of chronoFor("bureaux")) expect(maillesFor(s)).toContain("bureaux");
+    // Les européennes descendent au bureau de vote, pas à la circonscription.
+    expect(chronoFor("bureaux")).toContain("euro-2024-t1");
+    expect(chronoFor("circonscriptions")).not.toContain("euro-2024-t1");
+    expect(chronoFor("circonscriptions")).not.toContain("municipales-2020-t1");
+  });
+
+  it("familiesOf suit l'ordre du catalogue sans famille vide", () => {
+    const familles = familiesOf(chronoFor("bureaux")).map((g) => g.family);
+    expect(familles).toEqual(["presidentielle", "legislative", "europeenne", "municipale"]);
+    expect(familiesOf([])).toEqual([]);
   });
 });

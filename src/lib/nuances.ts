@@ -1,4 +1,5 @@
-// Codes de nuance politique MinInt (présidentielle + législatives 2024).
+// Codes de nuance politique MinInt (présidentielle + législatives + scrutins de
+// liste : européennes, municipales 2020 et 2026).
 // Couleurs adaptées aux conventions cartographiques du ministère de l'Intérieur
 // tout en restant lisibles sur un fond clair Positron.
 
@@ -44,7 +45,10 @@ export type NuanceCode =
   | "LVEC"
   | "LREG"
   | "LDIV"
+  | "LRDG"
+  | "LGJ"
   | "LREN"
+  | "LREM"
   | "LMDM"
   | "LUDI"
   | "LUC"
@@ -55,6 +59,7 @@ export type NuanceCode =
   | "LUDR"
   | "LDVD"
   | "LDSV"
+  | "LDLF"
   | "LREC"
   | "LRN"
   | "LUXD"
@@ -105,8 +110,11 @@ export const NUANCES: Record<NuanceCode, NuanceMeta> = {
   LECO: { label: "Liste écologiste",      color: "#16a34a" },
   LVEC: { label: "Liste écologiste",      color: "#16a34a" },
   LREG: { label: "Liste régionaliste",    color: "#0d9488" },
+  LRDG: { label: "Liste radicale de gauche", color: "#fb7185" },
   LDIV: { label: "Liste divers",          color: "#9ca3af" },
+  LGJ:  { label: "Liste gilets jaunes",   color: "#9ca3af" },   // municipales 2020
   LREN: { label: "Liste Renaissance (majorité)", color: "#f59e0b" },
+  LREM: { label: "Liste La République en marche", color: "#f59e0b" }, // municipales 2020
   LENS: { label: "Liste Ensemble (majorité)", color: "#f59e0b" }, // européennes 2024
   LMDM: { label: "Liste Modem",           color: "#f97316" },
   LUDI: { label: "Liste UDI",             color: "#fb923c" },
@@ -118,6 +126,7 @@ export const NUANCES: Record<NuanceCode, NuanceMeta> = {
   LUDR: { label: "Liste Union des droites (UDR)", color: "#1e3a8a" },
   LDVD: { label: "Liste divers droite",   color: "#60a5fa" },
   LDSV: { label: "Liste droite souverainiste", color: "#1e293b" },
+  LDLF: { label: "Liste Debout la France", color: "#334155" },  // municipales 2020
   // Extrême droite (listes) : famille bleu marine
   LREC: { label: "Liste Reconquête",      color: "#33405c" },
   LRN:  { label: "Liste Rassemblement National", color: "#13294b" },

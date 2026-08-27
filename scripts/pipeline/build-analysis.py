@@ -34,6 +34,7 @@ SCRUTINS: dict[str, list[str]] = {
     "presid-2022-t1": WITH_CIRCO, "presid-2022-t2": WITH_CIRCO,
     "legis-2022-t1": WITH_CIRCO, "legis-2022-t2": WITH_CIRCO,
     "legis-2024-t1": WITH_CIRCO, "legis-2024-t2": WITH_CIRCO,
+    "municipales-2020-t1": NO_CIRCO, "municipales-2020-t2": NO_CIRCO,
     "municipales-2026-t1": NO_CIRCO, "municipales-2026-t2": NO_CIRCO,
 }
 

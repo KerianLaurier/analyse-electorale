@@ -16,7 +16,10 @@ Mailles produites :
   - présidentielles : regions, departements, circonscriptions, communes
   - législatives    : regions, departements, circonscriptions (par circo),
                       communes (agrégé depuis les bureaux)
-  - municipales     : regions, departements, communes (pas de circo)
+  - municipales     : regions, departements, communes (pas de circo — le conseil
+                      municipal n'a pas de circonscription législative)
+
+La maille `bureaux` vit dans des Parquet séparés, produits par build-bureaux.py.
 
 Codes alignés sur les GeoJSON :
   region = code INSEE région (11, 24, …) ; departement = "01".."95","2A","2B" ;
@@ -59,6 +62,9 @@ REGION_NAMES = {
     "28": "Normandie", "75": "Nouvelle-Aquitaine", "76": "Occitanie",
     "52": "Pays de la Loire", "93": "Provence-Alpes-Côte d'Azur",
 }
+
+# Villes à scrutin par secteur (Paris, Lyon, Marseille) — cf. muni20_long.
+PLM_CITIES = ("75056", "69123", "13055")
 
 # ─── Mapping candidats présidentielles → nuance ──────────────────────────────
 PRESID_NUANCE = {
@@ -113,6 +119,26 @@ EURO19_BASE = [
 ]
 EURO19_CAND = ["N°Liste","Libellé Abrégé Liste","Libellé Etendu Liste",
                "Nom Tête de Liste","Voix","% Voix/Ins","% Voix/Exp"]
+
+# Municipales 2020 — format « wide » MinInt, résultats PAR BUREAU DE VOTE.
+# Toutes les mailles (région → commune) en sont dérivées : il n'existe pas de
+# fichier commune exploitable d'un bloc (le ministère sépare « communes de moins
+# de 1000 » et « de 1000 et plus », avec des schémas distincts), alors que le
+# fichier bureau couvre les deux d'un seul tenant.
+#
+# ⚠ Séparateurs INCOHÉRENTS entre les deux tours (export ministériel) :
+#    T1 = TABULATION, T2 = point-virgule. D'où le paramètre `sep` partout.
+# ⚠ T1 n'est pas non plus zéro-padé (département « 1 », commune « 1 »,
+#    bureau « 1 ») là où T2 l'est (« 01 », « 012 », « 0001 ») : les `lpad`
+#    habituels normalisent les deux.
+MUNI20_BASE = [
+    "Code du département","Libellé du département","Code de la commune",
+    "Libellé de la commune","Code B.Vote","Inscrits","Abstentions","% Abs/Ins",
+    "Votants","% Vot/Ins","Blancs","% Blancs/Ins","% Blancs/Vot",
+    "Nuls","% Nuls/Ins","% Nuls/Vot","Exprimés","% Exp/Ins","% Exp/Vot",
+]
+MUNI20_CAND = ["N.Pan.","Code Nuance","Sexe","Nom","Prénom","Liste","Voix",
+               "% Voix/Ins","% Voix/Exp"]
 
 # ─── Mapping listes européennes 2019 → nuance ────────────────────────────────
 # Les fichiers 2019 n'ont PAS de code nuance : on mappe le libellé ABRÉGÉ des
@@ -190,11 +216,17 @@ def ensure_utf8(src: Path, enc: str = "cp1252") -> Path:
     return out
 
 
-def read_raw(con, src: Path, enc: str, names: str | None):
+def read_raw(con, src: Path, enc: str, names: str | None, sep: str = ";",
+             quoted: bool = True):
+    """`quoted=False` désactive le guillemet : les exports « wide » du ministère
+    ne citent pas leurs champs, mais des libellés de liste contiennent des
+    guillemets nus (« MANDEURE "Tournons la page" »). Laissé actif, le sniffer
+    de duckdb ne trouve aucun dialecte cohérent et le fichier entier échoue."""
     nclause = names if names else ""
+    qclause = "" if quoted else "quote='', "
     return f"""
-      read_csv('{src.as_posix()}', sep=';', encoding='{enc}',
-               header=true, {nclause}
+      read_csv('{src.as_posix()}', sep='{sep}', encoding='{enc}',
+               header=true, {nclause} {qclause}
                all_varchar=true, null_padding=true, ignore_errors=true)
     """
 
@@ -393,6 +425,91 @@ def muni_long(con, src, enc, ncand):
           FROM {raw} WHERE {num(f'Voix {i}')} IS NOT NULL
         """)
     cand = " UNION ALL ".join(unions)
+    return header, cand
+
+
+# ─── Municipales 2020 (fichier bureau → toutes les mailles) ──────────────────
+#
+# Le ministère n'attribue de nuance de liste qu'aux communes d'au moins 3 500
+# habitants ; ailleurs il publie « NC » (ou « LNC »). Ces deux codes ne sont PAS
+# des nuances : laissés tels quels, ils formeraient un faux bloc politique qui
+# écraserait les agrégats département/région (et, dans les communes de moins de
+# 1 000 habitants, agrégerait des voix de PANACHAGE — un électeur y coche
+# plusieurs noms, la somme des voix dépasse donc les exprimés). On les ramène à
+# NULL : c'est exactement la convention du fichier 2026, où la nuance est
+# simplement vide hors des communes nuancées. Conséquence assumée et identique
+# aux deux millésimes : les blocs politiques et les mailles agrégées ne
+# couvrent que les communes nuancées, les autres restent lisibles à la commune
+# et au bureau sous le nom de leur liste ou de leur candidat.
+def muni20_nuance(col: str) -> str:
+    return (
+        f"CASE WHEN upper(trim(\"{col}\")) IN ('NC', 'LNC', '') THEN NULL "
+        f"ELSE trim(\"{col}\") END"
+    )
+
+
+def muni20_label(i: int) -> str:
+    """Libellé de liste ; à défaut le nom du candidat (scrutin plurinominal)."""
+    return f'coalesce(nullif(trim("Liste__{i}"), \'\'), nullif(trim("Nom__{i}"), \'\'))'
+
+
+def muni20_long(con, src, enc, ncand, sep):
+    """Header + listes au niveau BUREAU — municipales 2020 (wide, sans circo).
+
+    `emit()` agrège ensuite par commune / département / région : on renvoie donc
+    les lignes bureau telles quelles, sans pré-regroupement.
+    """
+    names = names_clause(MUNI20_BASE, MUNI20_CAND, ncand)
+    raw = read_raw(con, src, enc, names, sep=sep, quoted=False)
+    dept = "lpad(\"Code du département\", 2, '0')"
+    commune = f"{dept} || lpad(\"Code de la commune\", 3, '0')"
+    region = region_case(dept)
+
+    header = f"""
+      SELECT {region} AS c_region, {dept} AS c_dept, {commune} AS c_commune,
+             "Libellé du département" AS lib_dept, "Libellé de la commune" AS lib_commune,
+             {num('Inscrits')} AS ins, {num('Votants')} AS vot, {num('Exprimés')} AS exp,
+             {num('Abstentions')} AS abst, {num('Blancs')} AS blc, {num('Nuls')} AS nul
+      FROM {raw} WHERE "Code de la commune" IS NOT NULL
+    """
+    unions = []
+    for i in range(1, ncand + 1):
+        lbl = muni20_label(i)
+        unions.append(f"""
+          SELECT {region} AS c_region, {dept} AS c_dept, {commune} AS c_commune,
+                 {lbl} AS label, {muni20_nuance(f'Code Nuance__{i}')} AS nuance,
+                 {num(f'Voix__{i}')} AS voix, false AS elu
+          FROM {raw} WHERE {lbl} IS NOT NULL AND {num(f'Voix__{i}')} IS NOT NULL
+        """)
+    plm = ", ".join(q(c) for c in PLM_CITIES)
+    # Paris, Lyon et Marseille élisent PAR SECTEUR : sous un même code ville, le
+    # fichier empile 20 / 9 / 16 scrutins distincts, et le ministère y
+    # orthographie le libellé de liste différemment d'un arrondissement à
+    # l'autre (« ANNE HIDALGO, PARIS EN COMMUN », « Anne HIDALGO Paris en
+    # commun », « ANNE HIDALGO - PARIS EN COMMUN »…). Sans consolidation, Paris
+    # affiche 93 listes et la première ne pèse que 24,9 % au lieu de 29,3 %.
+    # On regroupe donc ces trois villes par nuance, en retenant le libellé de la
+    # variante la plus votée. Ailleurs, une commune = un seul scrutin : deux
+    # listes de même nuance y sont deux offres différentes, on n'y touche pas.
+    cand = f"""
+      WITH src AS ({' UNION ALL '.join(unions)}),
+      par_liste AS (
+        SELECT c_region, c_dept, c_commune, label, nuance,
+               SUM(voix) AS voix, bool_or(elu) AS elu
+        FROM src GROUP BY c_region, c_dept, c_commune, label, nuance
+      ),
+      variante_dominante AS (
+        SELECT c_commune, nuance, label,
+               row_number() OVER (PARTITION BY c_commune, nuance ORDER BY voix DESC) AS rang
+        FROM par_liste
+        WHERE c_commune IN ({plm}) AND nuance IS NOT NULL
+      )
+      SELECT l.c_region, l.c_dept, l.c_commune,
+             coalesce(v.label, l.label) AS label, l.nuance, l.voix, l.elu
+      FROM par_liste l
+      LEFT JOIN variante_dominante v
+        ON v.c_commune = l.c_commune AND v.nuance = l.nuance AND v.rang = 1
+    """
     return header, cand
 
 
@@ -674,7 +791,23 @@ def main() -> int:
     else:
         print("  ⚠ euro-2024-t1: source manquante")
 
-    # ── Municipales ──────────────────────────────────────────────────────────
+    # ── Municipales 2020 (fichier bureau : toutes les mailles en dérivent) ───
+    for scrutin, fname, sep in [
+        ("municipales-2020-t1", "municipales_2020_t1_bureau.txt", "\t"),
+        ("municipales-2020-t2", "municipales_2020_t2_bureau.txt", ";"),
+    ]:
+        src = RAW / fname
+        if not src.exists():
+            print(f"  ⚠ {scrutin}: source manquante {fname}"); continue
+        # read_csv de duckdb refuse ces exports en 'latin-1' → copie UTF-8.
+        src = ensure_utf8(src)
+        ncand = (scan_maxcols(src, "utf-8", sep) - len(MUNI20_BASE)) // len(MUNI20_CAND)
+        print(f"→ {scrutin} ({ncand} listes max)")
+        header, cand = muni20_long(con, src, "utf-8", ncand, sep)
+        emit(con, scrutin, header, cand,
+             ["regions", "departements", "communes"], "mixte")
+
+    # ── Municipales 2026 (fichier commune fourni directement par le MinInt) ──
     muni = [
         ("municipales-2026-t1", "municipales_2026_t1_commune.csv"),
         ("municipales-2026-t2", "municipales_2026_t2_commune.csv"),

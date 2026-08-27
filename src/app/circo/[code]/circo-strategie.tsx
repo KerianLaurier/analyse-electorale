@@ -27,7 +27,7 @@ import {
 } from "@/lib/queries";
 import { BLOCS, blocById, marginDiagnostic, type BlocId } from "@/lib/analysis";
 import { useHasTeam, addSectorsBulk } from "@/lib/campaign";
-import { SCRUTIN_META, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
+import { SCRUTIN_META, chronoFor, type Scrutin, type ScrutinFamily } from "@/lib/url-state";
 import { nuanceLabel } from "@/lib/nuances";
 import { fmtInt, fmtPct } from "@/lib/format";
 import type { Choropleth } from "@/components/map";
@@ -45,13 +45,10 @@ const TerritoryMap = dynamic(() => import("@/components/map").then((m) => m.Map)
 const fmtPts = (n: number) =>
   `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pts`;
 
-// Ordre chronologique des scrutins (ancien → récent).
-const CHRONO: Scrutin[] = [
-  "presid-2017-t1", "presid-2017-t2",
-  "legis-2022-t1", "legis-2022-t2",
-  "presid-2022-t1", "presid-2022-t2",
-  "legis-2024-t1", "legis-2024-t2",
-];
+// Scrutins couvrant la circonscription, dans l'ordre chronologique (cf.
+// SCRUTINS_CHRONO). Européennes et municipales en sont naturellement absentes :
+// leur maille ne comprend pas la circonscription législative.
+const CHRONO: Scrutin[] = chronoFor("circonscriptions");
 
 // Index nuance → bloc (codes définis dans analysis.ts).
 const NUANCE_TO_BLOC = new Map<string, BlocId>();
