@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Crosshair, Search, X } from "lucide-react";
+import { Crosshair, Globe, Search } from "lucide-react";
 import { Input } from "@appica/ui-react/input";
 import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
@@ -16,9 +16,7 @@ import {
   TERRITORY_LABELS,
   type TerritoryType,
 } from "@/lib/territory-analysis";
-
-/** Territoire sélectionné dans l'outil d'analyse. */
-export type TerritorySel = { type: TerritoryType; code: string; label: string };
+import { FRANCE, type Perimetre } from "@/app/(app)/analyser/perimetre";
 
 const ENTRY_TO_TYPE: Partial<Record<SearchEntryType, TerritoryType>> = {
   region: "region",
@@ -36,18 +34,19 @@ const FILTERS: { id: TerritoryType | "tous"; label: string }[] = [
 ];
 
 /**
- * Sélecteur du territoire cible : recherche unique sur les 4 mailles (index
- * ⌘K), filtre facultatif par maille, raccourci vers la cible de campagne du QG.
+ * Sélecteur du périmètre d'analyse : recherche unique sur les 4 mailles (index
+ * ⌘K), filtre facultatif par maille, retour à la France entière et raccourci
+ * vers la cible de campagne du QG.
  */
 export function TerritoryPicker({
   value,
   campaign,
   onChange,
 }: {
-  value: TerritorySel | null;
+  value: Perimetre;
   /** Cible de campagne du QG (raccourci « Ma cible »), si définie. */
-  campaign: TerritorySel | null;
-  onChange: (sel: TerritorySel) => void;
+  campaign: Perimetre | null;
+  onChange: (p: Perimetre) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -68,13 +67,18 @@ export function TerritoryPicker({
   }, [index.data, query, filter]);
 
   function pick(entry: SearchEntry, type: TerritoryType) {
-    onChange({ type, code: entry.code, label: entryLabel(entry) });
+    onChange({ scope: "territoire", type, code: entry.code, label: entryLabel(entry) });
     setQuery("");
     setOpen(false);
   }
 
+  const isFrance = value.scope === "france";
   const isCampaignSelected =
-    !!campaign && !!value && campaign.type === value.type && campaign.code === value.code;
+    !!campaign &&
+    campaign.scope === "territoire" &&
+    value.scope === "territoire" &&
+    campaign.type === value.type &&
+    campaign.code === value.code;
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface p-3 shadow-card">
@@ -131,6 +135,21 @@ export function TerritoryPicker({
         ))}
       </div>
 
+      {/* La France est un périmètre comme un autre — c'est ce qui permet aux
+          analyses nationales (sièges disputés, sur/sous-performance, sièges
+          projetés) de vivre dans les mêmes lentilles que le local. */}
+      <Button
+        type="button"
+        onClick={() => onChange(FRANCE)}
+        disabled={isFrance}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors",
+          isFrance ? "bg-warm/15 text-warm" : "text-muted-foreground hover:text-foreground",
+        )}
+        title="Analyser la France entière" variant="ghost" size="sm">
+        <Globe className="h-3.5 w-3.5" /> France
+      </Button>
+
       {campaign && (
         <Button
           type="button"
@@ -142,27 +161,21 @@ export function TerritoryPicker({
               ? "bg-warm/15 text-warm"
               : "bg-primary text-primary-foreground hover:opacity-90",
           )}
-          title={campaign.label} variant="ghost" size="sm">
+          title={perimetreShortTitle(campaign)} variant="ghost" size="sm">
           <Crosshair className="h-3.5 w-3.5" /> Ma cible
         </Button>
       )}
 
-      {value && (
+      {value.scope === "territoire" && (
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-pill border border-border bg-surface px-3 py-1.5 text-[12px] font-medium">
           <span className="truncate">{value.label}</span>
           <span className="shrink-0 text-[10.5px] font-normal text-muted-foreground">
             {TERRITORY_LABELS[value.type]}
           </span>
-          {!isCampaignSelected && campaign && (
-            <Button
-              type="button"
-              onClick={() => onChange(campaign)}
-              aria-label="Revenir à ma cible de campagne" variant="ghost" size="sm">
-              <X className="h-3 w-3" />
-            </Button>
-          )}
         </span>
       )}
     </div>
   );
 }
+
+const perimetreShortTitle = (p: Perimetre) => (p.scope === "france" ? "France entière" : p.label);

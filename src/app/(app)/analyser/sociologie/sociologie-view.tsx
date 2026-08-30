@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { ArrowLeft, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
 import { Button } from "@appica/ui-react/button";
 import { Spinner } from "@appica/ui-react/spinner";
@@ -138,13 +137,10 @@ export function SociologieView() {
   };
 
   return (
-    <div className="flex h-full w-full min-h-0 flex-col gap-3 overflow-auto bg-canvas p-3">
-      <div className="flex items-end justify-between gap-4 px-2 pt-2">
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <Link href="/analyser" className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-3 w-3" /> Analyser
-          </Link>
-          <h1 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight">Sociologie des territoires</h1>
+          <h2 className="text-[15px] font-semibold tracking-tight">Sociologie des territoires</h2>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
             Cartographie des indicateurs INSEE (revenus, CSP, âge, diplômes…) et leur corrélation avec le vote.
           </p>

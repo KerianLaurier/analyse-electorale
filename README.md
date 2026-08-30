@@ -77,8 +77,8 @@ c'est déjà une frontière de sous-domaine en production.
 (app)/                      Layout racine + chrome applicatif
   /explorer                 Vue principale (carte)
   /explorer/[maille]/[code] État d'URL avec sélection
-  /analyser                 Analyse de territoire
-    /comparateur  /simulateur  /marginalite  /sociologie  /potentiel  /ciblage
+  /analyser                 Diagnostic du périmètre (lentille d'accueil)
+    /historique  /sociologie  /ciblage  /projection
   /espace                   QG — tableau de bord « aujourd'hui »
     /plan                   Cible, objectif de voix, secteurs, épingles
     /terrain                Actions, permanences, porte-à-porte, phoning
@@ -168,6 +168,38 @@ src/
   lib/
     utils.ts                cn() et helpers
 ```
+
+### Analyser : un périmètre, cinq lentilles
+
+Deux modèles mentaux se contredisaient : `/analyser` était centré sur un
+**territoire**, tandis que ses six « outils spécialisés » (comparateur,
+simulateur, marginalité, sociologie, potentiel, ciblage) repartaient chacun
+d'un état **national** codé en dur, avec leur propre sélecteur et leur propre
+bouton retour — enterrés dans un pied de page, dont deux masqués sur mobile.
+Choisir un territoire n'avait aucun effet sur eux.
+
+Le **périmètre** est désormais l'objet central : choisi une fois, porté par
+l'URL (`?t=&c=&l=`, inchangée), il suit d'une lentille à l'autre. Et **la France
+n'est plus un mode à part** — c'est le périmètre par défaut :
+
+| Lentille | Territoire | France |
+| --- | --- | --- |
+| `/analyser` — Diagnostic | KPI, marge, participation, rapport de force | rapport de force national par bloc |
+| `/analyser/historique` | tous les scrutins du territoire (ex-comparateur) | → invite à choisir un territoire |
+| `/analyser/sociologie` | profil INSEE + potentiel par bloc | corrélations INSEE × vote **ou** sur/sous-performance (ex-potentiel) |
+| `/analyser/ciblage` | bureaux prioritaires (circo) | circonscriptions les plus disputées (ex-marginalité), filtrables par région/département |
+| `/analyser/projection` | projection tendancielle + scénario national | simulateur de sièges (ex-simulateur) |
+
+« Sièges marginaux » devient donc la lentille Ciblage à l'échelle France, et
+« ciblage terrain » la même lentille à l'échelle circonscription : un seul
+geste, à l'échelle où l'on se trouve. Quand une analyse n'a pas de sens à une
+échelle (le ciblage sur une commune), la page l'explique et propose l'échelle
+qui convient plutôt que de faire disparaître l'onglet.
+
+Les anciennes URL redirigent en conservant le périmètre —
+`/analyser/comparateur` → `/historique`, `/marginalite` → `/ciblage`,
+`/simulateur` → `/projection`, `/potentiel` → `/sociologie`, et
+`/analyser/ciblage?circo=1502` → le périmètre circonscription correspondant.
 
 ### Le QG : 4 sections, et des rôles
 

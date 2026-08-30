@@ -191,7 +191,7 @@ function CanvassContent() {
         </div>
         {sortedSectors.length === 0 ? (
           <p className="mt-3 rounded-lg border border-dashed border-foreground/10 bg-surface/60 px-4 py-8 text-center text-[12.5px] text-muted-foreground">
-            Aucun secteur. Construisez votre plan de terrain dans l’onglet <span className="font-medium">Campagne</span> ou
+            Aucun secteur. Construisez votre plan de terrain dans la section <span className="font-medium">Le plan</span> ou
             poussez les bureaux prioritaires depuis le <Link href="/analyser/ciblage" className="font-medium text-warm hover:underline">ciblage</Link>.
           </p>
         ) : (

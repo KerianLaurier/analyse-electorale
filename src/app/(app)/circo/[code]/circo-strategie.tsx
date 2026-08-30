@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { circoShortLabel } from "@/lib/territoire";
 import {
   Crosshair,
   Plus,
@@ -250,7 +251,10 @@ export function CircoStrategie({
           <p className="mt-3 text-[11px] text-muted-foreground">
             Indicateurs INSEE (Filosofi 2021 · Recensement 2022) — écart à la moyenne nationale des
             circonscriptions. Pour l’analyse croisée socio × vote,{" "}
-            <Link href="/analyser/sociologie" className="font-medium text-warm hover:underline">
+            <Link
+              href={`/analyser/sociologie?t=circo&c=${encodeURIComponent(code)}&l=${encodeURIComponent(circoShortLabel(code))}`}
+              className="font-medium text-warm hover:underline"
+            >
               voir Sociologie
             </Link>
             .

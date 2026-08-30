@@ -64,3 +64,31 @@ test("créer puis supprimer une action dans le QG", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Supprimer" }).click();
   await expect(page.getByText(titre)).toHaveCount(0);
 });
+
+test("Analyser : le périmètre suit d'une lentille à l'autre", async ({ page }) => {
+  await login(page);
+  // Défaut : la France (le national n'est plus un outil à part).
+  await page.goto("/analyser");
+  await expect(page.getByRole("heading", { name: "France entière" })).toBeVisible();
+
+  const lentilles = page.getByRole("navigation", { name: "Lentilles d’analyse" });
+  for (const label of ["Diagnostic", "Historique", "Sociologie", "Ciblage", "Projection"]) {
+    await expect(lentilles.getByRole("link", { name: new RegExp(label) })).toBeVisible();
+  }
+
+  // Un périmètre posé dans l'URL est conservé en changeant de lentille.
+  await page.goto("/analyser?t=commune&c=59350&l=Lille");
+  await expect(page.getByRole("heading", { name: "Lille" })).toBeVisible();
+  await lentilles.getByRole("link", { name: /Historique/ }).click();
+  await expect(page).toHaveURL(/\/analyser\/historique\?t=commune&c=59350&l=Lille$/);
+  await expect(page.getByRole("heading", { name: "Lille" })).toBeVisible();
+});
+
+test("Analyser : les anciennes URL d'outils redirigent vers leur lentille", async ({ page }) => {
+  await login(page);
+  await page.goto("/analyser/marginalite");
+  await expect(page).toHaveURL(/\/analyser\/ciblage$/);
+  // Le périmètre éventuel est préservé au passage.
+  await page.goto("/analyser/comparateur?t=commune&c=59350&l=Lille");
+  await expect(page).toHaveURL(/\/analyser\/historique\?t=commune&c=59350&l=Lille$/);
+});

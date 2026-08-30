@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
 import { Spinner } from "@appica/ui-react/spinner";
 import type { Choropleth } from "@/components/map";
@@ -105,13 +104,10 @@ export function PotentielView() {
   }
 
   return (
-    <div className="flex h-full w-full min-h-0 flex-col gap-3 overflow-auto bg-canvas p-3">
-      <div className="flex items-end justify-between gap-4 px-2 pt-2">
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <Link href="/analyser" className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-3 w-3" /> Analyser
-          </Link>
-          <h1 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight">Potentiel électoral</h1>
+          <h2 className="text-[15px] font-semibold tracking-tight">Potentiel électoral</h2>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
             Score d&apos;un bloc modélisé par la sociologie (régression sur 10 indicateurs INSEE) → sur / sous-performance par circonscription.
           </p>

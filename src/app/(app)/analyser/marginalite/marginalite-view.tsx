@@ -2,8 +2,6 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
 import { Slider } from "@appica/ui-react/slider";
 import { Spinner } from "@appica/ui-react/spinner";
@@ -39,14 +37,29 @@ const MARGIN_STOPS: Array<[number, string]> = [
   [0.45, "#e5e7eb"],
 ];
 
-export function MarginaliteView() {
+/**
+ * Circonscriptions les plus disputées.
+ *
+ * `garde` restreint l'analyse au périmètre courant (une région, un
+ * département) ; sans elle, c'est la France entière. C'est ce qui permet à cet
+ * écran — autrefois l'outil national « Sièges marginaux » — de devenir la
+ * lentille Ciblage à toutes les échelles supra-circonscription.
+ */
+export function MarginaliteView({
+  garde,
+  perimetreLabel,
+}: {
+  garde?: (circoCode: string) => boolean;
+  perimetreLabel?: string;
+} = {}) {
   const [scrutin, setScrutin] = useState<Scrutin>("legis-2024-t1");
   const [seuil, setSeuil] = useState(10); // points
 
   const q = useMarginalite(scrutin, "circonscriptions", true);
   // Référence stable (sinon `?? []` recrée un tableau à chaque render et
   // invalide tous les useMemo en aval).
-  const rows = useMemo(() => q.data ?? [], [q.data]);
+  const all = useMemo(() => q.data ?? [], [q.data]);
+  const rows = useMemo(() => (garde ? all.filter((r) => garde(r.code)) : all), [all, garde]);
 
   const disputed = useMemo(() => rows.filter((r) => r.marginPts * 100 <= seuil), [rows, seuil]);
 
@@ -66,13 +79,12 @@ export function MarginaliteView() {
   }, [rows]);
 
   return (
-    <div className="flex h-full w-full min-h-0 flex-col gap-3 overflow-auto bg-canvas p-3">
-      <div className="flex items-end justify-between gap-4 px-2 pt-2">
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <Link href="/analyser" className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-3 w-3" /> Analyser
-          </Link>
-          <h1 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight">Sièges marginaux</h1>
+          <h2 className="text-[15px] font-semibold tracking-tight">
+            Sièges marginaux{perimetreLabel ? ` · ${perimetreLabel}` : ""}
+          </h2>
           <p className="mt-0.5 text-[12px] text-muted-foreground">Circonscriptions les plus disputées — écart entre le 1er et le 2e.</p>
         </div>
         {q.isFetching && <Spinner currentColor className="size-4 text-muted-foreground" />}

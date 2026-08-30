@@ -1,176 +1,61 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Search, X } from "lucide-react";
-import { Input } from "@appica/ui-react/input";
+import { useMemo } from "react";
 import { Button } from "@appica/ui-react/button";
-import { cn } from "@/lib/utils";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
 import { type Maille, MAILLE_LABELS } from "@/lib/map-config";
 import { SCRUTIN_META, SCRUTINS_CHRONO, maillesFor, type Scrutin } from "@/lib/url-state";
 import { useScrutinDetail } from "@/lib/queries";
-import {
-  useSearchIndex,
-  searchEntries,
-  type SearchEntry,
-  type SearchEntryType,
-} from "@/lib/search";
 
 // Ordre chronologique des scrutins (un même territoire superposé dans le
 // temps) — filtré par maille juste en dessous.
 const TIMELINE: Scrutin[] = SCRUTINS_CHRONO;
 
-// Mailles disponibles dans l'index de recherche (⌘K).
-const MAILLES: Maille[] = ["regions", "departements", "circonscriptions", "communes"];
-const MAILLE_TO_TYPE: Record<string, SearchEntryType> = {
-  regions: "region",
-  departements: "departement",
-  circonscriptions: "circo",
-  communes: "commune",
-};
 
 const fmtPct = (v: number) =>
   `${(v * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
 
-export function ComparateurView() {
-  const [maille, setMaille] = useState<Maille>("departements");
-  const [code, setCode] = useState<string>("59");
-  const [name, setName] = useState<string>("Nord");
-
-  const type = MAILLE_TO_TYPE[maille];
+/**
+ * Tous les scrutins d'un même territoire, côte à côte et dans l'ordre.
+ *
+ * La maille et le code viennent du périmètre d'Analyser : cet écran n'a plus
+ * son propre sélecteur ni son territoire par défaut codé en dur (« Nord »).
+ * Les scrutins non disponibles à cette maille sont simplement absents de la
+ * frise (`maillesFor`).
+ */
+export function ComparateurView({
+  maille,
+  code,
+  label,
+}: {
+  maille: Maille;
+  code: string;
+  label: string;
+}) {
   const timeline = useMemo(() => TIMELINE.filter((s) => maillesFor(s).includes(maille)), [maille]);
 
-  function pick(entry: SearchEntry) {
-    setCode(entry.code);
-    setName(entry.nom);
-  }
-
-  function changeMaille(m: Maille) {
-    setMaille(m);
-    setCode("");
-    setName("");
-  }
-
   return (
-    <div className="flex h-full w-full min-h-0 flex-col gap-3 overflow-auto bg-canvas p-3">
-      <div className="px-2 pt-2">
-        <Link href="/analyser" className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-3 w-3" /> Analyser
-        </Link>
-        <h1 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight">Comparateur de scrutins</h1>
+    <div className="flex min-w-0 flex-col gap-3">
+      <div>
+        <h2 className="text-[15px] font-semibold tracking-tight">Tous les scrutins de {label}</h2>
         <p className="mt-0.5 text-[12px] text-muted-foreground">
-          Superposer tous les scrutins sur un même territoire pour repérer les bascules.
+          Superposer les scrutins d&apos;un même territoire pour repérer les bascules ·{" "}
+          {MAILLE_LABELS[maille].toLowerCase()}.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface p-4 shadow-card">
-        <div className="inline-flex items-center gap-0.5 rounded-pill bg-surface-soft/70 p-0.5">
-          {MAILLES.map((m) => (
-            <Button
-              key={m}
-              type="button"
-              onClick={() => changeMaille(m)}
-              aria-pressed={maille === m}
-              className={cn(
-                "rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                maille === m
-                  ? "bg-surface text-foreground shadow-[0_1px_2px_rgba(10,10,12,0.06)]"
-                  : "text-muted-foreground hover:text-foreground",
-              )} variant="ghost" size="sm">
-              {MAILLE_LABELS[m]}
-            </Button>
-          ))}
-        </div>
-        <span className="mx-1 h-5 w-px bg-border" />
-        <TerritorySearch type={type} placeholder={`Rechercher ${labelFor(maille)}…`} onPick={pick} />
-        {code && name && (
-          <span className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground">
-            {name}
-            <Button type="button" onClick={() => { setCode(""); setName(""); }} aria-label="Effacer" variant="ghost" size="sm">
-              <X className="h-3 w-3" />
-            </Button>
-          </span>
-        )}
-      </div>
-
-      {code ? (
+      {timeline.length > 0 ? (
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
           {timeline.map((s) => (
             <ScrutinCard key={s} scrutin={s} maille={maille} code={code} />
           ))}
         </div>
       ) : (
-        <div className="grid min-h-[300px] place-items-center rounded-lg bg-surface p-8 text-center shadow-card">
-          <div>
-            <Search className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-2 text-[13px] font-medium">Choisis un territoire</p>
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              Sélectionne une maille puis recherche {labelFor(maille)}.
-            </p>
-          </div>
+        <div className="grid min-h-[240px] place-items-center rounded-lg bg-surface p-8 text-center shadow-card">
+          <p className="text-[13px] text-muted-foreground">
+            Aucun scrutin disponible à cette maille.
+          </p>
         </div>
-      )}
-    </div>
-  );
-}
-
-function labelFor(maille: Maille): string {
-  switch (maille) {
-    case "regions": return "une région";
-    case "departements": return "un département";
-    case "circonscriptions": return "une circonscription";
-    default: return "une commune";
-  }
-}
-
-function TerritorySearch({
-  type,
-  placeholder,
-  onPick,
-}: {
-  type: SearchEntryType;
-  placeholder: string;
-  onPick: (e: SearchEntry) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const index = useSearchIndex(true);
-
-  const results = useMemo(() => {
-    if (!index.data || query.trim().length < 1) return [];
-    return searchEntries(index.data, query, 60).filter((e) => e.type === type).slice(0, 8);
-  }, [index.data, query, type]);
-
-  return (
-    <div className="relative">
-      <div className="inline-flex items-center gap-2 rounded-pill border border-border bg-surface px-3 py-1.5">
-        <Search className="h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder={placeholder}
-          className="w-52 text-[12px] placeholder:text-muted-foreground" />
-      </div>
-      {open && results.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-72 w-72 overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-lg">
-          {results.map((e) => (
-            <li key={`${e.type}-${e.code}`}>
-              <button
-                type="button"
-                onMouseDown={(ev) => { ev.preventDefault(); onPick(e); setQuery(e.nom); setOpen(false); }}
-                className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-soft"
-              >
-                <span className="truncate">{e.nom}</span>
-                <span className="shrink-0 text-[10.5px] tabular-nums text-muted-foreground">
-                  {e.departement ? `${e.departement} · ${e.code}` : e.code}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
       )}
     </div>
   );

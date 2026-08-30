@@ -2,14 +2,12 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
-import { ArrowLeft, Crosshair, MapPin, Info, Plus, Check } from "lucide-react";
+import { Crosshair, MapPin, Info, Plus, Check } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
 import { Button } from "@appica/ui-react/button";
 import { Spinner } from "@appica/ui-react/spinner";
 import { cn } from "@/lib/utils";
-import { useCircoList, useCircoBureaux, scoreBureaux, type TargetBureau, type TargetReason } from "@/lib/queries";
-import { circoLabel } from "@/lib/territoire";
+import { useCircoBureaux, scoreBureaux, type TargetBureau, type TargetReason } from "@/lib/queries";
 import { BLOCS, blocById, type BlocId } from "@/lib/analysis";
 import { useHasTeam, addSectorsBulk } from "@/lib/campaign";
 import { nuanceColor, nuanceLabel } from "@/lib/nuances";
@@ -36,11 +34,14 @@ function priorityClass(p: number): string {
 
 const BLOC_KEY = "mvc:ciblage:bloc";
 
-export function CiblageView() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const circo = params.get("circo");
-  const list = useCircoList();
+/**
+ * Ciblage d'une CIRCONSCRIPTION : ses bureaux de vote classés par priorité.
+ *
+ * La circonscription vient désormais du périmètre d'Analyser (`?t=circo&c=…`)
+ * et non plus d'un `?circo=` propre à cet écran, ni de son sélecteur maison :
+ * choisir un territoire en haut de page suffit.
+ */
+export function CiblageView({ circo }: { circo: string }) {
   const raw = useCircoBureaux(circo);
 
   const [bloc, setBloc] = useState<BlocId | "">(() => {
@@ -74,7 +75,7 @@ export function CiblageView() {
     setPushing(false);
     setNotice(
       added > 0
-        ? `${added} bureau${added > 1 ? "x" : ""} ajouté${added > 1 ? "s" : ""} au plan de terrain du QG (onglet Campagne).`
+        ? `${added} bureau${added > 1 ? "x" : ""} ajouté${added > 1 ? "s" : ""} au plan de terrain du QG (section « Le plan »).`
         : "Ces bureaux sont déjà dans votre plan de terrain.",
     );
   }
@@ -85,33 +86,17 @@ export function CiblageView() {
   const blocMeta = bloc ? blocById(bloc) : null;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
-      <Link href="/analyser" className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground">
-        <ArrowLeft className="h-3.5 w-3.5" /> Analyser
-      </Link>
-
-      <header className="mt-3 border-b border-foreground/5 pb-5">
+    <div className="flex min-w-0 flex-col">
+      <header className="border-b border-foreground/5 pb-4">
         <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           <Crosshair className="h-3.5 w-3.5" /> Ciblage terrain
         </p>
-        <h1 className="mt-0.5 text-[22px] font-semibold tracking-tight">Bureaux prioritaires</h1>
+        <h2 className="mt-0.5 text-[15px] font-semibold tracking-tight">Bureaux prioritaires</h2>
         <p className="text-[12.5px] text-muted-foreground">
           Où concentrer le porte-à-porte, en fonction de votre positionnement.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Circonscription</span>
-            <Select value={circo ?? ""} onValueChange={(appicaValue) => router.push(String(appicaValue ?? "") ? `/analyser/ciblage?circo=${String(appicaValue ?? "")}` : "/analyser/ciblage")} size="sm">
-              <SelectTrigger className="min-w-[240px] text-[13px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-              <SelectItem value="">Choisir une circonscription…</SelectItem>
-              {(list.data ?? []).map((c) => (
-                <SelectItem key={c.code} value={c.code}>{circoLabel(c.code)}</SelectItem>
-              ))}
-            </SelectContent>
-            </Select>
-          </label>
           <label className="flex flex-col gap-1">
             <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Mon positionnement</span>
             <Select value={bloc} onValueChange={(appicaValue) => changeBloc(String(appicaValue ?? "") as BlocId | "")} size="sm">
@@ -127,9 +112,7 @@ export function CiblageView() {
         </div>
       </header>
 
-      {!circo ? (
-        <Empty>Choisissez une circonscription et votre positionnement pour classer ses bureaux par priorité.</Empty>
-      ) : raw.isError ? (
+      {raw.isError ? (
         <ErrorState
           className="mt-6"
           message="Impossible de charger les bureaux de cette circonscription."

@@ -1,5 +1,5 @@
-import { SociologieView } from "@/app/(app)/analyser/sociologie/sociologie-view";
+import { SociologieLens } from "@/app/(app)/analyser/sociologie/sociologie-lens";
 
 export default function SociologiePage() {
-  return <SociologieView />;
+  return <SociologieLens />;
 }

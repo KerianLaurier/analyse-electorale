@@ -1,11 +1,6 @@
-import { Suspense } from "react";
-import { AnalyserView } from "@/app/(app)/analyser/analyser-view";
+import { DiagnosticView } from "@/app/(app)/analyser/diagnostic-view";
 
 export default function AnalyserPage() {
-  // Suspense requis : le territoire analysé est lu depuis l'URL (useSearchParams).
-  return (
-    <Suspense fallback={<div className="flex-1 bg-canvas" />}>
-      <AnalyserView />
-    </Suspense>
-  );
+  // Le périmètre est lu par la coquille (layout) : rien à faire ici.
+  return <DiagnosticView />;
 }

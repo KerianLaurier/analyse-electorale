@@ -38,8 +38,8 @@ const TYPE_ICON: Record<SearchEntryType, typeof MapPin> = {
 // Navigation rapide (toujours dispo, en bas de la palette).
 const NAV_SHORTCUTS = [
   { href: "/explorer", label: "Ouvrir l'explorateur" },
-  { href: "/analyser/simulateur", label: "Simulateur législatif" },
-  { href: "/analyser/marginalite", label: "Carte des sièges marginaux" },
+  { href: "/analyser/projection", label: "Projection de sièges (national)" },
+  { href: "/analyser/ciblage", label: "Sièges marginaux / ciblage" },
 ] as const;
 
 export function CommandPalette() {
