@@ -28,9 +28,29 @@ test("l'explorateur charge la carte et ses contrôles", async ({ page }) => {
   ).toHaveAttribute("aria-current", "page");
 });
 
+test("les anciens liens ?tab= redirigent vers les nouvelles sections du QG", async ({ page }) => {
+  await login(page);
+  // Liens partagés / mis en favori du temps où le QG tenait en une route à
+  // dix onglets (cf. LEGACY_TAB_REDIRECTS).
+  await page.goto("/espace?tab=canvass");
+  await expect(page).toHaveURL(/\/espace\/terrain\?vue=porte-a-porte$/);
+  await page.goto("/espace?tab=campaign");
+  await expect(page).toHaveURL(/\/espace\/plan\?vue=campagne$/);
+});
+
+test("la navigation du QG expose les 4 sections", async ({ page }) => {
+  await login(page);
+  await page.goto("/espace");
+  const nav = page.getByRole("navigation", { name: "Sections du QG" });
+  for (const label of ["Aujourd’hui", "Le plan", "Le terrain", "L’équipe"]) {
+    await expect(nav.getByRole("link", { name: new RegExp(label) })).toBeVisible();
+  }
+  await expect(nav.getByRole("link", { name: /Aujourd’hui/ })).toHaveAttribute("aria-current", "page");
+});
+
 test("créer puis supprimer une action dans le QG", async ({ page }) => {
   await login(page);
-  await page.goto("/espace?tab=tasks");
+  await page.goto("/espace/terrain?vue=actions");
 
   const titre = `[E2E] Tract gare — ${Date.now()}`;
   await page.getByRole("button", { name: "Nouvelle action" }).click();

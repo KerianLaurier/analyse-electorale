@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
 import { Button } from "@appica/ui-react/button";
@@ -110,9 +111,9 @@ export function WaitlistForm({ className }: { className?: string }) {
         En vous inscrivant, vous acceptez d&apos;être recontacté·e à l&apos;ouverture du service.
         Votre adresse ne sert qu&apos;à cela, n&apos;est jamais cédée, et vous pouvez demander son
         effacement à tout moment —{" "}
-        <a href="/confidentialite" className="underline underline-offset-2 hover:text-foreground">
+        <Link href="/confidentialite" className="underline underline-offset-2 hover:text-foreground">
           politique de confidentialité
-        </a>
+        </Link>
         .
       </p>
     </form>
