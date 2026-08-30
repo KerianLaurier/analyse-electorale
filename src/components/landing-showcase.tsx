@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
+import { useSessionCookie } from "@/components/landing-session";
 
 const DISPLAY = "[font-family:var(--font-display)]";
 
@@ -67,7 +68,10 @@ const TABS: {
  * plateforme — intelligence électorale et pilotage de campagne.
  * Chaque onglet = un bénéfice, une liste de fonctionnalités, un aperçu et un CTA.
  */
-export function LandingShowcase({ authed }: { authed: boolean }) {
+export function LandingShowcase() {
+  // Résolu après hydratation (cookie de session), plutôt que passé en prop
+  // depuis le serveur : c'est ce qui permet à la landing de rester statique.
+  const authed = useSessionCookie();
   const [active, setActive] = useState<TabId>("explorer");
   const base = useId();
   const current = TABS.find((t) => t.id === active) ?? TABS[0];

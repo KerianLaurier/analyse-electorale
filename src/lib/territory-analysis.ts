@@ -271,7 +271,14 @@ export type PotentielBlocRow = {
  * Potentiel des 5 blocs pour une commune / un département / une région, depuis
  * l'indice précalculé par commune (pot_/aff_/reel_), agrégé pondéré population
  * au-delà de la commune.
+ *
+ * ⚠ `potentiel_communes.json` stocke des **points de pourcentage** (0–100),
+ * là où `PotentielBlocRow` — et la variante circonscription
+ * (`usePotentielCirco`) — expose des **fractions** (0–1). On divise donc par
+ * 100 à la lecture. Sans cette normalisation, l'affichage sortait des scores à
+ * « 1710 % » sur toute maille autre que la circonscription.
  */
+const PCT_POINTS_TO_FRACTION = 1 / 100;
 export function usePotentielTerritory(type: TerritoryType | null, code: string | null) {
   return useQuery({
     enabled: !!type && !!code && type !== "circo",
@@ -297,7 +304,7 @@ export function usePotentielTerritory(type: TerritoryType | null, code: string |
           const col = cols[key];
           if (type === "commune") {
             const v = col[code];
-            agg[key] = v != null && Number.isFinite(v) ? v : null;
+            agg[key] = v != null && Number.isFinite(v) ? v * PCT_POINTS_TO_FRACTION : null;
             continue;
           }
           let sum = 0, w = 0;
@@ -308,7 +315,7 @@ export function usePotentielTerritory(type: TerritoryType | null, code: string |
             sum += v * p;
             w += p;
           }
-          agg[key] = w > 0 ? sum / w : null;
+          agg[key] = w > 0 ? (sum / w) * PCT_POINTS_TO_FRACTION : null;
         }
         rows.push({ bloc: b.id, ...agg });
       }

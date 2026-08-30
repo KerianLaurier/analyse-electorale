@@ -55,28 +55,51 @@ rm -rf node_modules package-lock.json && npm install --os=linux --cpu=x64 && npm
 
 ## Structure des routes
 
-Implémentée à l'identique de la section 5 du brief :
+**Deux groupes de routes, deux layouts racines** — `src/app/(vitrine)/` et
+`src/app/(app)/`. Les parenthèses n'apparaissent pas dans les URL : `/`,
+`/explorer`, `/espace` sont inchangés. Il n'y a **pas** de `src/app/layout.tsx` ;
+chaque groupe porte son propre `<html>`/`<body>`.
+
+Pourquoi : tout le chrome applicatif (en-tête, palette ⌘K, TanStack Query,
+supabase-js, bandeau d'abonnement, PWA) est fait de composants clients. Tant
+qu'il vivait dans un layout commun, la vitrine téléchargeait et hydratait ce
+JavaScript sans en afficher un pixel (`AppHeader` renvoie `null` sur `/`).
+Mesuré sur un build de production : **502 → 318 kB gz** de JS sur la landing,
+et `/` repasse de `ƒ` (rendue à chaque requête) à `○` (statique, servie par le
+CDN). Le prix : passer de la vitrine à l'app recharge la page — sans effet,
+c'est déjà une frontière de sous-domaine en production.
 
 ```
-/                           Landing publique
-/explorer                   Vue principale (carte)
-/explorer/[maille]/[code]   État d'URL avec sélection
-/analyser                   → redirige vers /analyser/simulateur
-  /comparateur
-  /simulateur
-  /marginalite
-/circo/[code]
-/commune/[insee]
-/candidat/[id]
-/elu/[id]
-/bienvenue                  Accueil post-inscription (essai démarré, premiers pas)
-/auth
-  /login
-  /signup                   Démarrage de l'essai gratuit (14 jours)
-  /callback                 Retour du lien de confirmation e-mail (échange PKCE)
-  /abonnement               Tarifs publics + checkout + gestion (résilier/reprendre)
-  /team
+(vitrine)/                  Layout racine sans provider client
+  /                         Landing publique (statique)
+  /cgu  /mentions-legales  /confidentialite
+
+(app)/                      Layout racine + chrome applicatif
+  /explorer                 Vue principale (carte)
+  /explorer/[maille]/[code] État d'URL avec sélection
+  /analyser                 Diagnostic du périmètre (lentille d'accueil)
+    /historique  /sociologie  /ciblage  /projection
+  /espace                   QG — tableau de bord « aujourd'hui »
+    /plan                   Cible, objectif de voix, secteurs, épingles
+    /terrain                Actions, permanences, porte-à-porte, phoning
+    /equipe                 Membres & rôles, contacts, notes
+  /circo/[code]  /commune/[insee]  /bureau/[code]
+  /candidat/[id]  /elu/[id]
+  /bienvenue                Accueil post-inscription (essai démarré, premiers pas)
+  /auth
+    /login
+    /signup                 Démarrage de l'essai gratuit (14 jours)
+    /callback               Retour du lien de confirmation e-mail (échange PKCE)
+    /abonnement             Tarifs publics + checkout + gestion (résilier/reprendre)
+    /team                   Réglages d'équipe (invitations, création de rôles)
+  /[...introuvable]         Attrape-tout → 404 maison (cf. ci-dessous)
 ```
+
+> **404** — sans layout racine commun, Next n'a plus d'endroit où composer une
+> 404 globale et retombe sur sa page par défaut en anglais. Le segment
+> attrape-tout `(app)/[...introuvable]` appelle `notFound()` et rend la 404
+> maison. Les routes déclarées ont la priorité ; un visiteur non connecté n'y
+> arrive pas (le proxy renvoie toute URL inconnue vers la connexion).
 
 Les fiches territoire `/circo/[code]` et `/commune/[insee]` et les fiches personne `/candidat/[id]` et `/elu/[id]` sont implémentées (historique multi-scrutins, sociologie INSEE, classement, enrichissement nominatif). L'onglet `Suivre` (sondages, Assemblée, agenda, parrainages, soirée électorale) a été retiré — le produit se concentre sur Explorer, Analyser et le QG de campagne. Tout son code reste récupérable dans l'historique git.
 
@@ -127,20 +150,95 @@ moteur.
 
 ```
 src/
-  app/                      App Router (pages + layout global)
-    explorer/               Vue Explorer (carte 3 colonnes)
+  app/
+    (vitrine)/layout.tsx    Layout racine vitrine (fontes + thème, zéro provider)
+    (app)/layout.tsx        Layout racine app (chrome complet)
+    (app)/espace/           QG : layout (contexte + rôle) puis 4 sections
+      espace-shell.tsx      Contexte d'équipe + navigation des sections
+      routes.ts             Plan de routes + redirections des anciens ?tab=
+    globals.css, manifest.ts, robots.ts, sitemap.ts, opengraph-image.tsx…
   components/
     app-header.tsx          Header global + bouton recherche (déclenche ⌘K)
     command-palette.tsx     CommandDialog + raccourcis ⌘K et F (focus mode)
-    map.tsx                 Wrapper MapLibre minimal (style OSM en attendant PMTiles)
-    page-placeholder.tsx    Squelette des pages non encore implémentées
-    ui/                     Composants shadcn (button, dialog, command, …)
+    landing-session.tsx     Détection de session sur la vitrine, sans supabase-js
+    map.tsx                 Wrapper MapLibre (PMTiles + fond IGN)
   providers/
     query-provider.tsx      QueryClientProvider TanStack Query
-    theme-provider.tsx      next-themes (light/dark/system)
+    theme-provider.tsx      Thème Appica UI (light/dark/system)
   lib/
     utils.ts                cn() et helpers
 ```
+
+### Analyser : un périmètre, cinq lentilles
+
+Deux modèles mentaux se contredisaient : `/analyser` était centré sur un
+**territoire**, tandis que ses six « outils spécialisés » (comparateur,
+simulateur, marginalité, sociologie, potentiel, ciblage) repartaient chacun
+d'un état **national** codé en dur, avec leur propre sélecteur et leur propre
+bouton retour — enterrés dans un pied de page, dont deux masqués sur mobile.
+Choisir un territoire n'avait aucun effet sur eux.
+
+Le **périmètre** est désormais l'objet central : choisi une fois, porté par
+l'URL (`?t=&c=&l=`, inchangée), il suit d'une lentille à l'autre. Et **la France
+n'est plus un mode à part** — c'est le périmètre par défaut :
+
+| Lentille | Territoire | France |
+| --- | --- | --- |
+| `/analyser` — Diagnostic | KPI, marge, participation, rapport de force | rapport de force national par bloc |
+| `/analyser/historique` | tous les scrutins du territoire (ex-comparateur) | → invite à choisir un territoire |
+| `/analyser/sociologie` | profil INSEE + potentiel par bloc | corrélations INSEE × vote **ou** sur/sous-performance (ex-potentiel) |
+| `/analyser/ciblage` | bureaux prioritaires (circo) | circonscriptions les plus disputées (ex-marginalité), filtrables par région/département |
+| `/analyser/projection` | projection tendancielle + scénario national | simulateur de sièges (ex-simulateur) |
+
+« Sièges marginaux » devient donc la lentille Ciblage à l'échelle France, et
+« ciblage terrain » la même lentille à l'échelle circonscription : un seul
+geste, à l'échelle où l'on se trouve. Quand une analyse n'a pas de sens à une
+échelle (le ciblage sur une commune), la page l'explique et propose l'échelle
+qui convient plutôt que de faire disparaître l'onglet.
+
+Les anciennes URL redirigent en conservant le périmètre —
+`/analyser/comparateur` → `/historique`, `/marginalite` → `/ciblage`,
+`/simulateur` → `/projection`, `/potentiel` → `/sociologie`, et
+`/analyser/ciblage?circo=1502` → le périmètre circonscription correspondant.
+
+### Le QG : 4 sections, et des rôles
+
+`/espace` tenait dans **une seule route à dix onglets** (`?tab=`), qui importait
+statiquement ses dix vues : ouvrir le phoning chargeait aussi la carte du
+porte-à-porte et le calendrier des permanences. Les dix onglets sont regroupés
+en quatre sections, chacune un vrai segment de route (donc son propre lot de
+code) ; à l'intérieur, la vue reste un paramètre `?vue=`.
+
+| Section | Regroupe | Pour qui |
+| --- | --- | --- |
+| `/espace` — Aujourd'hui | tableau de bord | tout le monde, adapté au rôle |
+| `/espace/plan` | Campagne + Territoire + Épingles | édité par le responsable |
+| `/espace/terrain` | Actions, Permanences, Porte-à-porte, Phoning | tout le monde |
+| `/espace/equipe` | Membres & rôles, Contacts, Notes | tout le monde |
+
+Les anciens liens `/espace?tab=…` sont redirigés (`LEGACY_TAB_REDIRECTS`).
+
+**Rôles** — deux notions distinctes, à ne pas confondre :
+
+- le **rôle structurel** `WsRole` (`owner` / `member`), dérivé de
+  `profiles.role` et de `teams.created_by`, sans migration. Un espace sans
+  équipe vaut `owner` ;
+- les **rôles de campagne** (`team_roles` : « Logistique », « Responsable
+  terrain »…), étiquettes libres définies par l'équipe, qui n'ouvrent aucun
+  droit.
+
+Ce que le rôle change : l'ordre des sections (le terrain d'abord pour un
+membre), le contenu du tableau de bord (« mes actions » plutôt que celles de
+toute l'équipe), la checklist de prise en main (responsable seulement) et
+l'édition du plan — cible, objectif de voix, création/suppression de secteurs.
+Le **compte rendu de terrain** (statut d'un secteur, contactés, favorables)
+reste ouvert à tous : c'est le travail des membres.
+
+> ⚠️ **Garde-fou d'interface uniquement.** Les politiques RLS de `campaigns` et
+> `sectors` sont à l'échelle de l'équipe : un membre déterminé peut encore
+> écrire via l'API. Aligner la base demande une migration dédiée (restreindre
+> `UPDATE`/`INSERT` sur `campaigns` et sur les colonnes de plan de `sectors` au
+> créateur de l'équipe) — non appliquée ici.
 
 ## Raccourcis
 
@@ -212,9 +310,11 @@ middleware (`src/proxy.ts`).
      (`/explorer`, `/analyser`, `/espace`, `/auth`, …) vers le sous-domaine app.
    - **Absente** (local/dev) → tout reste sur un seul host, comportement inchangé.
 
-Itération indépendante : modifier la vitrine n'affecte pas le runtime de l'app
-(code splitté), et les Deploy Previews Netlify (par branche/PR) permettent de
-prévisualiser sans risque.
+Itération indépendante : modifier la vitrine n'affecte pas le runtime de l'app,
+et les Deploy Previews Netlify (par branche/PR) permettent de prévisualiser sans
+risque. Le découpage n'est pas qu'un routage d'hôte : les deux surfaces ont des
+**layouts racines distincts** (`(vitrine)` / `(app)`, cf. « Structure des
+routes »), donc des arbres de composants et des bundles séparés.
 
 ## Observabilité & tests
 

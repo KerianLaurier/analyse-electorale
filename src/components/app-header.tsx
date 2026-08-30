@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Search, Bell, Settings2, LogOut, Users, Star, ListTodo, CalendarClock, Target, CheckCheck, X, KeyRound, ShieldCheck, Megaphone, UserRound, Sparkles, MonitorDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ESPACE } from "@/app/(app)/espace/routes";
 import { BrandMark } from "@/components/brand-mark";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
@@ -39,9 +40,14 @@ const PRIMARY_NAV = [
 // seulement — l'horizontale ferait se chevaucher des cibles voisines.
 const HIT_AREA = "relative before:absolute before:-inset-y-1.5 before:-inset-x-0.5 before:content-['']";
 
-// Pages sans chrome applicatif : écrans d'auth + landing publique (`/`),
-// qui possèdent leur propre en-tête.
-const NO_CHROME = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset", "/offline", "/mentions-legales", "/confidentialite", "/cgu"]);
+// Pages sans chrome applicatif : écrans d'auth et secours hors-ligne, qui
+// possèdent leur propre en-tête.
+//
+// La vitrine (`/`, pages légales) n'a plus besoin d'y figurer : elle vit dans
+// le groupe de routes `(vitrine)`, dont le layout ne monte tout simplement pas
+// ce composant (cf. src/app/(vitrine)/layout.tsx). Elle ne télécharge donc plus
+// son JavaScript, là où ce garde-fou se contentait de masquer le rendu.
+const NO_CHROME = new Set(["/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset", "/offline"]);
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -189,7 +195,7 @@ export function AppHeader() {
             title="Mes épingles"
             nativeButton={false}
             className={cn("hidden active:scale-95 sm:inline-flex", HIT_AREA)}
-            render={<Link href="/espace?tab=pins" />}
+            render={<Link href={ESPACE.plan("epingles")} />}
           >
             <Star className="h-4 w-4" />
           </Button>
@@ -237,7 +243,7 @@ export function AppHeader() {
                 <Megaphone className="h-4 w-4" />
                 Mon QG
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/espace?tab=pins")}>
+              <DropdownMenuItem onClick={() => router.push(ESPACE.plan("epingles"))}>
                 <Star className="h-4 w-4" />
                 Mes épingles
               </DropdownMenuItem>

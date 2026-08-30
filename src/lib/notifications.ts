@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { useTasks } from "@/lib/tasks";
 import { useShifts } from "@/lib/shifts";
 import { useCampaign, useSectors, voteGoal } from "@/lib/campaign";
+import { ESPACE } from "@/app/(app)/espace/routes";
 
 /**
  * Centre de notifications — alertes dérivées (côté client) des données du QG :
@@ -97,9 +98,9 @@ export function useNotifications(meId: string | null): AppNotification[] {
       if (!forMe) continue;
       const d = daysUntil(t.dueDate);
       if (d < 0) {
-        out.push({ id: `task:${t.id}:overdue`, kind: "task", tone: "warn", title: `Action en retard : ${t.title}`, detail: "Échéance dépassée", href: "/espace?tab=tasks" });
+        out.push({ id: `task:${t.id}:overdue`, kind: "task", tone: "warn", title: `Action en retard : ${t.title}`, detail: "Échéance dépassée", href: ESPACE.terrain("actions") });
       } else if (d <= 2) {
-        out.push({ id: `task:${t.id}:due`, kind: "task", tone: "info", title: `Échéance proche : ${t.title}`, detail: whenLabel(d), href: "/espace?tab=tasks" });
+        out.push({ id: `task:${t.id}:due`, kind: "task", tone: "info", title: `Échéance proche : ${t.title}`, detail: whenLabel(d), href: ESPACE.terrain("actions") });
       }
     }
 
@@ -108,9 +109,9 @@ export function useNotifications(meId: string | null): AppNotification[] {
       const d = daysUntil(s.date);
       if (d < 0) continue;
       if (s.joined && d <= 2) {
-        out.push({ id: `shift:${s.id}:mine`, kind: "shift", tone: "info", title: `Permanence : ${s.title}`, detail: whenLabel(d), href: "/espace?tab=shifts" });
+        out.push({ id: `shift:${s.id}:mine`, kind: "shift", tone: "info", title: `Permanence : ${s.title}`, detail: whenLabel(d), href: ESPACE.terrain("permanences") });
       } else if (!s.joined && s.shared && d <= 3 && (s.capacity == null || s.signups.length < s.capacity)) {
-        out.push({ id: `shift:${s.id}:open`, kind: "shift", tone: "warn", title: `Créneau à pourvoir : ${s.title}`, detail: `${s.signups.length}${s.capacity != null ? ` / ${s.capacity}` : ""} inscrits · ${whenLabel(d)}`, href: "/espace?tab=shifts" });
+        out.push({ id: `shift:${s.id}:open`, kind: "shift", tone: "warn", title: `Créneau à pourvoir : ${s.title}`, detail: `${s.signups.length}${s.capacity != null ? ` / ${s.capacity}` : ""} inscrits · ${whenLabel(d)}`, href: ESPACE.terrain("permanences") });
       }
     }
   }
@@ -120,7 +121,7 @@ export function useNotifications(meId: string | null): AppNotification[] {
   if (goal && goal > 0) {
     const identified = sectors.reduce((a, x) => a + x.favorable, 0);
     if (identified >= goal) {
-      out.push({ id: "campaign:goal", kind: "campaign", tone: "success", title: "Objectif de voix atteint 🎯", detail: `${new Intl.NumberFormat("fr-FR").format(identified)} voix identifiées`, href: "/espace?tab=campaign" });
+      out.push({ id: "campaign:goal", kind: "campaign", tone: "success", title: "Objectif de voix atteint 🎯", detail: `${new Intl.NumberFormat("fr-FR").format(identified)} voix identifiées`, href: ESPACE.plan("campagne") });
     }
   }
 
