@@ -12,6 +12,7 @@ import { Badge } from "@appica/ui-react/badge";
 import { Separator } from "@appica/ui-react/separator";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { waitlistHref } from "@/lib/site-url";
 import { waitForSessionCookie } from "@/lib/session-cookie";
 import { safeInternalPath } from "@/lib/safe-redirect";
 
@@ -175,7 +176,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
           <p className="mt-6 text-center text-[12.5px] text-muted-foreground">
             {isLogin ? (
-              <>Pas encore de compte ? <Link href="/auth/signup" className="font-medium text-foreground hover:underline">Démarrer l&apos;essai gratuit</Link></>
+              // Pré-lancement : plus de création de compte — on renvoie vers la
+              // liste d'attente (lien absolu : la vitrine vit sur le domaine racine).
+              <>Pas encore de compte ? <a href={waitlistHref()} className="font-medium text-foreground hover:underline">Rejoindre la liste d&apos;attente</a></>
             ) : (
               <>Déjà inscrit ? <Link href="/auth/login" className="font-medium text-foreground hover:underline">Se connecter</Link></>
             )}

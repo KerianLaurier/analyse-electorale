@@ -2,14 +2,16 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 import { computeAccess } from "@/lib/billing";
 import { env } from "@/lib/env";
+import { waitlistHref } from "@/lib/site-url";
 
 // Routes publiques (pas de compte requis) : landing + écrans d'authentification.
 // /auth/team (réglages in-app) reste protégé.
+// PRÉ-LANCEMENT : /auth/signup (fermé, redirigé vers la liste d'attente) et
+// /auth/abonnement (formules non publiques : connexion requise) ne sont plus
+// dans la liste. À rétablir à l'ouverture du service.
 const PUBLIC_PATHS = new Set([
   "/",
   "/auth/login",
-  "/auth/signup",
-  "/auth/abonnement",
   "/auth/forgot",
   "/auth/reset",
   // Retour du lien de confirmation e-mail : doit passer avant toute session.
@@ -162,6 +164,14 @@ async function readSubscriptionClaims(supabase: ProxyClient): Promise<{
  * valide (actif ou essai en cours) accèdent à l'application.
  */
 export async function proxy(request: NextRequest) {
+  // PRÉ-LANCEMENT : l'inscription publique est fermée. Toute tentative (lien
+  // résiduel, URL connue) est renvoyée vers la liste d'attente de la vitrine.
+  // Placé avant l'aiguillage par sous-domaine pour rediriger en un seul saut.
+  // À retirer à l'ouverture du service.
+  if (request.nextUrl.pathname === "/auth/signup") {
+    return NextResponse.redirect(new URL(waitlistHref(), request.url));
+  }
+
   // Aiguillage vitrine / app par sous-domaine (no-op si NEXT_PUBLIC_APP_URL absent).
   const routed = routeBySubdomain(request);
   if (routed) return routed;

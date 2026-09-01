@@ -42,7 +42,9 @@ const TABS: {
       "Comparateur, sièges marginaux et simulateur de sièges",
     ],
     cta: "Explorer la carte",
-    href: () => "/explorer",
+    // Pré-lancement : les visiteurs anonymes sont dirigés vers la liste
+    // d'attente — la carte, comme tout l'applicatif, exige un compte.
+    href: (authed) => (authed ? "/explorer" : "#bientot"),
   },
   {
     id: "campagne",
@@ -59,7 +61,8 @@ const TABS: {
       "Tout partagé, en temps réel, avec votre équipe",
     ],
     cta: "Créer mon QG",
-    href: (authed) => (authed ? "/espace" : "/auth/signup"),
+    // Pré-lancement : l'inscription est fermée → liste d'attente.
+    href: (authed) => (authed ? "/espace" : "#bientot"),
   },
 ];
 

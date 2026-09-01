@@ -19,6 +19,11 @@
 
 [context.production.environment]
   NEXT_PUBLIC_APP_URL = "https://app.mouvancia.fr"
+  # Google Analytics 4 (vitrine uniquement, derrière le bandeau de consentement
+  # de src/components/analytics-consent.tsx). Sans la variable, ni traceur ni
+  # bandeau ne sont rendus — la définir ici (ou dans l'UI Netlify) avec l'ID de
+  # mesure « G-… » du flux GA pour activer la mesure d'audience.
+  # NEXT_PUBLIC_GA_ID = "G-XXXXXXXXXX"
 
 # ── Cache des gros assets statiques ──────────────────────────────────────────
 # Sans ces headers, les ~90 Mo de data (tuiles, Parquet) se revalident à chaque
