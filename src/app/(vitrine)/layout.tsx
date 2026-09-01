@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "../globals.css";
 import { ThemeProvider } from "@/providers/theme-provider";
+import { AnalyticsConsent } from "@/components/analytics-consent";
 
 /**
  * Layout racine de la VITRINE (landing publique + pages légales).
@@ -98,6 +99,8 @@ export default function VitrineLayout({
             un visiteur en préférence sombre doit voir la landing en sombre. */}
         <ThemeProvider defaultTheme="light" enableSystem disableTransitionOnChange>
           <main className="flex-1 flex flex-col">{children}</main>
+          {/* GA4 derrière consentement explicite — no-op sans NEXT_PUBLIC_GA_ID. */}
+          <AnalyticsConsent />
         </ThemeProvider>
       </body>
     </html>

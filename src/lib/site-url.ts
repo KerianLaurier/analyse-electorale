@@ -12,3 +12,15 @@ export function marketingUrl(): string {
   if (app) return app.replace(/:\/\/app\./, "://").replace(/\/$/, "");
   return "https://mouvancia.fr";
 }
+
+/**
+ * Cible de la liste d'attente de pré-lancement (section `#bientot` de la
+ * landing). Contrairement à `marketingUrl()`, on reste RELATIF quand le split
+ * par sous-domaine est inactif (local/preview) : rediriger vers
+ * `https://mouvancia.fr` depuis un environnement de test serait faux.
+ */
+export function waitlistHref(): string {
+  const app = process.env.NEXT_PUBLIC_APP_URL;
+  const vitrine = app ? app.replace(/:\/\/app\./, "://").replace(/\/$/, "") : "";
+  return `${vitrine}/#bientot`;
+}

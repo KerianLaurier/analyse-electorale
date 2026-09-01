@@ -19,6 +19,10 @@
 
 [context.production.environment]
   NEXT_PUBLIC_APP_URL = "https://app.mouvancia.fr"
+  # Google Analytics 4 (vitrine uniquement, derrière le bandeau de consentement
+  # de src/components/analytics-consent.tsx). Sans la variable, ni traceur ni
+  # bandeau ne sont rendus — production seulement, les previews restent vierges.
+  NEXT_PUBLIC_GA_ID = "G-5SGL5RJ75S"
 
 # ── Cache des gros assets statiques ──────────────────────────────────────────
 # Sans ces headers, les ~90 Mo de data (tuiles, Parquet) se revalident à chaque
