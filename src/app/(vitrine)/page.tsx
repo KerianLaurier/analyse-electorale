@@ -97,7 +97,7 @@ const SOURCES = [
 const FAQ = [
   {
     q: "Les données personnelles des électeurs sont-elles utilisées ?",
-    a: "Non. MOUVANCIA n'exploite que des agrégats publics (résultats par bureau de vote, indicateurs INSEE par commune). Aucune donnée nominative d'électeur n'est collectée ni stockée. Vos données de campagne, elles, restent privées et sécurisées.",
+    a: "Les analyses électorales utilisent des agrégats publics : résultats par bureau de vote et indicateurs INSEE. Les espaces de campagne permettent aussi d'enregistrer des contacts nominatifs et des comptes rendus. Ces informations peuvent contenir des données personnelles sensibles ; leur collecte et leur utilisation doivent respecter les règles applicables à votre campagne.",
   },
   {
     q: "L'outil est-il neutre politiquement ?",
@@ -128,7 +128,7 @@ const TRUST = [
 ];
 
 const SECURITY = [
-  { icon: EyeOff, title: "Aucune donnée d'électeur", desc: "MOUVANCIA n'exploite que des agrégats publics. Aucune donnée nominative d'électeur n'est collectée ni stockée." },
+  { icon: EyeOff, title: "Analyses sur données agrégées", desc: "Les cartes utilisent des données publiques agrégées. Les contacts et comptes rendus saisis dans votre espace de campagne peuvent contenir des données personnelles." },
   { icon: Server, title: "Hébergement dans l'UE", desc: "Vos données de campagne sont hébergées et chiffrées au sein de l'Union européenne." },
   { icon: Users, title: "Cloisonnement par équipe", desc: "Chaque équipe accède uniquement à ses propres données : contacts, terrain et analyses restent privés." },
   { icon: FileCheck2, title: "Conforme au RGPD", desc: "Les opinions politiques sont traitées avec le plus grand soin. Droits d'accès et d'effacement garantis." },

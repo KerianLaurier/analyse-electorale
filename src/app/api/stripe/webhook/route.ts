@@ -8,6 +8,7 @@ import {
   subscriptionToPatch,
   subscriptionUpdateEventType,
   type StripeSubscriptionLike,
+  type ProfileBillingPatch,
 } from "@/lib/stripe-sync";
 
 /**
@@ -19,7 +20,7 @@ import {
  * Route publique (exemptée du gating dans src/proxy.ts) : Stripe n'a pas de
  * session — l'authenticité est garantie par la signature `stripe-signature`.
  * Réponses : 2xx = traité (Stripe n'insiste pas), 4xx = rejeté, 5xx = Stripe
- * retentera (l'event est retiré de la dédup pour permettre ce rejeu).
+ * retentera (la transaction SQL est annulée intégralement en cas d'erreur).
  */
 export async function POST(request: Request) {
   if (!stripeEnabled() || !serviceRoleConfigured() || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -41,31 +42,27 @@ export async function POST(request: Request) {
 
   const admin = createServiceClient();
 
-  // Idempotence : Stripe rejoue les événements (retries, incidents réseau).
-  const { error: dedupError } = await admin.from("stripe_events").insert({ id: event.id, type: event.type });
-  if (dedupError) {
-    if (dedupError.code === "23505") {
-      return NextResponse.json({ received: true, duplicate: true });
-    }
-    return NextResponse.json({ error: "Dédup indisponible." }, { status: 500 });
-  }
+  let userId: string | null = null;
+  let customerId: string | null = null;
+  let subscriptionId: string | null = null;
+  let patch: ProfileBillingPatch | null = null;
+  let billingEvent: Record<string, unknown> | null = null;
 
   try {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
         if (session.mode !== "subscription") break;
-        const userId = session.metadata?.user_id ?? session.client_reference_id;
-        const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+        userId = session.metadata?.user_id ?? session.client_reference_id;
+        customerId = customerIdOf(session);
+        subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
         if (!userId || !subscriptionId) break;
 
         const sub = (await getStripe().subscriptions.retrieve(subscriptionId)) as unknown as StripeSubscriptionLike;
-        const patch = subscriptionToPatch(sub);
-        await admin.from("profiles").update(patch).eq("id", userId);
+        patch = subscriptionToPatch(sub);
 
         const plan = planFromSubscription(sub);
-        await admin.from("billing_events").insert({
-          user_id: userId,
+        billingEvent = {
           type: "subscribe",
           tier: plan?.tier ?? null,
           cycle: plan?.cycle ?? null,
@@ -76,7 +73,7 @@ export async function POST(request: Request) {
             subscription: subscriptionId,
             amount_eur: session.amount_total != null ? session.amount_total / 100 : null,
           },
-        });
+        };
         break;
       }
 
@@ -86,21 +83,18 @@ export async function POST(request: Request) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        const sub = event.data.object as unknown as StripeSubscriptionLike;
-        const stripeCustomerId = customerIdOf(event.data.object);
-        const userId = await resolveUserId(admin, sub.metadata?.user_id, stripeCustomerId);
+        const delivered = event.data.object as unknown as StripeSubscriptionLike;
+        // Stripe ne garantit pas l'ordre de livraison : relire l'état courant
+        // évite de réactiver un abonnement avec un ancien snapshot « active ».
+        const sub = event.type === "customer.subscription.deleted"
+          ? { ...delivered, status: "canceled" }
+          : await getStripe().subscriptions.retrieve(delivered.id) as unknown as StripeSubscriptionLike;
+        subscriptionId = sub.id;
+        customerId = customerIdOf(event.data.object);
+        userId = await resolveUserId(admin, sub.metadata?.user_id, customerId);
         if (!userId) break; // customer inconnu de nos profils : rien à faire
 
-        const patch = subscriptionToPatch(
-          event.type === "customer.subscription.deleted" ? { ...sub, status: "canceled" } : sub,
-        );
-        // Auto-réparation : rattache aussi le customer (normalement posé par la
-        // route checkout, absent si la subscription est née hors checkout). On
-        // le garde après suppression : le portail (factures) reste accessible.
-        await admin
-          .from("profiles")
-          .update({ ...patch, ...(stripeCustomerId ? { stripe_customer_id: stripeCustomerId } : {}) })
-          .eq("id", userId);
+        patch = subscriptionToPatch(sub);
 
         const plan = planFromSubscription(sub);
         const eventType =
@@ -113,8 +107,7 @@ export async function POST(request: Request) {
                   sub,
                 );
         if (eventType) {
-          await admin.from("billing_events").insert({
-            user_id: userId,
+          billingEvent = {
             type: eventType,
             tier: plan?.tier ?? null,
             cycle: plan?.cycle ?? null,
@@ -126,7 +119,7 @@ export async function POST(request: Request) {
                 ? { effective: true }
                 : { cancel_at: patch.cancel_at }),
             },
-          });
+          };
         }
         break;
       }
@@ -136,10 +129,10 @@ export async function POST(request: Request) {
         // Seuls les renouvellements : la première facture est déjà tracée par
         // checkout.session.completed (type `subscribe`).
         if (invoice.billing_reason !== "subscription_cycle") break;
-        const userId = await resolveUserId(admin, invoice.metadata?.user_id ?? undefined, customerIdOf(invoice));
+        customerId = customerIdOf(invoice);
+        userId = await resolveUserId(admin, invoice.metadata?.user_id ?? undefined, customerId);
         if (!userId) break;
-        await admin.from("billing_events").insert({
-          user_id: userId,
+        billingEvent = {
           type: "renewal",
           details: {
             source: "stripe",
@@ -147,18 +140,18 @@ export async function POST(request: Request) {
             invoice: invoice.id,
             amount_eur: invoice.amount_paid != null ? invoice.amount_paid / 100 : null,
           },
-        });
+        };
         break;
       }
 
       case "invoice.payment_failed": {
         const invoice = event.data.object;
-        const userId = await resolveUserId(admin, invoice.metadata?.user_id ?? undefined, customerIdOf(invoice));
+        customerId = customerIdOf(invoice);
+        userId = await resolveUserId(admin, invoice.metadata?.user_id ?? undefined, customerId);
         if (!userId) break;
         // Trace seulement : Stripe relance l'encaissement (Smart Retries) ; si
         // tout échoue, `customer.subscription.updated/deleted` coupera l'accès.
-        await admin.from("billing_events").insert({
-          user_id: userId,
+        billingEvent = {
           type: "payment_failed",
           details: {
             source: "stripe",
@@ -166,21 +159,30 @@ export async function POST(request: Request) {
             invoice: invoice.id,
             amount_eur: invoice.amount_due != null ? invoice.amount_due / 100 : null,
           },
-        });
+        };
         break;
       }
 
       default:
         break; // événement non suivi : dédupliqué mais sans effet
     }
+    // Supabase renvoie { error } sans lever d'exception par défaut. La RPC
+    // assure l'atomicité ; toute erreur doit produire un 5xx pour le retry.
+    const { data: applied, error } = await admin.rpc("apply_stripe_event", {
+      p_event_id: event.id,
+      p_event_type: event.type,
+      p_user_id: userId,
+      p_customer_id: customerId,
+      p_subscription_id: subscriptionId,
+      p_patch: patch,
+      p_billing_event: billingEvent,
+    });
+    if (error) throw error;
+    return NextResponse.json({ received: true, ...(applied === false ? { duplicate: true } : {}) });
   } catch (err) {
-    // Échec de traitement : on libère la dédup pour que le retry Stripe rejoue.
-    await admin.from("stripe_events").delete().eq("id", event.id);
     console.error("[stripe-webhook]", event.type, err);
     return NextResponse.json({ error: "Traitement échoué — à rejouer." }, { status: 500 });
   }
-
-  return NextResponse.json({ received: true });
 }
 
 /** Customer id d'un objet Stripe (string ou objet expandé). */
@@ -197,6 +199,7 @@ async function resolveUserId(
 ): Promise<string | null> {
   if (metadataUserId) return metadataUserId;
   if (!stripeCustomerId) return null;
-  const { data } = await admin.from("profiles").select("id").eq("stripe_customer_id", stripeCustomerId).single();
+  const { data, error } = await admin.from("profiles").select("id").eq("stripe_customer_id", stripeCustomerId).maybeSingle();
+  if (error) throw error;
   return (data?.id as string | undefined) ?? null;
 }

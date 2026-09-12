@@ -5,6 +5,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { getQueryClient } from "@/providers/query-provider";
+import { toast } from "@/components/toaster";
 
 /**
  * Campagne locale d'une équipe (1 par équipe) : territoire visé, objectif
@@ -172,7 +173,7 @@ export async function saveCampaign(patch: CampaignPatch): Promise<void> {
   patchData((d) => ({ ...d, campaign: next, hasTeam: true }));
 
   const supabase = createClient();
-  await supabase.from("campaigns").upsert(
+  const { error } = await supabase.from("campaigns").upsert(
     {
       team_id: teamId,
       target_type: next.target?.type ?? null,
@@ -187,6 +188,10 @@ export async function saveCampaign(patch: CampaignPatch): Promise<void> {
     },
     { onConflict: "team_id" },
   );
+  if (error) {
+    patchData((d) => ({ ...d, campaign: prev }));
+    toast.error("Campagne non enregistrée — réessayez.");
+  }
 }
 
 export type NewSector = {
@@ -196,18 +201,23 @@ export type NewSector = {
   priority?: number | null;
 };
 
-export async function addSector(input: NewSector): Promise<void> {
+export async function addSector(input: NewSector): Promise<boolean> {
   const { teamId } = await getIdentity();
-  if (!teamId) return;
+  if (!teamId) return false;
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("campaign_sectors")
     .insert({ team_id: teamId, name: input.name, registered: input.registered ?? null })
     .select("*")
     .single();
+  if (error || !data) {
+    toast.error("Secteur non enregistré — réessayez.");
+    return false;
+  }
   if (data) {
     patchData((d) => ({ ...d, sectors: [...d.sectors, mapSector(data as SectorRow)] }));
   }
+  return true;
 }
 
 /** Ajoute plusieurs secteurs d'un coup (génération / ciblage). Dédoublonne par
@@ -223,7 +233,7 @@ export async function addSectorsBulk(items: NewSector[]): Promise<number> {
   );
   if (fresh.length === 0) return 0;
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("campaign_sectors")
     .insert(
       fresh.map((i) => ({
@@ -238,6 +248,7 @@ export async function addSectorsBulk(items: NewSector[]): Promise<number> {
   if (data) {
     patchData((d) => ({ ...d, sectors: [...d.sectors, ...(data as SectorRow[]).map(mapSector)] }));
   }
+  if (error) toast.error("Secteurs non enregistrés — réessayez.");
   return data?.length ?? 0;
 }
 
@@ -264,14 +275,23 @@ export async function updateSector(id: string, patch: SectorPatch): Promise<void
   const { error } = await supabase
     .from("campaign_sectors")
     .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) void qc.invalidateQueries({ queryKey: CAMPAIGN_KEY });
+    .eq("id", id).select("id").single();
+  if (error) {
+    patchData((d) => ({ ...d, sectors: d.sectors.map((s) => s.id === id ? sectors[idx] : s) }));
+    void qc.invalidateQueries({ queryKey: CAMPAIGN_KEY });
+    toast.error("Modification du secteur non enregistrée — réessayez.");
+  }
 }
 
 export async function deleteSector(id: string): Promise<void> {
+  const previous = currentData().sectors;
   patchData((d) => ({ ...d, sectors: d.sectors.filter((s) => s.id !== id) }));
   const supabase = createClient();
-  await supabase.from("campaign_sectors").delete().eq("id", id);
+  const { error } = await supabase.from("campaign_sectors").delete().eq("id", id).select("id").single();
+  if (error) {
+    patchData((d) => ({ ...d, sectors: previous }));
+    toast.error("Suppression du secteur impossible — réessayez.");
+  }
 }
 
 function useCampaignQuery() {

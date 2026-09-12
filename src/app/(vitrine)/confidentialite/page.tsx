@@ -112,10 +112,10 @@ export default function ConfidentialitePage() {
 
       <h2>Cookies</h2>
       <p>
-        MOUVANCIA n&apos;utilise que des cookies strictement nécessaires au fonctionnement du service
-        (session et authentification), qui ne requièrent pas de consentement préalable. Aucun cookie
-        publicitaire ni de mesure d&apos;audience tierce n&apos;est déposé.{" "}
-        <Todo>À mettre à jour si un outil de mesure d&apos;audience est ajouté (bandeau de consentement requis)</Todo>.
+        Le service utilise des cookies de session et d&apos;authentification. Sur la vitrine,
+        lorsque la mesure d&apos;audience est activée, Google Analytics 4 est chargé uniquement
+        après votre acceptation dans le bandeau de consentement. Vous pouvez refuser cette mesure.
+        <Todo>Préciser les durées, les transferts éventuels et la procédure de retrait du consentement</Todo>.
       </p>
     </LegalShell>
   );

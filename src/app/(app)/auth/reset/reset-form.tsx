@@ -66,6 +66,8 @@ export function ResetForm() {
     }
     setPhase("done");
     await new Promise((r) => setTimeout(r, 900));
+    // Repartir avec un document et des caches neufs après le flux de récupération.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign("/explorer");
   }
 

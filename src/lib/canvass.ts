@@ -5,6 +5,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { getQueryClient } from "@/providers/query-provider";
+import { toast } from "@/components/toaster";
 
 /**
  * Comptes-rendus de porte-à-porte (table `canvass_reports`) — partagés avec
@@ -121,12 +122,12 @@ export type NewReport = {
   shared?: boolean;
 };
 
-export async function addReport(input: NewReport): Promise<void> {
+export async function addReport(input: NewReport): Promise<boolean> {
   const { userId, teamId } = await getIdentity();
-  if (!userId) return;
+  if (!userId) return false;
   const supabase = createClient();
   const team_id = input.shared && teamId ? teamId : null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("canvass_reports")
     .insert({
       user_id: userId,
@@ -145,18 +146,28 @@ export async function addReport(input: NewReport): Promise<void> {
     })
     .select("*")
     .single();
+  if (error || !data) {
+    toast.error("Compte rendu non enregistré — réessayez.");
+    return false;
+  }
   if (data) {
     getQueryClient().setQueryData<CanvassReport[]>(REPORTS_KEY, (old) =>
       [mapRow(data as Row, userId), ...(old ?? [])].sort((a, b) => (a.date < b.date ? 1 : -1)),
     );
   }
+  return true;
 }
 
 export async function deleteReport(id: string): Promise<void> {
   const qc = getQueryClient();
+  const previous = qc.getQueryData<CanvassReport[]>(REPORTS_KEY);
   qc.setQueryData<CanvassReport[]>(REPORTS_KEY, (old) => (old ?? []).filter((r) => r.id !== id));
   const supabase = createClient();
-  await supabase.from("canvass_reports").delete().eq("id", id);
+  const { error } = await supabase.from("canvass_reports").delete().eq("id", id).select("id").single();
+  if (error) {
+    qc.setQueryData(REPORTS_KEY, previous);
+    toast.error("Suppression impossible — réessayez.");
+  }
 }
 
 function useReportsQuery() {

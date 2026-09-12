@@ -16,7 +16,13 @@ const SEP = ";";
 /** Échappe une cellule : guillemets si elle contient ; " ou un retour ligne. */
 function escapeCell(value: CsvCell): string {
   if (value === null || value === undefined) return "";
-  let s = typeof value === "number" ? String(value) : String(value);
+  let s = String(value);
+  // Les guillemets CSV n'empêchent pas Excel d'exécuter une formule. Les
+  // chaînes (noms, notes, téléphones, en-têtes) sont des entrées non fiables.
+  // Les vraies valeurs numériques gardent leur type et leur signe.
+  if (typeof value === "string" && (/^\s*[=+@-]/u.test(s) || /^[\t\r\n]/.test(s))) {
+    s = `'${s}`;
+  }
   // Décimales à la française pour les nombres réels (lecture Excel FR).
   if (typeof value === "number" && !Number.isInteger(value)) {
     s = value.toLocaleString("fr-FR", { maximumFractionDigits: 4, useGrouping: false });

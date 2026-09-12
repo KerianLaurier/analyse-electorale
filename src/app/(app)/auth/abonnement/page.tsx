@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/team";
 import type { Cycle } from "@/lib/billing";
+import { SignOutButton } from "@/components/sign-out-button";
 import {
   SubscriptionFlow,
   type BillingProvider,
@@ -53,10 +54,21 @@ export default async function AbonnementPage({
     };
   }
 
-  // Paiement carte actif seulement si la chaîne serveur est complète (clé
-  // Stripe + service role pour la synchro webhook) — sinon repli facture.
-  const provider: BillingProvider =
-    process.env.STRIPE_SECRET_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY ? "stripe" : "invoice";
+  const stripeReady = !!(process.env.STRIPE_SECRET_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.STRIPE_WEBHOOK_SECRET);
+  const { data: invoiceAllowed } = !stripeReady && user
+    ? await supabase.rpc("can_use_invoice_billing")
+    : { data: false };
+  // Une configuration incomplète ne doit jamais autoriser un accès gratuit.
+  if (!stripeReady && invoiceAllowed !== true) {
+    return (
+      <main className="mx-auto max-w-xl px-6 py-16 space-y-4">
+        <h1 className="text-2xl font-semibold">Abonnement</h1>
+        <p>La souscription est indisponible pour le moment. Contactez <a href="mailto:contact@mouvancia.fr" className="underline">contact@mouvancia.fr</a> pour gérer votre abonnement.</p>
+        <SignOutButton />
+      </main>
+    );
+  }
+  const provider: BillingProvider = stripeReady ? "stripe" : "invoice";
 
   const initialPlanId = PLANS.some((p) => p.id === plan) ? (plan as (typeof PLANS)[number]["id"]) : null;
   const initialCycle: Cycle | null = cycle === "monthly" || cycle === "yearly" ? cycle : null;

@@ -324,11 +324,10 @@ function SectorsCard({
   const coverage = sectors.length > 0 ? done / sectors.length : 0;
   const canGenerate = target?.type === "commune" || target?.type === "circo";
 
-  function add(e: React.FormEvent) {
+  async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    addSector({ name: name.trim() });
-    setName("");
+    if (await addSector({ name: name.trim() })) setName("");
   }
 
   async function generate() {

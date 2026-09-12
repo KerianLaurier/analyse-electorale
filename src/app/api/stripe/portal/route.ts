@@ -33,31 +33,37 @@ export async function POST(request: Request) {
     // corps vide accepté
   }
 
-  const admin = createServiceClient();
-  const { data: prof } = await admin
-    .from("profiles")
-    .select("stripe_customer_id, stripe_subscription_id")
-    .eq("id", user.id)
-    .single();
-  const customerId = (prof?.stripe_customer_id as string | null) ?? null;
-  if (!customerId) {
-    return NextResponse.json(
-      { error: "Aucun compte de facturation Stripe associé — souscrivez d'abord une formule." },
-      { status: 404 },
-    );
+  try {
+    const admin = createServiceClient();
+    const { data: prof, error: profileError } = await admin
+      .from("profiles")
+      .select("stripe_customer_id, stripe_subscription_id")
+      .eq("id", user.id)
+      .single();
+    if (profileError) throw profileError;
+    const customerId = (prof?.stripe_customer_id as string | null) ?? null;
+    if (!customerId) {
+      return NextResponse.json(
+        { error: "Aucun compte de facturation Stripe associé — souscrivez d'abord une formule." },
+        { status: 404 },
+      );
+    }
+
+    // Origine de confiance : l'URL app configurée (prod) prime sur l'en-tête
+    // `Origin` (contrôlable par le client) → pas de retour de portail forgé.
+    const origin = env.APP_URL ?? new URL(request.url).origin;
+    const subscriptionId = (prof?.stripe_subscription_id as string | null) ?? null;
+    const session = await getStripe().billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${origin}/auth/abonnement`,
+      ...(flow === "subscription_update" && subscriptionId
+        ? { flow_data: { type: "subscription_update", subscription_update: { subscription: subscriptionId } } }
+        : {}),
+    });
+
+    return NextResponse.json({ url: session.url });
+  } catch (error) {
+    console.error("[stripe-portal]", error);
+    return NextResponse.json({ error: "Le service de facturation est indisponible — réessayez." }, { status: 502 });
   }
-
-  // Origine de confiance : l'URL app configurée (prod) prime sur l'en-tête
-  // `Origin` (contrôlable par le client) → pas de retour de portail forgé.
-  const origin = env.APP_URL ?? request.headers.get("origin") ?? new URL(request.url).origin;
-  const subscriptionId = (prof?.stripe_subscription_id as string | null) ?? null;
-  const session = await getStripe().billingPortal.sessions.create({
-    customer: customerId,
-    return_url: `${origin}/auth/abonnement`,
-    ...(flow === "subscription_update" && subscriptionId
-      ? { flow_data: { type: "subscription_update", subscription_update: { subscription: subscriptionId } } }
-      : {}),
-  });
-
-  return NextResponse.json({ url: session.url });
 }

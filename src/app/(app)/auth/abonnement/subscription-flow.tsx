@@ -63,16 +63,20 @@ function rpcErrorMessage(err: { code?: string; message?: string } | null): strin
 
 /** POST JSON vers nos routes Stripe ; renvoie l'URL de redirection ou lève l'erreur serveur. */
 async function fetchStripeUrl(path: string, body: Record<string, unknown>): Promise<{ url?: string; portal?: boolean; error?: string }> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as { url?: string; portal?: boolean; error?: string };
-  if (!res.ok || !data.url) {
-    return { portal: data.portal, error: data.error || "Le service de paiement est indisponible — réessayez." };
+  try {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json().catch(() => ({}))) as { url?: string; portal?: boolean; error?: string };
+    if (!res.ok || !data.url) {
+      return { portal: data.portal, error: data.error || "Le service de paiement est indisponible — réessayez." };
+    }
+    return data;
+  } catch {
+    return { error: "Connexion au paiement impossible — vérifiez votre réseau puis réessayez." };
   }
-  return data;
 }
 
 /**
@@ -133,6 +137,19 @@ export function SubscriptionFlow({
   const [awaitingActivation, setAwaitingActivation] = useState(
     checkoutResult === "success" && account?.status !== "active",
   );
+
+  useEffect(() => {
+    // Si le webhook est arrivé AVANT le retour de Checkout, aucun polling ne
+    // démarre. Il faut néanmoins réémettre le JWT encore marqué « trial ».
+    if (checkoutResult !== "success" || account?.status !== "active") return;
+    let stopped = false;
+    void syncSessionAfterBillingChange().then(() => {
+      if (!stopped) router.refresh();
+    }).catch(() => {
+      if (!stopped) setError("Abonnement actif, mais session non actualisée — reconnectez-vous.");
+    });
+    return () => { stopped = true; };
+  }, [checkoutResult, account?.status, router]);
 
   useEffect(() => {
     if (!awaitingActivation) return;
@@ -979,7 +996,11 @@ function SuccessPanel({
       <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
         <Button
           type="button"
-          onClick={() => window.location.assign("/explorer")}
+          onClick={() => {
+            // Recharger le document après synchronisation des claims de facturation.
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+            window.location.assign("/explorer");
+          }}
           className="gap-2 rounded-pill text-[13.5px]" size="lg">
           Accéder à mes analyses <ArrowRight className="h-4 w-4" />
         </Button>

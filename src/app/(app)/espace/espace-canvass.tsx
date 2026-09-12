@@ -373,7 +373,7 @@ function ReportForm({ sectors, presetSector, onDone }: { sectors: Sector[]; pres
     e.preventDefault();
     if (busy) return;
     setBusy(true);
-    await addReport({
+    const saved = await addReport({
       sectorId: sectorId || null,
       zone: zone.trim() || null,
       date,
@@ -387,7 +387,7 @@ function ReportForm({ sectors, presetSector, onDone }: { sectors: Sector[]; pres
       shared: hasTeam,
     });
     setBusy(false);
-    onDone();
+    if (saved) onDone();
   }
 
   return (

@@ -88,12 +88,24 @@ type DetailEntry = {
 };
 
 const jsonCache = new Map<string, Promise<unknown | null>>();
-function loadJson<T>(path: string): Promise<T | null> {
+export function loadJson<T>(path: string): Promise<T | null> {
   let p = jsonCache.get(path);
   if (!p) {
     p = fetch(dataUrl(path))
-      .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
-      .catch(() => null);
+      .then((r) => {
+        // Une absence de couverture est normale ; une panne ne doit pas
+        // devenir une analyse vide mise en cache comme un succès.
+        if (r.status === 404) {
+          jsonCache.delete(path);
+          return null;
+        }
+        if (!r.ok) throw new Error(`Données indisponibles (${r.status}) : ${path}`);
+        return r.json() as Promise<T>;
+      })
+      .catch((error) => {
+        jsonCache.delete(path);
+        throw error;
+      });
     jsonCache.set(path, p);
   }
   return p as Promise<T | null>;

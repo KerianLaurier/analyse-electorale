@@ -5,6 +5,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
 import { getIdentity, onIdentityChange } from "@/lib/identity";
 import { getQueryClient } from "@/providers/query-provider";
+import { toast } from "@/components/toaster";
 
 /**
  * Permanences / créneaux de terrain d'une campagne — table `shifts` + table
@@ -131,12 +132,12 @@ export type NewShift = {
   shared?: boolean;
 };
 
-export async function addShift(input: NewShift): Promise<void> {
+export async function addShift(input: NewShift): Promise<boolean> {
   const { userId, teamId } = await getIdentity();
-  if (!userId) return;
+  if (!userId) return false;
   const supabase = createClient();
   const team_id = input.shared && teamId ? teamId : null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("shifts")
     .insert({
       user_id: userId,
@@ -152,7 +153,12 @@ export async function addShift(input: NewShift): Promise<void> {
     })
     .select("*")
     .single();
-  if (data) await getQueryClient().refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
+  if (error || !data) {
+    toast.error("Créneau non enregistré — réessayez.");
+    return false;
+  }
+  await getQueryClient().refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
+  return true;
 }
 
 export type ShiftPatch = {
@@ -167,7 +173,7 @@ export type ShiftPatch = {
   shared?: boolean;
 };
 
-export async function updateShift(id: string, patch: ShiftPatch): Promise<void> {
+export async function updateShift(id: string, patch: ShiftPatch): Promise<boolean> {
   const { teamId } = await getIdentity();
   const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.title !== undefined) dbPatch.title = patch.title;
@@ -180,15 +186,25 @@ export async function updateShift(id: string, patch: ShiftPatch): Promise<void> 
   if (patch.notes !== undefined) dbPatch.notes = patch.notes;
   if (patch.shared !== undefined) dbPatch.team_id = patch.shared && teamId ? teamId : null;
   const supabase = createClient();
-  await supabase.from("shifts").update(dbPatch).eq("id", id);
+  const { error } = await supabase.from("shifts").update(dbPatch).eq("id", id).select("id").single();
+  if (error) {
+    toast.error("Modification non enregistrée — réessayez.");
+    return false;
+  }
   await getQueryClient().refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
+  return true;
 }
 
 export async function deleteShift(id: string): Promise<void> {
   const qc = getQueryClient();
+  const previous = qc.getQueryData<Shift[]>(SHIFTS_KEY);
   qc.setQueryData<Shift[]>(SHIFTS_KEY, (old) => (old ?? []).filter((s) => s.id !== id));
   const supabase = createClient();
-  await supabase.from("shifts").delete().eq("id", id);
+  const { error } = await supabase.from("shifts").delete().eq("id", id).select("id").single();
+  if (error) {
+    qc.setQueryData(SHIFTS_KEY, previous);
+    toast.error("Suppression impossible — réessayez.");
+  }
 }
 
 function setJoinedLocal(id: string, joined: boolean, userId: string) {
@@ -211,17 +227,26 @@ export async function joinShift(id: string): Promise<void> {
   const shift = getQueryClient().getQueryData<Shift[]>(SHIFTS_KEY)?.find((s) => s.id === id);
   setJoinedLocal(id, true, userId);
   const supabase = createClient();
-  await supabase
+  const { error } = await supabase
     .from("shift_signups")
     .insert({ shift_id: id, user_id: userId, team_id: shift?.teamId ?? null });
+  if (error) {
+    setJoinedLocal(id, shift?.joined ?? false, userId);
+    toast.error("Inscription au créneau impossible — réessayez.");
+  }
 }
 
 export async function leaveShift(id: string): Promise<void> {
   const { userId } = await getIdentity();
   if (!userId) return;
+  const wasJoined = getQueryClient().getQueryData<Shift[]>(SHIFTS_KEY)?.find((s) => s.id === id)?.joined ?? false;
   setJoinedLocal(id, false, userId);
   const supabase = createClient();
-  await supabase.from("shift_signups").delete().eq("shift_id", id).eq("user_id", userId);
+  const { error } = await supabase.from("shift_signups").delete().eq("shift_id", id).eq("user_id", userId);
+  if (error) {
+    setJoinedLocal(id, wasJoined, userId);
+    toast.error("Désinscription impossible — réessayez.");
+  }
 }
 
 function useShiftsQuery() {

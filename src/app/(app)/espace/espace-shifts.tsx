@@ -143,10 +143,9 @@ function ShiftForm({ ctx, initial, onDone }: { ctx: WsContext; initial?: Shift; 
       notes: notes.trim() || null,
       shared: shared && !!ctx.teamId,
     };
-    if (initial) await updateShift(initial.id, payload);
-    else await addShift(payload);
+    const saved = initial ? await updateShift(initial.id, payload) : await addShift(payload);
     setBusy(false);
-    onDone();
+    if (saved) onDone();
   }
 
   return (

@@ -9,17 +9,20 @@ Voir le brief complet (sections 1–10) pour le contexte et la roadmap.
 - **Next.js 16** (App Router, RSC, TypeScript)
 - **Tailwind CSS v4** + **shadcn/ui** (base `neutral`, components dans `src/components/ui`)
 - **TanStack Query** pour le cache des requêtes serveur
-- **MapLibre GL JS** + **pmtiles** pour la cartographie (PMTiles à brancher dans le sprint données)
-- **DuckDB-WASM** pour les requêtes analytiques côté client (Parquet électoraux)
-- **next-themes** pour light/dark
+- **MapLibre GL JS** + **pmtiles** pour la cartographie (WebGL 2 requis)
+- **Python / DuckDB** pour précalculer les données ; le navigateur consomme des JSON et des tuiles depuis le stockage public
+- **Supabase** pour l'authentification et les données de campagne, **Stripe** pour les abonnements par carte
+- **@appica/ui-react** pour le thème light/dark
 - **cmdk** (via shadcn) pour la palette de commandes `⌘K`
 
-> Note : Next.js 16 installé (le brief mentionne v15) ; même API App Router, aucun ajustement nécessaire.
+> Les guides du brief peuvent décrire une ancienne version. Consulter les dépendances verrouillées et les guides Next fournis avec la version installée.
 
 ## Lancer en local
 
 ```bash
-npm install
+npm ci
+cp .env.example .env.local
+# Remplacer les valeurs factices pour utiliser une instance Supabase de test.
 npm run dev
 ```
 
@@ -276,7 +279,7 @@ bash scripts/pipeline/all.sh   # download + tiles + parquet
 
 Produit :
 - `public/tiles/{regions,departements,circonscriptions,communes}.pmtiles` — servis directement par Next.
-- `public/electoral/*.parquet` — chargés à la demande par DuckDB-WASM via HTTP range.
+- `public/electoral/*.parquet` — intermédiaires pour les scripts de précalcul ; les JSON générés alimentent le frontend.
 
 > **Maille bureau de vote** — la 5ᵉ maille s'appuie sur le découpage officiel le plus récent et précis : les *contours des bureaux de vote* d'Etalab (reconstruits depuis le Répertoire Électoral Unique INSEE + BAN, Licence Ouverte 2.0). Les **PMTiles sont servis directement par data.gouv.fr** (pas de copie locale de 282 Mo) ; voir `TILES.bureaux` dans `src/lib/map-config.ts` et l'entrée `geo.bureaux` de `scripts/pipeline/sources.json`. Les résultats par bureau sont agrégés depuis les fichiers MinInt par `scripts/pipeline/build-bureaux.py` → `public/electoral/agg/{scrutin}_bureaux_*.parquet`, avec la clé de jointure `codeBureauVote` (`01001_0001`). Disponible pour **présidentielles 2017 & 2022 (T1/T2)** et **législatives 2022 & 2024 (T1/T2)**. Contours adossés au REU 2022 : couverture quasi-complète, quelques bureaux re-numérotés depuis peuvent manquer.
 
@@ -286,12 +289,17 @@ Produit :
 
 > **Perf carto** — les feature-states de la choroplèthe (jusqu'à ~70 k bureaux) sont appliqués **par lots de 5 000 via `requestAnimationFrame`** avec annulation si la maille/coloration change, pour garder le thread principal réactif (`src/components/map.tsx`).
 
-## Points reportés (à câbler dans les sprints suivants)
+## Limites de reproductibilité
 
-- **Supabase** : auth + données propriétaires (équipes, annotations, snapshots). Non installé pour ce sprint.
-- **DuckDB-WASM** : installé, Parquets prêts, à instancier dans un worker pour brancher les couches Explorer et le simulateur.
-- **Git** : non initialisé (choix utilisateur). À faire avant tout déploiement.
-- **Identité visuelle** : palette neutre par défaut shadcn (`neutral`). Charte à définir en phase design.
+Le dépôt contient des migrations incrémentales Supabase, mais pas le schéma initial complet
+(tables métier, fonctions d'équipe et politiques RLS). Elles ne suffisent donc pas à recréer
+une base vide. Versionner ce socle et vérifier l'isolation entre équipes sur une base de test
+avant une ouverture publique. Le pipeline Python nécessite aussi un environnement de dépendances
+verrouillé et des tests de données ; la simple compilation Python ne valide pas les résultats.
+
+Les correctifs de facturation de septembre 2026 ajoutent deux migrations. Voir
+[`docs/audit-deployment.md`](docs/audit-deployment.md) pour leur ordre d'application et
+l'autorisation explicite des clients facturés hors Stripe.
 
 ## Déploiement — vitrine & application (même marque)
 
@@ -322,17 +330,16 @@ routes »), donc des arbres de composants et des bundles séparés.
   dans l'environnement Netlify pour activer la remontée — sans la variable,
   tout est no-op (dev, previews). Optionnel : `SENTRY_AUTH_TOKEN` au build pour
   uploader les source maps (init runtime : `src/instrumentation*.ts`).
-- **Tests unitaires** : `npm test` (Vitest, logique pure de `src/lib`).
+- **Tests** : `npm test` (Vitest : logique métier, routes de paiement, proxy, erreurs de sauvegarde et transactions PostgreSQL dans PGlite).
 - **Tests E2E** : `npm run test:e2e` (Playwright). La suite publique (landing,
   gating, erreurs d'auth en français) tourne sans configuration ; la suite
   authentifiée (Explorer, QG) nécessite `E2E_EMAIL` / `E2E_PASSWORD`
   (compte de test avec abonnement) + les `NEXT_PUBLIC_SUPABASE_*` réelles.
-- **CI** (`.github/workflows/ci.yml`) : lint + types + Vitest + Playwright sur
-  chaque PR.
+- **CI** (`.github/workflows/ci.yml`) : lint + types + Vitest + build de production + Playwright sur le build + syntaxe Python/shell sur chaque PR.
 - **Migrations Supabase** : versionnées dans `supabase/migrations/` —
   appliquées manuellement (voir l'en-tête de chaque fichier).
 
 ## Conformité
 
-- RGPD : pas de données personnelles d'électeurs (uniquement agrégats publics).
+- Les analyses utilisent des agrégats publics. Les contacts et listes de phoning peuvent contenir des noms, coordonnées et opinions politiques : définir les finalités, bases applicables, accès, durées et droits pour ces données sensibles. Les pages légales contiennent encore des champs à compléter.
 - Neutralité : codes couleurs partisans alignés sur les conventions du ministère de l'Intérieur, à implémenter dans les couches de la carte.

@@ -60,6 +60,10 @@ const APP_PREFIXES = [
   "/auth",
   "/api",
 ];
+// Un compte expiré doit toujours pouvoir payer et consulter ses factures.
+// Ces routes restent authentifiées ; leurs handlers vérifient aussi le compte.
+const BILLING_PATHS = new Set(["/auth/abonnement", "/api/stripe/checkout", "/api/stripe/portal"]);
+
 function isAppPath(pathname: string): boolean {
   return APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
@@ -87,6 +91,10 @@ function routeBySubdomain(request: NextRequest): NextResponse | null {
   }
   const host = request.headers.get("host") ?? "";
   const { pathname, search } = request.nextUrl;
+
+  // Le formulaire de la vitrine fait un POST same-origin. Une redirection
+  // vers le sous-domaine app transformerait cet appel en requête CORS.
+  if (pathname === "/api/waitlist") return NextResponse.next();
 
   // Domaine app : la racine renvoie vers l'entrée applicative, le reste suit.
   if (host === appHost) {
@@ -176,18 +184,36 @@ export async function proxy(request: NextRequest) {
   const routed = routeBySubdomain(request);
   if (routed) return routed;
 
+  // Ces endpoints assurent eux-mêmes leur sécurité, sans session utilisateur.
+  if (request.nextUrl.pathname === "/api/waitlist" || request.nextUrl.pathname === "/api/stripe/webhook") {
+    return NextResponse.next();
+  }
+
   const { supabase, response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
+
+  // Le refresh peut faire tourner les tokens : toute redirection doit garder
+  // les Set-Cookie de Supabase, sinon le navigateur conserve l'ancien token.
+  function withSessionCookies(result: NextResponse): NextResponse {
+    for (const cookie of response.cookies.getAll()) result.cookies.set(cookie);
+    return result;
+  }
 
   if (isPublic(pathname)) return response;
 
   // Non connecté → page de connexion (en mémorisant la destination).
   if (!user) {
+    if (pathname.startsWith("/api/")) {
+      return withSessionCookies(NextResponse.json({ error: "Authentification requise." }, { status: 401 }));
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    url.search = "";
+    url.searchParams.set("next", pathname + request.nextUrl.search);
+    return withSessionCookies(NextResponse.redirect(url));
   }
+
+  if (BILLING_PATHS.has(pathname)) return response;
 
   // Fast path : claims JWT (zéro requête DB, valable sur tous les isolats).
   let isSuperAdmin: boolean;
@@ -218,7 +244,11 @@ export async function proxy(request: NextRequest) {
       );
       if (hasAccess) {
         if (gateCache.size > 1000) gateCache.clear(); // borne mémoire, reconstruction lazy
-        gateCache.set(user.id, { isSuperAdmin, expires: Date.now() + GATE_TTL_MS });
+        const end = profile?.subscription_status === "trial" ? profile?.trial_ends_at : profile?.cancel_at;
+        const expires = !isSuperAdmin && end
+          ? Math.min(Date.now() + GATE_TTL_MS, new Date(end).getTime())
+          : Date.now() + GATE_TTL_MS;
+        gateCache.set(user.id, { isSuperAdmin, expires });
       }
     }
   }
@@ -229,15 +259,19 @@ export async function proxy(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/explorer";
       url.search = "";
-      return NextResponse.redirect(url);
+      return withSessionCookies(NextResponse.redirect(url));
     }
     return response;
   }
 
-  if (!hasAccess && pathname !== "/auth/abonnement") {
+  if (!hasAccess) {
+    if (pathname.startsWith("/api/")) {
+      return withSessionCookies(NextResponse.json({ error: "Abonnement requis." }, { status: 403 }));
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/auth/abonnement";
-    return NextResponse.redirect(url);
+    url.search = "";
+    return withSessionCookies(NextResponse.redirect(url));
   }
 
   return response;

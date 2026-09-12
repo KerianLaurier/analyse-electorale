@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { useTheme } from "@appica/ui-react/hooks/use-theme";
-import maplibregl, {
+import * as maplibregl from "maplibre-gl";
+import {
   type Map as MapLibreMap,
   type MapLayerMouseEvent,
   type StyleSpecification,
@@ -148,11 +149,11 @@ const lineOpacityExpr = (p: MapPalette) => [
  * `stateKey` est la clé de feature-state de la choroplèthe courante (null quand
  * aucune donnée n'est chargée : tout est alors « sans donnée »).
  */
-const fillOpacityExpr = (p: MapPalette, maille: Maille, stateKey: string | null) => {
+const fillOpacityExpr = (p: MapPalette, maille: Maille, stateKey: string | null): DataDrivenPropertyValueSpecification<number> => {
   // Les bureaux de vote sont de tout petits polygones : un poil plus opaques,
   // sinon ils se dissolvent dans le fond.
   const withData = Math.min(1, p.fillOpacity + (maille === "bureaux" ? 0.05 : 0));
-  const base = stateKey
+  const base: DataDrivenPropertyValueSpecification<number> = stateKey
     ? ["case", ["==", ["feature-state", stateKey], null], p.fillOpacityNoData, withData]
     : p.fillOpacityNoData;
   return [
@@ -452,7 +453,7 @@ export function Map({
       // `once("load")` peut se déclencher après un démontage (la carte est alors
       // détruite) : on garde le même réflexe que les autres effets — ne toucher
       // qu'à des couches encore présentes.
-      const set = (layer: string, prop: string, value: string | number) => {
+      const set = (layer: string, prop: Parameters<MapLibreMap["setPaintProperty"]>[1], value: string | number) => {
         if (map.getLayer(layer)) map.setPaintProperty(layer, prop, value);
       };
       set("background", "background-color", palette.background);
@@ -473,7 +474,8 @@ export function Map({
       }
       // Fond de carte : eau, végétation, urbain, routes, toponymes.
       for (const { layer, prop, value } of basemapPaintUpdates(palette.basemap)) {
-        set(layer, prop, value);
+        // Clés issues des paints de couches typées StyleSpecification.
+        set(layer, prop as Parameters<MapLibreMap["setPaintProperty"]>[1], value);
       }
     };
     if (styleLoadedRef.current || map.isStyleLoaded()) apply();
