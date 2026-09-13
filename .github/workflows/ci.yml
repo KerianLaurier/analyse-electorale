@@ -23,6 +23,8 @@ jobs:
       # Aucun accès aux comptes ou paiements réels dans la suite publique.
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      # Valeur fictive pour détecter une sérialisation accidentelle au build.
+      STRIPE_WEBHOOK_SECRET: whsec_build_canary_4c302c8eb944442ab85d4c88
     steps:
       - uses: actions/checkout@v7
 
@@ -45,6 +47,9 @@ jobs:
 
       - name: Build de production
         run: npm run build
+
+      - name: Absence de secrets serveur dans les artefacts
+        run: npm run check:build-secrets
 
       - uses: actions/setup-python@v7
         with:

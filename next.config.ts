@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  // Le cache persistant peut sérialiser les variables serveur du build.
+  // Les fonctions lisent les secrets à l'exécution ; rien ne doit les conserver
+  // dans un cache que l'hébergeur pourrait archiver avec les artefacts.
+  experimental: {
+    turbopackFileSystemCacheForBuild: false,
+  },
   turbopack: {
     root: path.join(__dirname),
   },

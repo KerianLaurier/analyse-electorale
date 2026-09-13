@@ -12,8 +12,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "check:lock": "npm ci --dry-run --os=linux --cpu=x64 --ignore-scripts",
-    "prebuild": "node scripts/copy-maplibre-worker.mjs",
-    "predev": "node scripts/copy-maplibre-worker.mjs"
+    "prebuild": "node scripts/clear-build-cache.mjs && node scripts/copy-maplibre-worker.mjs",
+    "predev": "node scripts/copy-maplibre-worker.mjs",
+    "check:build-secrets": "node scripts/check-build-secrets.mjs"
   },
   "dependencies": {
     "@appica/ui-react": "^1.1.0",

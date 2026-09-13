@@ -8,6 +8,12 @@ Appliquer les migrations `202609*.sql` dans l’ordre et en transaction avant de
 
 La nouvelle page admin nécessite `admin_accounts_page`. La création de compte nécessite aussi `SUPABASE_SERVICE_ROLE_KEY` côté serveur et l’API Auth officielle. L’ancienne RPC de création devient inaccessible aux clients. Prévoir une courte fenêtre coordonnée pour ces changements ; ne pas utiliser l’ancienne interface admin après révocation de la RPC.
 
+## Cache de compilation
+
+Le cache persistant de Turbopack pour `next build` est désactivé : il peut conserver des valeurs de variables serveur dans ses fichiers internes. Le script `prebuild` supprime les caches Turbopack précédents, y compris une copie restaurée par Netlify. Les autres fichiers générés et les données de l’application ne sont pas visés. Le coût est une compilation moins réutilisable entre builds.
+
+La CI construit avec une valeur Stripe fictive puis contrôle son absence dans `.next` et `public` avec `npm run check:build-secrets`. Le contrôle Netlify reste actif, sans exclusion de secret ni de chemin. Références : [cache Turbopack](https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopackFileSystemCache), [contrôle Netlify](https://docs.netlify.com/manage/security/secret-scanning/).
+
 ## Facturation
 
 Chaque compte possède au maximum une réservation Checkout. Une requête en reprise utilise les paramètres stockés et la même clé d’idempotence Stripe. Une session ouverte est réutilisée, une session payée attend sa réconciliation, une session n’est renouvelée qu’après confirmation d’expiration par Stripe. Les prix du catalogue doivent correspondre au montant et à la période affichés : un écart bloque le paiement plutôt que de facturer un montant inattendu.
