@@ -1,5 +1,5 @@
 import type { Cycle, Tier } from "@/lib/billing";
-import { parseLookupKey } from "@/lib/stripe";
+import { parseLookupKey } from "@/lib/stripe-catalog";
 
 /**
  * Synchronisation Stripe → `profiles` : logique PURE (testée par Vitest),
@@ -38,15 +38,21 @@ export type ProfileBillingPatch = {
   stripe_subscription_id: string | null;
 };
 
-const toIso = (epochSeconds: number): string => new Date(epochSeconds * 1000).toISOString();
+const toIso = (epochSeconds: number): string =>
+  new Date(epochSeconds * 1000).toISOString();
 
 /** Formule+cycle d'une subscription : lookup key du prix, sinon metadata posée au checkout. */
-export function planFromSubscription(sub: StripeSubscriptionLike): { tier: Tier; cycle: Cycle } | null {
+export function planFromSubscription(
+  sub: StripeSubscriptionLike,
+): { tier: Tier; cycle: Cycle } | null {
   const fromPrice = parseLookupKey(sub.items?.data?.[0]?.price?.lookup_key);
   if (fromPrice) return fromPrice;
   const tier = sub.metadata?.tier;
   const cycle = sub.metadata?.cycle;
-  if ((tier === "candidat" || tier === "equipe" || tier === "parti") && (cycle === "monthly" || cycle === "yearly")) {
+  if (
+    (tier === "candidat" || tier === "equipe" || tier === "parti") &&
+    (cycle === "monthly" || cycle === "yearly")
+  ) {
     return { tier, cycle };
   }
   return null;
@@ -58,7 +64,9 @@ export function planFromSubscription(sub: StripeSubscriptionLike): { tier: Tier;
  * (résiliation à l'échéance), NULL = reconduction ; un abonnement terminé chez
  * Stripe (canceled/unpaid/…) redevient `inactive`, détaché de la subscription.
  */
-export function subscriptionToPatch(sub: StripeSubscriptionLike): ProfileBillingPatch {
+export function subscriptionToPatch(
+  sub: StripeSubscriptionLike,
+): ProfileBillingPatch {
   if (!OPEN_ACCESS_STATUSES.has(sub.status)) {
     return {
       subscription_status: "inactive",
@@ -106,8 +114,10 @@ export function subscriptionUpdateEventType(
   if (!previous) return null;
 
   if (typeof previous.cancel_at_period_end === "boolean") {
-    if (!previous.cancel_at_period_end && sub.cancel_at_period_end) return "cancel";
-    if (previous.cancel_at_period_end && !sub.cancel_at_period_end) return "resume";
+    if (!previous.cancel_at_period_end && sub.cancel_at_period_end)
+      return "cancel";
+    if (previous.cancel_at_period_end && !sub.cancel_at_period_end)
+      return "resume";
   }
 
   if (previous.items) {

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createServiceClient, serviceRoleConfigured } from "@/lib/supabase/admin";
+import {
+  createServiceClient,
+  serviceRoleConfigured,
+} from "@/lib/supabase/admin";
 import { getStripe, stripeEnabled } from "@/lib/stripe";
 import {
   planFromSubscription,
@@ -23,24 +26,42 @@ import {
  * retentera (la transaction SQL est annulée intégralement en cas d'erreur).
  */
 export async function POST(request: Request) {
-  if (!stripeEnabled() || !serviceRoleConfigured() || !process.env.STRIPE_WEBHOOK_SECRET) {
-    return NextResponse.json({ error: "Webhook Stripe non configuré." }, { status: 503 });
+  if (
+    !stripeEnabled() ||
+    !serviceRoleConfigured() ||
+    !process.env.STRIPE_WEBHOOK_SECRET
+  ) {
+    return NextResponse.json(
+      { error: "Webhook Stripe non configuré." },
+      { status: 503 },
+    );
   }
 
   const signature = request.headers.get("stripe-signature");
   if (!signature) {
-    return NextResponse.json({ error: "Signature manquante." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Signature manquante." },
+      { status: 400 },
+    );
   }
 
   const payload = await request.text();
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(payload, signature, process.env.STRIPE_WEBHOOK_SECRET);
+    event = getStripe().webhooks.constructEvent(
+      payload,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET,
+    );
   } catch {
     return NextResponse.json({ error: "Signature invalide." }, { status: 400 });
   }
 
   const admin = createServiceClient();
+  const leaseCustomer = customerIdOf(
+    event.data.object as { customer?: string | { id: string } | null },
+  );
+  let leaseToken: string | null = null;
 
   let userId: string | null = null;
   let customerId: string | null = null;
@@ -49,16 +70,29 @@ export async function POST(request: Request) {
   let billingEvent: Record<string, unknown> | null = null;
 
   try {
+    if (leaseCustomer) {
+      const { data, error } = await admin.rpc("acquire_stripe_sync", {
+        p_customer_id: leaseCustomer,
+      });
+      if (error || typeof data !== "string")
+        throw new Error("Réconciliation déjà en cours ou indisponible");
+      leaseToken = data;
+    }
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
         if (session.mode !== "subscription") break;
         userId = session.metadata?.user_id ?? session.client_reference_id;
         customerId = customerIdOf(session);
-        subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
+        subscriptionId =
+          typeof session.subscription === "string"
+            ? session.subscription
+            : (session.subscription?.id ?? null);
         if (!userId || !subscriptionId) break;
 
-        const sub = (await getStripe().subscriptions.retrieve(subscriptionId)) as unknown as StripeSubscriptionLike;
+        const sub = (await getStripe().subscriptions.retrieve(
+          subscriptionId,
+        )) as unknown as StripeSubscriptionLike;
         patch = subscriptionToPatch(sub);
 
         const plan = planFromSubscription(sub);
@@ -71,7 +105,8 @@ export async function POST(request: Request) {
             stripe_event_id: event.id,
             checkout_session: session.id,
             subscription: subscriptionId,
-            amount_eur: session.amount_total != null ? session.amount_total / 100 : null,
+            amount_eur:
+              session.amount_total != null ? session.amount_total / 100 : null,
           },
         };
         break;
@@ -83,12 +118,16 @@ export async function POST(request: Request) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        const delivered = event.data.object as unknown as StripeSubscriptionLike;
+        const delivered = event.data
+          .object as unknown as StripeSubscriptionLike;
         // Stripe ne garantit pas l'ordre de livraison : relire l'état courant
         // évite de réactiver un abonnement avec un ancien snapshot « active ».
-        const sub = event.type === "customer.subscription.deleted"
-          ? { ...delivered, status: "canceled" }
-          : await getStripe().subscriptions.retrieve(delivered.id) as unknown as StripeSubscriptionLike;
+        const sub =
+          event.type === "customer.subscription.deleted"
+            ? { ...delivered, status: "canceled" }
+            : ((await getStripe().subscriptions.retrieve(
+                delivered.id,
+              )) as unknown as StripeSubscriptionLike);
         subscriptionId = sub.id;
         customerId = customerIdOf(event.data.object);
         userId = await resolveUserId(admin, sub.metadata?.user_id, customerId);
@@ -103,7 +142,9 @@ export async function POST(request: Request) {
             : event.type === "customer.subscription.created"
               ? null
               : subscriptionUpdateEventType(
-                  event.data.previous_attributes as Partial<StripeSubscriptionLike> | undefined,
+                  event.data.previous_attributes as
+                    | Partial<StripeSubscriptionLike>
+                    | undefined,
                   sub,
                 );
         if (eventType) {
@@ -130,7 +171,11 @@ export async function POST(request: Request) {
         // checkout.session.completed (type `subscribe`).
         if (invoice.billing_reason !== "subscription_cycle") break;
         customerId = customerIdOf(invoice);
-        userId = await resolveUserId(admin, invoice.metadata?.user_id ?? undefined, customerId);
+        userId = await resolveUserId(
+          admin,
+          invoice.metadata?.user_id ?? undefined,
+          customerId,
+        );
         if (!userId) break;
         billingEvent = {
           type: "renewal",
@@ -138,7 +183,8 @@ export async function POST(request: Request) {
             source: "stripe",
             stripe_event_id: event.id,
             invoice: invoice.id,
-            amount_eur: invoice.amount_paid != null ? invoice.amount_paid / 100 : null,
+            amount_eur:
+              invoice.amount_paid != null ? invoice.amount_paid / 100 : null,
           },
         };
         break;
@@ -147,7 +193,11 @@ export async function POST(request: Request) {
       case "invoice.payment_failed": {
         const invoice = event.data.object;
         customerId = customerIdOf(invoice);
-        userId = await resolveUserId(admin, invoice.metadata?.user_id ?? undefined, customerId);
+        userId = await resolveUserId(
+          admin,
+          invoice.metadata?.user_id ?? undefined,
+          customerId,
+        );
         if (!userId) break;
         // Trace seulement : Stripe relance l'encaissement (Smart Retries) ; si
         // tout échoue, `customer.subscription.updated/deleted` coupera l'accès.
@@ -157,7 +207,8 @@ export async function POST(request: Request) {
             source: "stripe",
             stripe_event_id: event.id,
             invoice: invoice.id,
-            amount_eur: invoice.amount_due != null ? invoice.amount_due / 100 : null,
+            amount_eur:
+              invoice.amount_due != null ? invoice.amount_due / 100 : null,
           },
         };
         break;
@@ -168,25 +219,58 @@ export async function POST(request: Request) {
     }
     // Supabase renvoie { error } sans lever d'exception par défaut. La RPC
     // assure l'atomicité ; toute erreur doit produire un 5xx pour le retry.
-    const { data: applied, error } = await admin.rpc("apply_stripe_event", {
-      p_event_id: event.id,
-      p_event_type: event.type,
-      p_user_id: userId,
-      p_customer_id: customerId,
-      p_subscription_id: subscriptionId,
-      p_patch: patch,
-      p_billing_event: billingEvent,
-    });
+    const { data: applied, error } = await admin.rpc(
+      "apply_stripe_event_serialized",
+      {
+        p_event_id: event.id,
+        p_event_type: event.type,
+        p_user_id: userId,
+        p_customer_id: customerId,
+        p_subscription_id: subscriptionId,
+        p_patch: patch,
+        p_billing_event: billingEvent,
+        p_lease_token: leaseToken,
+      },
+    );
     if (error) throw error;
-    return NextResponse.json({ received: true, ...(applied === false ? { duplicate: true } : {}) });
+    return NextResponse.json({
+      received: true,
+      ...(applied === false ? { duplicate: true } : {}),
+    });
   } catch (err) {
-    console.error("[stripe-webhook]", event.type, err);
-    return NextResponse.json({ error: "Traitement échoué — à rejouer." }, { status: 500 });
+    console.error(
+      "[stripe-webhook]",
+      event.type,
+      err instanceof Error ? err.name : "DatabaseError",
+    );
+    return NextResponse.json(
+      { error: "Traitement échoué — à rejouer." },
+      { status: 500 },
+    );
+  } finally {
+    if (leaseCustomer && leaseToken) {
+      // En cas de panne, le bail expirera ; son jeton empêche les écritures tardives.
+      await admin
+        .rpc("release_stripe_sync", {
+          p_customer_id: leaseCustomer,
+          p_token: leaseToken,
+        })
+        .then(
+          ({ error }) => {
+            if (error) console.error("[stripe-webhook] libération différée");
+          },
+          () => {
+            console.error("[stripe-webhook] libération différée");
+          },
+        );
+    }
   }
 }
 
 /** Customer id d'un objet Stripe (string ou objet expandé). */
-function customerIdOf(obj: { customer?: string | { id: string } | null }): string | null {
+function customerIdOf(obj: {
+  customer?: string | { id: string } | null;
+}): string | null {
   const c = obj.customer;
   return typeof c === "string" ? c : (c?.id ?? null);
 }
@@ -199,7 +283,11 @@ async function resolveUserId(
 ): Promise<string | null> {
   if (metadataUserId) return metadataUserId;
   if (!stripeCustomerId) return null;
-  const { data, error } = await admin.from("profiles").select("id").eq("stripe_customer_id", stripeCustomerId).maybeSingle();
+  const { data, error } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("stripe_customer_id", stripeCustomerId)
+    .maybeSingle();
   if (error) throw error;
   return (data?.id as string | undefined) ?? null;
 }

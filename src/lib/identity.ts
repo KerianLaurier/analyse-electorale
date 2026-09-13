@@ -57,27 +57,33 @@ const ANON: Identity = {
 let cached: Identity | null = null;
 let inflight: Promise<Identity> | null = null;
 let authWired = false;
+let identityChannel: BroadcastChannel | null = null;
+let revision = 0;
+let observedUser: string | null | undefined;
 const listeners = new Set<() => void>();
 
 async function resolve(): Promise<Identity> {
   const supabase = createClient();
   const {
     data: { session },
+    error: sessionError,
   } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
   const userId = session?.user?.id ?? null;
   if (!userId) {
-    cached = ANON;
-    return cached;
+    return ANON;
   }
   const email = session?.user?.email ?? null;
-  const { data: prof } = await supabase
+  const { data: prof, error: profileError } = await supabase
     // `*` à dessein (1 ligne, self) : tolère un front déployé avant/après la
     // migration billing (un select nommant une colonne absente échouerait).
     .from("profiles")
     .select("*")
     .eq("id", userId)
     .single();
-  cached = {
+  if (profileError) throw profileError;
+  if (!prof) throw new Error("Profil indisponible");
+  return {
     userId,
     email,
     fullName: (prof?.full_name as string | null) ?? null,
@@ -85,15 +91,18 @@ async function resolve(): Promise<Identity> {
     isSuperAdmin: prof?.is_super_admin === true,
     subscription: prof
       ? {
-          status: (prof.subscription_status ?? "inactive") as IdentitySubscription["status"],
-          tier: (prof.subscription_tier ?? "candidat") as IdentitySubscription["tier"],
+          status: (prof.subscription_status ??
+            "inactive") as IdentitySubscription["status"],
+          tier: (prof.subscription_tier ??
+            "candidat") as IdentitySubscription["tier"],
           trialEndsAt: (prof.trial_ends_at as string | null) ?? null,
           cancelAt: (prof.cancel_at as string | null) ?? null,
-          billingCycle: (prof.billing_cycle as IdentitySubscription["billingCycle"]) ?? null,
+          billingCycle:
+            (prof.billing_cycle as IdentitySubscription["billingCycle"]) ??
+            null,
         }
       : null,
   };
-  return cached;
 }
 
 /**
@@ -102,42 +111,81 @@ async function resolve(): Promise<Identity> {
  * souscription/résiliation (onAuthStateChange ignore volontairement les
  * rafraîchissements de token du même utilisateur).
  */
-export async function refreshIdentity(): Promise<Identity> {
+function notify() {
+  listeners.forEach((listener) => listener());
+}
+
+export function identityRevision(): number {
+  return revision;
+}
+
+function invalidate() {
+  revision += 1;
   cached = null;
   inflight = null;
-  const id = await getIdentity();
-  listeners.forEach((l) => l());
-  return id;
+}
+
+export async function refreshIdentity(broadcast = true): Promise<Identity> {
+  invalidate();
+  if (broadcast) identityChannel?.postMessage("refresh");
+  notify();
+  return getIdentity();
 }
 
 function wireAuth() {
   if (authWired) return;
   authWired = true;
+  if (typeof window !== "undefined") {
+    if (typeof BroadcastChannel !== "undefined") {
+      identityChannel = new BroadcastChannel("mouvancia:identity");
+      identityChannel.onmessage = () => {
+        void refreshIdentity(false).catch(() => notify());
+      };
+    }
+    window.addEventListener("focus", () => {
+      void refreshIdentity(false).catch(() => notify());
+    });
+  }
   createClient().auth.onAuthStateChange((_event, session) => {
-    // Déféré hors du callback : appeler supabase dans onAuthStateChange (qui
-    // tient le verrou d'auth) provoque un deadlock ré-entrant.
     const nextUser = session?.user?.id ?? null;
-    // Une résolution est déjà en cours : elle reflètera l'état courant.
-    if (inflight) return;
-    // Même utilisateur (ex. simple rafraîchissement de token) : ne rien
-    // recharger — c'est précisément ce qui provoquait des tempêtes de requêtes.
-    if (cached && nextUser === cached.userId) return;
+    if (observedUser === nextUser) return;
+    observedUser = nextUser;
+    invalidate();
+    if (!nextUser) cached = ANON;
+    const expected = revision;
+    // Aucun appel au SDK (y compris via un abonné) sous son verrou d'auth.
     setTimeout(() => {
-      cached = null;
-      inflight = null;
-      void getIdentity().then(() => listeners.forEach((l) => l()));
+      if (revision !== expected) return;
+      notify();
+      void getIdentity().catch(() => notify());
     }, 0);
   });
 }
 
-/** Identité courante, résolue une seule fois puis mise en cache. */
+/** Toute résolution ancienne rejoint la génération courante sans la publier. */
 export function getIdentity(): Promise<Identity> {
   wireAuth();
   if (cached) return Promise.resolve(cached);
   if (!inflight) {
-    inflight = resolve().finally(() => {
-      inflight = null;
-    });
+    const expected = revision;
+    const pending = resolve()
+      .then(
+        (identity) => {
+          if (revision !== expected) return getIdentity();
+          cached = identity;
+          observedUser = identity.userId;
+          notify();
+          return identity;
+        },
+        (error) => {
+          if (revision !== expected) return getIdentity();
+          throw error;
+        },
+      )
+      .finally(() => {
+        if (inflight === pending) inflight = null;
+      });
+    inflight = pending;
   }
   return inflight;
 }

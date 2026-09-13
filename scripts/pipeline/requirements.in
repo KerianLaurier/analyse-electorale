@@ -1,0 +1,6 @@
+# Python 3.13, dépendances communes aux traitements de données.
+duckdb
+numpy
+pandas
+openpyxl
+shapely

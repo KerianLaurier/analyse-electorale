@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
-import { getIdentity, onIdentityChange } from "@/lib/identity";
-import { getQueryClient } from "@/providers/query-provider";
+import { getIdentity } from "@/lib/identity";
+import {
+  getPrivateQueryClient as getQueryClient,
+  usePrivateQuery as useQuery,
+} from "@/lib/private-query";
 import { toast } from "@/components/toaster";
 
 /**
@@ -16,7 +18,14 @@ import { toast } from "@/components/toaster";
  * inchangée ; inscriptions optimistes, créations/éditions par refetch.
  */
 
-export type ShiftKind = "porte" | "boitage" | "collage" | "tractage" | "permanence" | "reunion" | "autre";
+export type ShiftKind =
+  | "porte"
+  | "boitage"
+  | "collage"
+  | "tractage"
+  | "permanence"
+  | "reunion"
+  | "autre";
 
 export type Shift = {
   id: string;
@@ -76,10 +85,11 @@ async function fetchShifts(): Promise<Shift[]> {
   const { userId } = await getIdentity();
   if (!userId) return [];
   const supabase = createClient();
-  const [{ data: rows, error: e1 }, { data: signupRows, error: e2 }] = await Promise.all([
-    supabase.from("shifts").select("*").order("date", { ascending: true }),
-    supabase.from("shift_signups").select("shift_id, user_id"),
-  ]);
+  const [{ data: rows, error: e1 }, { data: signupRows, error: e2 }] =
+    await Promise.all([
+      supabase.from("shifts").select("*").order("date", { ascending: true }),
+      supabase.from("shift_signups").select("shift_id, user_id"),
+    ]);
   if (e1 || e2) throw e1 ?? e2; // remonte l'échec de lecture → état d'erreur
 
   const byShift = new Map<string, string[]>();
@@ -111,15 +121,6 @@ async function fetchShifts(): Promise<Shift[]> {
   });
 }
 
-let identityWired = false;
-function ensureIdentityWired() {
-  if (identityWired || typeof window === "undefined") return;
-  identityWired = true;
-  onIdentityChange(() => {
-    void getQueryClient().invalidateQueries({ queryKey: SHIFTS_KEY });
-  });
-}
-
 export type NewShift = {
   title: string;
   kind?: ShiftKind;
@@ -134,6 +135,7 @@ export type NewShift = {
 
 export async function addShift(input: NewShift): Promise<boolean> {
   const { userId, teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!userId) return false;
   const supabase = createClient();
   const team_id = input.shared && teamId ? teamId : null;
@@ -157,7 +159,7 @@ export async function addShift(input: NewShift): Promise<boolean> {
     toast.error("Créneau non enregistré — réessayez.");
     return false;
   }
-  await getQueryClient().refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
+  await privateClient.refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
   return true;
 }
 
@@ -173,9 +175,15 @@ export type ShiftPatch = {
   shared?: boolean;
 };
 
-export async function updateShift(id: string, patch: ShiftPatch): Promise<boolean> {
+export async function updateShift(
+  id: string,
+  patch: ShiftPatch,
+): Promise<boolean> {
   const { teamId } = await getIdentity();
-  const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const privateClient = getQueryClient();
+  const dbPatch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
   if (patch.title !== undefined) dbPatch.title = patch.title;
   if (patch.kind !== undefined) dbPatch.kind = patch.kind;
   if (patch.date !== undefined) dbPatch.date = patch.date;
@@ -184,73 +192,107 @@ export async function updateShift(id: string, patch: ShiftPatch): Promise<boolea
   if (patch.location !== undefined) dbPatch.location = patch.location;
   if (patch.capacity !== undefined) dbPatch.capacity = patch.capacity;
   if (patch.notes !== undefined) dbPatch.notes = patch.notes;
-  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && teamId ? teamId : null;
+  if (patch.shared !== undefined)
+    dbPatch.team_id = patch.shared && teamId ? teamId : null;
   const supabase = createClient();
-  const { error } = await supabase.from("shifts").update(dbPatch).eq("id", id).select("id").single();
+  const { error } = await supabase
+    .from("shifts")
+    .update(dbPatch)
+    .eq("id", id)
+    .select("id")
+    .single();
   if (error) {
     toast.error("Modification non enregistrée — réessayez.");
     return false;
   }
-  await getQueryClient().refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
+  await privateClient.refetchQueries({ queryKey: SHIFTS_KEY, type: "all" });
   return true;
 }
 
 export async function deleteShift(id: string): Promise<void> {
-  const qc = getQueryClient();
+  const privateClient = getQueryClient();
+  const qc = privateClient;
   const previous = qc.getQueryData<Shift[]>(SHIFTS_KEY);
-  qc.setQueryData<Shift[]>(SHIFTS_KEY, (old) => (old ?? []).filter((s) => s.id !== id));
+  qc.setQueryData<Shift[]>(SHIFTS_KEY, (old) =>
+    (old ?? []).filter((s) => s.id !== id),
+  );
   const supabase = createClient();
-  const { error } = await supabase.from("shifts").delete().eq("id", id).select("id").single();
+  const { error } = await supabase
+    .from("shifts")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .single();
   if (error) {
     qc.setQueryData(SHIFTS_KEY, previous);
     toast.error("Suppression impossible — réessayez.");
   }
 }
 
-function setJoinedLocal(id: string, joined: boolean, userId: string) {
-  const qc = getQueryClient();
+function setJoinedLocal(
+  id: string,
+  joined: boolean,
+  userId: string,
+  client = getQueryClient(),
+) {
+  const qc = client;
   qc.setQueryData<Shift[]>(SHIFTS_KEY, (old) => {
     if (!old) return old;
     const idx = old.findIndex((s) => s.id === id);
     if (idx < 0) return old;
     const s = old[idx];
     const signups = joined
-      ? s.signups.includes(userId) ? s.signups : [...s.signups, userId]
+      ? s.signups.includes(userId)
+        ? s.signups
+        : [...s.signups, userId]
       : s.signups.filter((u) => u !== userId);
-    return [...old.slice(0, idx), { ...s, signups, joined }, ...old.slice(idx + 1)];
+    return [
+      ...old.slice(0, idx),
+      { ...s, signups, joined },
+      ...old.slice(idx + 1),
+    ];
   });
 }
 
 export async function joinShift(id: string): Promise<void> {
   const { userId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!userId) return;
-  const shift = getQueryClient().getQueryData<Shift[]>(SHIFTS_KEY)?.find((s) => s.id === id);
-  setJoinedLocal(id, true, userId);
+  const shift = privateClient
+    .getQueryData<Shift[]>(SHIFTS_KEY)
+    ?.find((s) => s.id === id);
+  setJoinedLocal(id, true, userId, privateClient);
   const supabase = createClient();
   const { error } = await supabase
     .from("shift_signups")
     .insert({ shift_id: id, user_id: userId, team_id: shift?.teamId ?? null });
   if (error) {
-    setJoinedLocal(id, shift?.joined ?? false, userId);
+    setJoinedLocal(id, shift?.joined ?? false, userId, privateClient);
     toast.error("Inscription au créneau impossible — réessayez.");
   }
 }
 
 export async function leaveShift(id: string): Promise<void> {
   const { userId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!userId) return;
-  const wasJoined = getQueryClient().getQueryData<Shift[]>(SHIFTS_KEY)?.find((s) => s.id === id)?.joined ?? false;
-  setJoinedLocal(id, false, userId);
+  const wasJoined =
+    privateClient.getQueryData<Shift[]>(SHIFTS_KEY)?.find((s) => s.id === id)
+      ?.joined ?? false;
+  setJoinedLocal(id, false, userId, privateClient);
   const supabase = createClient();
-  const { error } = await supabase.from("shift_signups").delete().eq("shift_id", id).eq("user_id", userId);
+  const { error } = await supabase
+    .from("shift_signups")
+    .delete()
+    .eq("shift_id", id)
+    .eq("user_id", userId);
   if (error) {
-    setJoinedLocal(id, wasJoined, userId);
+    setJoinedLocal(id, wasJoined, userId, privateClient);
     toast.error("Désinscription impossible — réessayez.");
   }
 }
 
 function useShiftsQuery() {
-  ensureIdentityWired();
   return useQuery(shiftsQuery);
 }
 
@@ -262,7 +304,13 @@ export function useShifts(): Shift[] {
 export function useLoadState() {
   const q = useShiftsQuery();
   const hydrated = useHydrated();
-  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+  return {
+    loaded: q.isSuccess && hydrated,
+    error: q.isError,
+    retry: () => {
+      void q.refetch();
+    },
+  };
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */

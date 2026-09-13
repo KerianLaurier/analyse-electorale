@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
-import { getIdentity, onIdentityChange } from "@/lib/identity";
-import { getQueryClient } from "@/providers/query-provider";
+import { getIdentity } from "@/lib/identity";
+import {
+  getPrivateQueryClient as getQueryClient,
+  usePrivateQuery as useQuery,
+} from "@/lib/private-query";
 import { toast } from "@/components/toaster";
 
 /**
@@ -18,7 +20,14 @@ import { toast } from "@/components/toaster";
  * rollback + toast d'erreur.
  */
 
-export type CallStatus = "todo" | "joint" | "repondeur" | "occupe" | "faux" | "refus" | "rappeler";
+export type CallStatus =
+  | "todo"
+  | "joint"
+  | "repondeur"
+  | "occupe"
+  | "faux"
+  | "refus"
+  | "rappeler";
 export type CallOpinion = "favorable" | "neutre" | "defavorable";
 
 export const CALL_STATUS_LABELS: Record<CallStatus, string> = {
@@ -61,7 +70,14 @@ export type PhoneContact = {
   createdAt: number;
 };
 
-type ListRow = { id: string; team_id: string; created_by: string; name: string; description: string | null; created_at: string };
+type ListRow = {
+  id: string;
+  team_id: string;
+  created_by: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+};
 type ContactRow = {
   id: string;
   list_id: string;
@@ -81,7 +97,10 @@ type PhoningData = { lists: PhoneList[]; contacts: PhoneContact[] };
 const PHONING_KEY = ["phoning"] as const;
 const EMPTY_LISTS: PhoneList[] = [];
 const EMPTY_CONTACTS: PhoneContact[] = [];
-const EMPTY_DATA: PhoningData = { lists: EMPTY_LISTS, contacts: EMPTY_CONTACTS };
+const EMPTY_DATA: PhoningData = {
+  lists: EMPTY_LISTS,
+  contacts: EMPTY_CONTACTS,
+};
 
 const phoningQuery = {
   queryKey: PHONING_KEY,
@@ -90,7 +109,13 @@ const phoningQuery = {
 };
 
 function mapList(r: ListRow): PhoneList {
-  return { id: r.id, name: r.name, description: r.description, createdBy: r.created_by, createdAt: new Date(r.created_at).getTime() };
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    createdBy: r.created_by,
+    createdAt: new Date(r.created_at).getTime(),
+  };
 }
 function mapContact(r: ContactRow): PhoneContact {
   return {
@@ -112,8 +137,14 @@ async function fetchPhoning(): Promise<PhoningData> {
   if (!userId || !teamId) return { lists: [], contacts: [] };
   const supabase = createClient();
   const [{ data: l, error: e1 }, { data: c, error: e2 }] = await Promise.all([
-    supabase.from("phone_lists").select("*").order("created_at", { ascending: false }),
-    supabase.from("phone_contacts").select("*").order("created_at", { ascending: true }),
+    supabase
+      .from("phone_lists")
+      .select("*")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("phone_contacts")
+      .select("*")
+      .order("created_at", { ascending: true }),
   ]);
   if (e1 || e2) throw e1 ?? e2; // remonte l'échec de lecture → état d'erreur
   return {
@@ -122,44 +153,56 @@ async function fetchPhoning(): Promise<PhoningData> {
   };
 }
 
-let identityWired = false;
-function ensureIdentityWired() {
-  if (identityWired || typeof window === "undefined") return;
-  identityWired = true;
-  onIdentityChange(() => {
-    void getQueryClient().invalidateQueries({ queryKey: PHONING_KEY });
-  });
-}
-
-function patchData(fn: (d: PhoningData) => PhoningData) {
-  getQueryClient().setQueryData<PhoningData>(PHONING_KEY, (old) => fn(old ?? EMPTY_DATA));
+function patchData(
+  fn: (d: PhoningData) => PhoningData,
+  client = getQueryClient(),
+) {
+  client.setQueryData<PhoningData>(PHONING_KEY, (old) => fn(old ?? EMPTY_DATA));
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-export async function createList(name: string, description?: string | null): Promise<string | null> {
+export async function createList(
+  name: string,
+  description?: string | null,
+): Promise<string | null> {
   const { userId, teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!userId || !teamId) return null;
   const supabase = createClient();
   const { data, error } = await supabase
     .from("phone_lists")
-    .insert({ team_id: teamId, created_by: userId, name, description: description ?? null })
+    .insert({
+      team_id: teamId,
+      created_by: userId,
+      name,
+      description: description ?? null,
+    })
     .select("*")
     .single();
   if (error || !data) {
-    toast.error("Impossible de créer la liste — vérifiez votre connexion puis réessayez.");
+    toast.error(
+      "Impossible de créer la liste — vérifiez votre connexion puis réessayez.",
+    );
     return null;
   }
-  patchData((d) => ({ ...d, lists: [mapList(data as ListRow), ...d.lists] }));
+  patchData(
+    (d) => ({ ...d, lists: [mapList(data as ListRow), ...d.lists] }),
+    privateClient,
+  );
   return (data as ListRow).id;
 }
 
 export async function deleteList(id: string): Promise<void> {
-  const qc = getQueryClient();
-  patchData((d) => ({
-    lists: d.lists.filter((l) => l.id !== id),
-    contacts: d.contacts.filter((c) => c.listId !== id),
-  }));
+  const privateClient = getQueryClient();
+  const qc = privateClient;
+  patchData(
+    (d) => ({
+      lists: d.lists.filter((l) => l.id !== id),
+      contacts: d.contacts.filter((c) => c.listId !== id),
+    }),
+    privateClient,
+  );
   const supabase = createClient();
   const { error } = await supabase.from("phone_lists").delete().eq("id", id);
   if (error) {
@@ -171,8 +214,12 @@ export async function deleteList(id: string): Promise<void> {
 export type NewNumber = { phone: string; name?: string | null };
 
 /** Importe en masse des numéros dans une liste. Renvoie le nombre ajouté. */
-export async function addNumbers(listId: string, items: NewNumber[]): Promise<number> {
+export async function addNumbers(
+  listId: string,
+  items: NewNumber[],
+): Promise<number> {
   const { teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!teamId || items.length === 0) return 0;
   const supabase = createClient();
   const rows = items.map((it) => ({
@@ -181,24 +228,37 @@ export async function addNumbers(listId: string, items: NewNumber[]): Promise<nu
     phone: it.phone,
     name: it.name ?? null,
   }));
-  const { data, error } = await supabase.from("phone_contacts").insert(rows).select("*");
+  const { data, error } = await supabase
+    .from("phone_contacts")
+    .insert(rows)
+    .select("*");
   if (error) {
-    toast.error("Import des numéros impossible — vérifiez votre connexion puis réessayez.");
+    toast.error(
+      "Import des numéros impossible — vérifiez votre connexion puis réessayez.",
+    );
     return 0;
   }
   const mapped = ((data ?? []) as ContactRow[]).map(mapContact);
   if (mapped.length > 0) {
-    patchData((d) => ({ ...d, contacts: [...d.contacts, ...mapped] }));
+    patchData(
+      (d) => ({ ...d, contacts: [...d.contacts, ...mapped] }),
+      privateClient,
+    );
   }
   return mapped.length;
 }
 
-export type CallPatch = { status?: CallStatus; opinion?: CallOpinion | null; notes?: string | null };
+export type CallPatch = {
+  status?: CallStatus;
+  opinion?: CallOpinion | null;
+  notes?: string | null;
+};
 
 /** Consigne le résultat d'un appel sur un numéro. */
 export async function logCall(id: string, patch: CallPatch): Promise<void> {
-  const qc = getQueryClient();
   const { userId } = await getIdentity();
+  const privateClient = getQueryClient();
+  const qc = privateClient;
   const current = qc.getQueryData<PhoningData>(PHONING_KEY) ?? EMPTY_DATA;
   const idx = current.contacts.findIndex((c) => c.id === id);
   if (idx < 0) return;
@@ -231,13 +291,23 @@ export async function logCall(id: string, patch: CallPatch): Promise<void> {
     dbPatch.notes = patch.notes;
   }
 
-  patchData((d) => ({
-    ...d,
-    contacts: [...d.contacts.slice(0, idx), next, ...d.contacts.slice(idx + 1)],
-  }));
+  patchData(
+    (d) => ({
+      ...d,
+      contacts: [
+        ...d.contacts.slice(0, idx),
+        next,
+        ...d.contacts.slice(idx + 1),
+      ],
+    }),
+    privateClient,
+  );
 
   const supabase = createClient();
-  const { error } = await supabase.from("phone_contacts").update(dbPatch).eq("id", id);
+  const { error } = await supabase
+    .from("phone_contacts")
+    .update(dbPatch)
+    .eq("id", id);
   if (error) {
     await qc.invalidateQueries({ queryKey: PHONING_KEY }); // rollback : on recharge l'état serveur
     toast.error("Résultat d'appel non enregistré — réessayez.");
@@ -245,8 +315,12 @@ export async function logCall(id: string, patch: CallPatch): Promise<void> {
 }
 
 export async function deleteContact(id: string): Promise<void> {
-  const qc = getQueryClient();
-  patchData((d) => ({ ...d, contacts: d.contacts.filter((c) => c.id !== id) }));
+  const privateClient = getQueryClient();
+  const qc = privateClient;
+  patchData(
+    (d) => ({ ...d, contacts: d.contacts.filter((c) => c.id !== id) }),
+    privateClient,
+  );
   const supabase = createClient();
   const { error } = await supabase.from("phone_contacts").delete().eq("id", id);
   if (error) {
@@ -258,7 +332,6 @@ export async function deleteContact(id: string): Promise<void> {
 // ── Hooks ──────────────────────────────────────────────────────────────────
 
 function usePhoningQuery() {
-  ensureIdentityWired();
   return useQuery(phoningQuery);
 }
 
@@ -321,7 +394,13 @@ export function summarizePhoning(contacts: PhoneContact[]): PhoningSummary {
 export function useLoadState() {
   const q = usePhoningQuery();
   const hydrated = useHydrated();
-  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+  return {
+    loaded: q.isSuccess && hydrated,
+    error: q.isError,
+    retry: () => {
+      void q.refetch();
+    },
+  };
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */

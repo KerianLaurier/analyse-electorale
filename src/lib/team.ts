@@ -46,7 +46,11 @@ export const PLANS: Plan[] = [
     period: "/ mois",
     seats: "1 siège",
     tagline: "Pour un analyste indépendant.",
-    features: ["Explorer (toutes mailles)", "Analyser (diagnostic, prédictif)", "Historique des scrutins"],
+    features: [
+      "Explorer (toutes mailles)",
+      "Analyser (diagnostic, tendances)",
+      "Historique des scrutins",
+    ],
   },
   {
     id: "equipe",
@@ -58,7 +62,13 @@ export const PLANS: Plan[] = [
     period: "/ mois",
     seats: "5 sièges",
     tagline: "Pour une équipe de campagne.",
-    features: ["Tout Solo", "Analyser (swing, corrélations)", "Simulateur & marginalité", "Exports (à venir)", "Support prioritaire"],
+    features: [
+      "Tout Solo",
+      "Analyser (swing, corrélations)",
+      "Simulateur & marginalité",
+      "Exports (à venir)",
+      "Support prioritaire",
+    ],
   },
   {
     id: "cabinet",
@@ -70,7 +80,13 @@ export const PLANS: Plan[] = [
     period: "",
     seats: "Sièges illimités",
     tagline: "Pour un cabinet ou un parti.",
-    features: ["Tout Équipe", "SSO & rôles avancés", "Accès API", "Données sur-mesure", "Accompagnement dédié"],
+    features: [
+      "Tout Équipe",
+      "SSO & rôles avancés (sur étude)",
+      "Accès API (sur étude)",
+      "Données sur-mesure",
+      "Accompagnement dédié",
+    ],
   },
 ];
 
@@ -106,5 +122,12 @@ export const ROLE_SUGGESTIONS: { name: string; color: string }[] = [
 
 /** Palette de couleurs proposée pour un rôle. */
 export const ROLE_COLORS = [
-  "#f59e0b", "#3b82f6", "#16a34a", "#dc2626", "#8b5cf6", "#ec4899", "#0ea5e9", "#64748b",
+  "#f59e0b",
+  "#3b82f6",
+  "#16a34a",
+  "#dc2626",
+  "#8b5cf6",
+  "#ec4899",
+  "#0ea5e9",
+  "#64748b",
 ];

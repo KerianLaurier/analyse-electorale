@@ -46,6 +46,13 @@ jobs:
       - name: Build de production
         run: npm run build
 
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Contrats du pipeline sur données fictives
+        run: python -m unittest discover -s scripts/pipeline/tests -v
+
       - name: Syntaxe des pipelines
         run: |
           bash -n scripts/pipeline/all.sh

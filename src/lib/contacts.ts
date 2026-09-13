@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
-import { getIdentity, onIdentityChange } from "@/lib/identity";
-import { getQueryClient } from "@/providers/query-provider";
+import { getIdentity } from "@/lib/identity";
+import {
+  getPrivateQueryClient as getQueryClient,
+  usePrivateQuery as useQuery,
+} from "@/lib/private-query";
 import { toast } from "@/components/toaster";
 
 /**
@@ -16,9 +18,21 @@ import { toast } from "@/components/toaster";
  * inchangée ; mutations optimistes via le cache, rollback + toast d'erreur.
  */
 
-export type ContactKind = "benevole" | "soutien" | "electeur" | "presse" | "elu" | "partenaire" | "autre";
+export type ContactKind =
+  | "benevole"
+  | "soutien"
+  | "electeur"
+  | "presse"
+  | "elu"
+  | "partenaire"
+  | "autre";
 export type ContactSupport = "favorable" | "indecis" | "oppose" | "inconnu";
-export type ContactContext = { type: string; id: string; label: string; href: string };
+export type ContactContext = {
+  type: string;
+  id: string;
+  label: string;
+  href: string;
+};
 
 export type Contact = {
   id: string;
@@ -95,9 +109,15 @@ function mapRow(r: Row, myUserId: string | null): Contact {
     support: r.support,
     locality: r.locality,
     notes: r.notes,
-    context: r.context_type && r.context_id
-      ? { type: r.context_type, id: r.context_id, label: r.context_label ?? r.context_id, href: r.context_href ?? "#" }
-      : null,
+    context:
+      r.context_type && r.context_id
+        ? {
+            type: r.context_type,
+            id: r.context_id,
+            label: r.context_label ?? r.context_id,
+            href: r.context_href ?? "#",
+          }
+        : null,
     teamId: r.team_id,
     shared: r.team_id != null,
     mine: r.user_id === myUserId,
@@ -109,18 +129,12 @@ async function fetchContacts(): Promise<Contact[]> {
   const { userId } = await getIdentity();
   if (!userId) return [];
   const supabase = createClient();
-  const { data, error } = await supabase.from("contacts").select("*").order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("*")
+    .order("created_at", { ascending: false });
   if (error) throw error; // remonte l'échec de lecture → état d'erreur
   return (data ?? []).map((r) => mapRow(r as Row, userId));
-}
-
-let identityWired = false;
-function ensureIdentityWired() {
-  if (identityWired || typeof window === "undefined") return;
-  identityWired = true;
-  onIdentityChange(() => {
-    void getQueryClient().invalidateQueries({ queryKey: CONTACTS_KEY });
-  });
 }
 
 export type NewContact = {
@@ -139,6 +153,7 @@ export type NewContact = {
 /** Ajoute un contact. Renvoie false en cas d'échec (le formulaire reste rempli). */
 export async function addContact(input: NewContact): Promise<boolean> {
   const { userId, teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!userId) return false;
   const supabase = createClient();
   const team_id = input.shared && teamId ? teamId : null;
@@ -163,10 +178,15 @@ export async function addContact(input: NewContact): Promise<boolean> {
     .select("*")
     .single();
   if (error || !data) {
-    toast.error("Impossible d'ajouter le contact — vérifiez votre connexion puis réessayez.");
+    toast.error(
+      "Impossible d'ajouter le contact — vérifiez votre connexion puis réessayez.",
+    );
     return false;
   }
-  getQueryClient().setQueryData<Contact[]>(CONTACTS_KEY, (old) => [mapRow(data as Row, userId), ...(old ?? [])]);
+  privateClient.setQueryData<Contact[]>(CONTACTS_KEY, (old) => [
+    mapRow(data as Row, userId),
+    ...(old ?? []),
+  ]);
   return true;
 }
 
@@ -182,9 +202,13 @@ export type ContactPatch = {
   shared?: boolean;
 };
 
-export async function updateContact(id: string, patch: ContactPatch): Promise<void> {
-  const qc = getQueryClient();
+export async function updateContact(
+  id: string,
+  patch: ContactPatch,
+): Promise<void> {
   const { teamId } = await getIdentity();
+  const privateClient = getQueryClient();
+  const qc = privateClient;
   const current = qc.getQueryData<Contact[]>(CONTACTS_KEY) ?? [];
   const idx = current.findIndex((c) => c.id === id);
   if (idx < 0) return;
@@ -201,16 +225,35 @@ export async function updateContact(id: string, patch: ContactPatch): Promise<vo
     next.teamId = patch.shared && teamId ? teamId : null;
     next.shared = next.teamId != null;
   }
-  qc.setQueryData<Contact[]>(CONTACTS_KEY, [...current.slice(0, idx), next, ...current.slice(idx + 1)]);
+  qc.setQueryData<Contact[]>(CONTACTS_KEY, [
+    ...current.slice(0, idx),
+    next,
+    ...current.slice(idx + 1),
+  ]);
 
-  const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const k of ["name", "kind", "role", "phone", "email", "support", "locality", "notes"] as const) {
+  const dbPatch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  for (const k of [
+    "name",
+    "kind",
+    "role",
+    "phone",
+    "email",
+    "support",
+    "locality",
+    "notes",
+  ] as const) {
     if (patch[k] !== undefined) dbPatch[k] = patch[k];
   }
-  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && teamId ? teamId : null;
+  if (patch.shared !== undefined)
+    dbPatch.team_id = patch.shared && teamId ? teamId : null;
 
   const supabase = createClient();
-  const { error } = await supabase.from("contacts").update(dbPatch).eq("id", id);
+  const { error } = await supabase
+    .from("contacts")
+    .update(dbPatch)
+    .eq("id", id);
   if (error) {
     await qc.invalidateQueries({ queryKey: CONTACTS_KEY }); // rollback : on recharge l'état serveur
     toast.error("Modification non enregistrée — réessayez.");
@@ -218,8 +261,11 @@ export async function updateContact(id: string, patch: ContactPatch): Promise<vo
 }
 
 export async function deleteContact(id: string): Promise<void> {
-  const qc = getQueryClient();
-  qc.setQueryData<Contact[]>(CONTACTS_KEY, (old) => (old ?? []).filter((c) => c.id !== id));
+  const privateClient = getQueryClient();
+  const qc = privateClient;
+  qc.setQueryData<Contact[]>(CONTACTS_KEY, (old) =>
+    (old ?? []).filter((c) => c.id !== id),
+  );
   const supabase = createClient();
   const { error } = await supabase.from("contacts").delete().eq("id", id);
   if (error) {
@@ -229,7 +275,6 @@ export async function deleteContact(id: string): Promise<void> {
 }
 
 function useContactsQuery() {
-  ensureIdentityWired();
   return useQuery(contactsQuery);
 }
 
@@ -241,7 +286,13 @@ export function useContacts(): Contact[] {
 export function useLoadState() {
   const q = useContactsQuery();
   const hydrated = useHydrated();
-  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+  return {
+    loaded: q.isSuccess && hydrated,
+    error: q.isError,
+    retry: () => {
+      void q.refetch();
+    },
+  };
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */

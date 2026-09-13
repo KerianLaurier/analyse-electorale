@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
-import { getIdentity, onIdentityChange } from "@/lib/identity";
-import { getQueryClient } from "@/providers/query-provider";
+import { getIdentity } from "@/lib/identity";
+import {
+  getPrivateQueryClient as getQueryClient,
+  usePrivateQuery as useQuery,
+} from "@/lib/private-query";
 import { toast } from "@/components/toaster";
 
 /**
@@ -121,15 +123,6 @@ function myScopeOf(type: PinType, id: string, data: PinsData): PinScope {
   return mine.team_id != null ? "team" : "personal";
 }
 
-let identityWired = false;
-function ensureIdentityWired() {
-  if (identityWired || typeof window === "undefined") return;
-  identityWired = true;
-  onIdentityChange(() => {
-    void getQueryClient().invalidateQueries({ queryKey: PINS_KEY });
-  });
-}
-
 /** Recalcule les lignes après une écriture optimiste (upsert / suppression). */
 function applyOptimistic(
   data: PinsData,
@@ -138,7 +131,8 @@ function applyOptimistic(
 ): PinsData {
   const userId = data.userId;
   let rows = data.rows.filter(
-    (r) => !(r.type === pin.type && r.item_id === pin.id && r.user_id === userId),
+    (r) =>
+      !(r.type === pin.type && r.item_id === pin.id && r.user_id === userId),
   );
   if (scope !== "none" && userId) {
     rows = [
@@ -163,14 +157,21 @@ export async function setPinScope(
   pin: Omit<Pin, "addedAt" | "shared" | "mine">,
   scope: PinScope,
 ): Promise<void> {
-  ensureIdentityWired();
   const { userId, teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!userId) return;
   if (scope === "team" && !teamId) scope = "personal"; // garde-fou : pas d'équipe
 
-  const qc = getQueryClient();
-  const base: PinsData = qc.getQueryData<PinsData>(PINS_KEY) ?? { rows: [], userId, teamId };
-  qc.setQueryData<PinsData>(PINS_KEY, applyOptimistic({ ...base, userId, teamId }, pin, scope));
+  const qc = privateClient;
+  const base: PinsData = qc.getQueryData<PinsData>(PINS_KEY) ?? {
+    rows: [],
+    userId,
+    teamId,
+  };
+  qc.setQueryData<PinsData>(
+    PINS_KEY,
+    applyOptimistic({ ...base, userId, teamId }, pin, scope),
+  );
 
   const supabase = createClient();
   if (scope === "none") {
@@ -208,7 +209,8 @@ export async function setPinScope(
 export async function togglePin(
   pin: Omit<Pin, "addedAt" | "shared" | "mine">,
 ): Promise<boolean> {
-  const data = getQueryClient().getQueryData<PinsData>(PINS_KEY);
+  const privateClient = getQueryClient();
+  const data = privateClient.getQueryData<PinsData>(PINS_KEY);
   const current = data ? myScopeOf(pin.type, pin.id, data) : "none";
   if (current === "none") {
     await setPinScope(pin, "personal");
@@ -219,14 +221,18 @@ export async function togglePin(
 }
 
 export async function removePin(type: PinType, id: string): Promise<void> {
-  const data = getQueryClient().getQueryData<PinsData>(PINS_KEY);
-  const p = data ? toDisplay(data).find((x) => x.type === type && x.id === id && x.mine) : undefined;
+  const privateClient = getQueryClient();
+  const data = privateClient.getQueryData<PinsData>(PINS_KEY);
+  const p = data
+    ? toDisplay(data).find((x) => x.type === type && x.id === id && x.mine)
+    : undefined;
   if (p) await setPinScope(p, "none");
 }
 
 /** Force un rechargement (ex. après création / changement d'équipe). */
 export async function reloadPins(): Promise<void> {
-  await getQueryClient().refetchQueries({ queryKey: PINS_KEY, type: "all" });
+  const privateClient = getQueryClient();
+  await privateClient.refetchQueries({ queryKey: PINS_KEY, type: "all" });
 }
 
 /** Y a-t-il une épingle (perso ou équipe) visible pour cet item ? (synchrone) */
@@ -237,7 +243,6 @@ export function isPinned(type: PinType, id: string): boolean {
 }
 
 function usePinsData(): PinsData | undefined {
-  ensureIdentityWired();
   return useQuery(pinsQuery).data;
 }
 
@@ -265,10 +270,15 @@ export function useMyTeamId(): string | null {
 
 /** État de chargement d'un onglet : `loaded` (après hydratation), `error`, `retry`. */
 export function useLoadState() {
-  ensureIdentityWired();
   const q = useQuery(pinsQuery);
   const hydrated = useHydrated();
-  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+  return {
+    loaded: q.isSuccess && hydrated,
+    error: q.isError,
+    retry: () => {
+      void q.refetch();
+    },
+  };
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */

@@ -28,14 +28,17 @@ import { AnalyticsConsent } from "@/components/analytics-consent";
 // En prod, NEXT_PUBLIC_APP_URL pointe l'app (app.mouvancia.fr) ; la vitrine vit
 // sur le domaine racine → on retire le sous-domaine `app.`.
 const SITE_URL =
-  process.env.NEXT_PUBLIC_APP_URL?.replace(/:\/\/app\./, "://").replace(/\/$/, "") ??
-  "https://mouvancia.fr";
+  process.env.NEXT_PUBLIC_APP_URL?.replace(/:\/\/app\./, "://").replace(
+    /\/$/,
+    "",
+  ) ?? "https://mouvancia.fr";
 
-const OG_TITLE = "MOUVANCIA — L'intelligence électorale, du national au bureau de vote";
+const OG_TITLE =
+  "MOUVANCIA — L'intelligence électorale, du national au bureau de vote";
 // Pré-lancement : plus de promesse d'essai gratuit (les tarifs sont retirés de
 // la landing). La description reste factuelle sur le périmètre du produit.
 const OG_DESC =
-  "Analyse électorale et pilotage de campagne, réunis : cartographie, sociologie, prédictif et QG de terrain. Données publiques officielles. Ouverture prochaine.";
+  "Analyse électorale et pilotage de campagne, réunis : cartographie, sociologie, projections exploratoires et QG de terrain. Données publiques officielles. Ouverture prochaine.";
 
 // Fonte applicative : les tokens de `globals.css` s'appuient sur
 // `--font-geist-sans`. La landing superpose ses propres fontes éditoriales
@@ -97,7 +100,11 @@ export default function VitrineLayout({
         {/* Seul composant client de la vitrine : le thème. Il porte le script
             anti-flash et respecte `prefers-color-scheme`, comme sur l'app —
             un visiteur en préférence sombre doit voir la landing en sombre. */}
-        <ThemeProvider defaultTheme="light" enableSystem disableTransitionOnChange>
+        <ThemeProvider
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
           <main className="flex-1 flex flex-col">{children}</main>
           {/* GA4 derrière consentement explicite — no-op sans NEXT_PUBLIC_GA_ID. */}
           <AnalyticsConsent />

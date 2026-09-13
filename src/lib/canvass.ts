@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
-import { getIdentity, onIdentityChange } from "@/lib/identity";
-import { getQueryClient } from "@/providers/query-provider";
+import { getIdentity } from "@/lib/identity";
+import {
+  getPrivateQueryClient as getQueryClient,
+  usePrivateQuery as useQuery,
+} from "@/lib/private-query";
 import { toast } from "@/components/toaster";
 
 /**
@@ -93,18 +95,12 @@ async function fetchReports(): Promise<CanvassReport[]> {
   const { userId } = await getIdentity();
   if (!userId) return [];
   const supabase = createClient();
-  const { data, error } = await supabase.from("canvass_reports").select("*").order("date", { ascending: false });
+  const { data, error } = await supabase
+    .from("canvass_reports")
+    .select("*")
+    .order("date", { ascending: false });
   if (error) throw error; // remonte l'échec de lecture → état d'erreur
   return (data ?? []).map((r) => mapRow(r as Row, userId));
-}
-
-let identityWired = false;
-function ensureIdentityWired() {
-  if (identityWired || typeof window === "undefined") return;
-  identityWired = true;
-  onIdentityChange(() => {
-    void getQueryClient().invalidateQueries({ queryKey: REPORTS_KEY });
-  });
 }
 
 export type NewReport = {
@@ -124,6 +120,7 @@ export type NewReport = {
 
 export async function addReport(input: NewReport): Promise<boolean> {
   const { userId, teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!userId) return false;
   const supabase = createClient();
   const team_id = input.shared && teamId ? teamId : null;
@@ -151,19 +148,29 @@ export async function addReport(input: NewReport): Promise<boolean> {
     return false;
   }
   if (data) {
-    getQueryClient().setQueryData<CanvassReport[]>(REPORTS_KEY, (old) =>
-      [mapRow(data as Row, userId), ...(old ?? [])].sort((a, b) => (a.date < b.date ? 1 : -1)),
+    privateClient.setQueryData<CanvassReport[]>(REPORTS_KEY, (old) =>
+      [mapRow(data as Row, userId), ...(old ?? [])].sort((a, b) =>
+        a.date < b.date ? 1 : -1,
+      ),
     );
   }
   return true;
 }
 
 export async function deleteReport(id: string): Promise<void> {
-  const qc = getQueryClient();
+  const privateClient = getQueryClient();
+  const qc = privateClient;
   const previous = qc.getQueryData<CanvassReport[]>(REPORTS_KEY);
-  qc.setQueryData<CanvassReport[]>(REPORTS_KEY, (old) => (old ?? []).filter((r) => r.id !== id));
+  qc.setQueryData<CanvassReport[]>(REPORTS_KEY, (old) =>
+    (old ?? []).filter((r) => r.id !== id),
+  );
   const supabase = createClient();
-  const { error } = await supabase.from("canvass_reports").delete().eq("id", id).select("id").single();
+  const { error } = await supabase
+    .from("canvass_reports")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .single();
   if (error) {
     qc.setQueryData(REPORTS_KEY, previous);
     toast.error("Suppression impossible — réessayez.");
@@ -171,7 +178,6 @@ export async function deleteReport(id: string): Promise<void> {
 }
 
 function useReportsQuery() {
-  ensureIdentityWired();
   return useQuery(reportsQuery);
 }
 
@@ -234,7 +240,14 @@ export function bySector(reports: CanvassReport[]): Map<string, SectorAgg> {
   const m = new Map<string, SectorAgg>();
   for (const r of reports) {
     if (!r.sectorId) continue;
-    const cur = m.get(r.sectorId) ?? { sessions: 0, doors: 0, met: 0, favorable: 0, neutral: 0, unfavorable: 0 };
+    const cur = m.get(r.sectorId) ?? {
+      sessions: 0,
+      doors: 0,
+      met: 0,
+      favorable: 0,
+      neutral: 0,
+      unfavorable: 0,
+    };
     cur.sessions += 1;
     cur.doors += r.doors;
     cur.met += r.met;
@@ -276,7 +289,16 @@ export function weeklyTrend(reports: CanvassReport[]): WeekPoint[] {
     const wk = mondayOf(r.date);
     const cur =
       m.get(wk) ??
-      ({ week: wk, label: "", sessions: 0, met: 0, favorable: 0, neutral: 0, unfavorable: 0, favPct: 0 } as WeekPoint);
+      ({
+        week: wk,
+        label: "",
+        sessions: 0,
+        met: 0,
+        favorable: 0,
+        neutral: 0,
+        unfavorable: 0,
+        favPct: 0,
+      } as WeekPoint);
     cur.sessions += 1;
     cur.met += r.met;
     cur.favorable += r.favorable;
@@ -291,7 +313,10 @@ export function weeklyTrend(reports: CanvassReport[]): WeekPoint[] {
       return {
         ...w,
         favPct: op > 0 ? w.favorable / op : 0,
-        label: new Date(w.week + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }),
+        label: new Date(w.week + "T00:00:00").toLocaleDateString("fr-FR", {
+          day: "numeric",
+          month: "short",
+        }),
       };
     });
 }
@@ -300,7 +325,13 @@ export function weeklyTrend(reports: CanvassReport[]): WeekPoint[] {
 export function useLoadState() {
   const q = useReportsQuery();
   const hydrated = useHydrated();
-  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+  return {
+    loaded: q.isSuccess && hydrated,
+    error: q.isError,
+    retry: () => {
+      void q.refetch();
+    },
+  };
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */

@@ -6,6 +6,8 @@ Sortie : public/search-index.json — consommé côté client par la palette Cmd
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,10 +18,14 @@ OUT = ROOT / "public" / "search-index.json"
 def load(name: str) -> list[dict]:
     path = RAW / f"{name}.geojson"
     if not path.exists():
-        print(f"✗ source manquante : {path}")
-        return []
-    data = json.loads(path.read_text())
-    return data.get("features", [])
+        raise ValueError(f"Source requise manquante : {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    features = data.get("features") if isinstance(data, dict) else None
+    if not isinstance(data, dict) or data.get("type") != "FeatureCollection" or not isinstance(features, list) or not features:
+        raise ValueError(f"Collection GeoJSON vide ou invalide : {path}")
+    if any(not isinstance(f, dict) or not isinstance(f.get("properties"), dict) for f in features):
+        raise ValueError(f"Propriétés GeoJSON invalides : {path}")
+    return features
 
 
 def main() -> int:
@@ -56,10 +62,9 @@ def main() -> int:
     for f in load("communes"):
         p = f["properties"]
         code = p.get("code")
-        # Le code département est les 2 premiers caractères de l'INSEE pour
-        # la métropole (les DOM ont un préfixe 97 + 1 chiffre, mais ça reste
-        # exploitable pour la recherche).
-        dep_code = code[:2] if code else None
+        # Les départements d'outre-mer utilisent trois chiffres ; conserver
+        # également les préfixes corses et les zéros des codes INSEE.
+        dep_code = code[:3] if isinstance(code, str) and code.startswith(("97", "98")) else code[:2] if isinstance(code, str) else None
         entries.append(
             {
                 "type": "commune",
@@ -69,14 +74,30 @@ def main() -> int:
             }
         )
 
-    # Garde-fou : on supprime les entries avec code/nom manquants.
-    entries = [
-        e for e in entries
-        if e.get("code") and e.get("nom")
-    ]
+    # Ne jamais remplacer une version complète par un résultat silencieusement
+    # amputé. Les codes sont des chaînes : un nombre perdrait les zéros initiaux.
+    seen: set[tuple[str, str]] = set()
+    for entry in entries:
+        if any(not isinstance(entry.get(key), str) or not entry[key].strip() for key in ("code", "nom")):
+            raise ValueError("Code ou nom territorial manquant/invalide")
+        key = (entry["type"], entry["code"])
+        if key in seen:
+            raise ValueError(f"Territoire dupliqué : {key}")
+        seen.add(key)
+    entries.sort(key=lambda entry: (entry["type"], entry["code"]))
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(entries, ensure_ascii=False, separators=(",", ":")))
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=OUT.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(entries, stream, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(OUT)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     size_kb = OUT.stat().st_size / 1024
     print(f"✓ {len(entries)} entries → {OUT.relative_to(ROOT)} ({size_kb:.0f} KB)")
     return 0

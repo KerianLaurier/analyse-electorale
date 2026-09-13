@@ -1,5 +1,9 @@
+import { readBoundedJson, RequestBodyError } from "@/lib/request-json";
 import { NextResponse } from "next/server";
-import { createServiceClient, serviceRoleConfigured } from "@/lib/supabase/admin";
+import {
+  createServiceClient,
+  serviceRoleConfigured,
+} from "@/lib/supabase/admin";
 
 /**
  * Inscription à la liste d'attente de pré-lancement.
@@ -21,16 +25,27 @@ const MAX_EMAIL_LEN = 254; // RFC 5321
 export async function POST(request: Request) {
   let payload: unknown;
   try {
-    payload = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
+    payload = await readBoundedJson(request);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof RequestBodyError
+            ? error.message
+            : "Requête invalide.",
+      },
+      { status: error instanceof RequestBodyError ? error.status : 400 },
+    );
   }
 
   const raw = (payload as { email?: unknown })?.email;
   const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
 
   if (!email || email.length > MAX_EMAIL_LEN || !EMAIL_RE.test(email)) {
-    return NextResponse.json({ error: "Adresse e-mail invalide." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Adresse e-mail invalide." },
+      { status: 400 },
+    );
   }
 
   if (!serviceRoleConfigured()) {
@@ -43,18 +58,29 @@ export async function POST(request: Request) {
   }
 
   const supabase = createServiceClient();
-  const { error } = await supabase
-    .from("waitlist")
-    .upsert(
-      { email, source: "landing" },
-      // Idempotent : une adresse déjà inscrite ne déclenche ni erreur ni
-      // doublon, et la réponse reste identique — on ne révèle donc pas si
-      // l'adresse figurait déjà dans la liste.
-      { onConflict: "email", ignoreDuplicates: true },
+  const { data: allowed, error: quotaError } = await supabase.rpc(
+    "consume_waitlist_quota",
+  );
+  if (quotaError)
+    return NextResponse.json(
+      { error: "Inscription indisponible pour le moment." },
+      { status: 503 },
     );
+  if (!allowed)
+    return NextResponse.json(
+      { error: "Trop de demandes — réessayez dans une minute." },
+      { status: 429, headers: { "Retry-After": "60" } },
+    );
+  const { error } = await supabase.from("waitlist").upsert(
+    { email, source: "landing" },
+    // Idempotent : une adresse déjà inscrite ne déclenche ni erreur ni
+    // doublon, et la réponse reste identique — on ne révèle donc pas si
+    // l'adresse figurait déjà dans la liste.
+    { onConflict: "email", ignoreDuplicates: true },
+  );
 
   if (error) {
-    console.error("waitlist: échec d'insertion", error.message);
+    console.error("waitlist: échec d'insertion", { code: error.code });
     return NextResponse.json(
       { error: "Inscription impossible pour le moment." },
       { status: 500 },

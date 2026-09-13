@@ -1,19 +1,24 @@
 # Pipeline de données — Analyse Electorale
 
-Toutes les données sont **open data**, pré-calculées au build en **Parquet/PMTiles
-statiques** servis depuis `public/`, et interrogées côté client par **DuckDB-WASM**
-(lecture HTTP range) + **MapLibre/pmtiles**. Aucun backend, aucune donnée
-individuelle (agrégats commune / bureau / IRIS uniquement — RGPD).
+Le pipeline produit des fichiers Parquet intermédiaires, puis des JSON précalculés pour l’analyse et des PMTiles pour la carte. Le client courant charge ces JSON et MapLibre ; il n’exécute plus les requêtes analytiques dans DuckDB-WASM. Les données de travail privées de l’application sont stockées séparément dans Supabase.
 
-## Rafraîchir
+## Environnement reproductible
+
+Utiliser Python 3.13 dans un environnement virtuel :
 
 ```bash
-bash scripts/pipeline/all.sh        # download → tuiles → tous les parquets
+python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install --require-hashes -r scripts/pipeline/requirements.txt
+python -m unittest discover -s scripts/pipeline/tests -v
+bash scripts/pipeline/all.sh
 ```
 
-`download.sh` récupère les sources brutes dans `data/raw/` (gitignoré) à partir
-des URL de `sources.json`. Le socle électoral + socio est *build-once* :
-relancer `all.sh` à chaque nouveau millésime INSEE / scrutin.
+`requirements.in` décrit les dépendances directes ; `requirements.txt` fixe aussi les dépendances transitives et leurs empreintes. Les workflows utilisent ce fichier. Pour une mise à jour intentionnelle, utiliser `pip-tools==7.6.1` avec Python 3.13 puis `pip-compile --strip-extras --no-emit-index-url --no-emit-trusted-host --output-file=scripts/pipeline/requirements.txt scripts/pipeline/requirements.in` et `python scripts/pipeline/add-lock-hashes.py`. Vérifier les changements et relancer les tests avant publication ([documentation pip-tools](https://pip-tools.readthedocs.io/en/stable/)). Les outils externes de construction de tuiles restent à installer et à versionner séparément.
+
+`download.sh` récupère les sources dans `data/raw/` à partir de `sources.json`. Le téléchargement complet et la génération de toutes les tuiles restent nécessaires pour valider une nouvelle livraison. Les fixtures couvrent la recherche territoriale : codes avec zéro initial, Corse/outre-mer, accents, sources absentes, collections vides et doublons. Ce n’est pas encore une couverture des agrégations de tous les scrutins.
+
+L’index de recherche est remplacé atomiquement uniquement si ses quatre sources sont présentes et valides. Une entrée sans code ou nom, un doublon ou une source absente provoque un échec explicite ; la dernière version reste intacte. Pour publier une version cohérente des données, suivre [la procédure de release](../../docs/data-releases.md).
 
 ## Couche socio-démographique (commune)
 
@@ -34,10 +39,7 @@ relancer `all.sh` à chaque nouveau millésime INSEE / scrutin.
 | `trends/presid_2017_2022.parquet`, `trends/legis_2022_2024.parquet` | deltas sur agrégats électoraux | Δ abstention, Δ bloc RN/ext. droite, Δ bloc gauche/NFP par territoire (région→commune) | 683 + 724 Ko |
 | `potentiel_commune.parquet` (+ `potentiel_meta.json`) | régression ridge (présid. 2022) sur 10 variables socio | par bloc (RN, gauche, écolo, centre, droite) : affinité (attendu), réel, potentiel (= attendu − réel). `meta` = R² par bloc | 524 Ko |
 
-> **Potentiel** : indice d'**affinité socio-démographique**, pas un pronostic. Le
-> R² (publié dans `potentiel_meta.json`) qualifie chaque bloc : bon pour RN/écolo
-> (~0,3), faible pour la droite (~0,06 — le vote LR n'est pas déterminé par le
-> socio). Affiché tel quel côté produit (« fiabilité »).
+> **Potentiel** : résultat exploratoire d’un modèle ajusté aux données historiques. Le R² publié décrit l’ajustement sur ces données ; ce n’est ni une probabilité, ni une validation prédictive indépendante.
 
 ## Scripts (ordre de `all.sh`)
 
@@ -96,7 +98,4 @@ au lieu des codes INSEE, comme pour les présidentielles 2017/2022.
 
 ## Performance
 
-Mes ajouts socio + analytique pèsent ≈ **2,9 Mo** au total, lazy-loadés par
-vue/indicateur (négligeable face aux 33 Mo d'agrégats électoraux et 42 Mo de
-tuiles). DuckDB-WASM ne télécharge que les colonnes/lignes utiles (projection +
-predicate pushdown sur HTTP range).
+Les tailles et la couverture des tableaux ci-dessus sont des observations historiques, pas des budgets garantis. Mesurer les fichiers de chaque nouvelle release et les parcours mobiles avant activation. Les PMTiles utilisent des requêtes HTTP Range ; les JSON sont chargés à la demande et conservés dans des caches bornés.

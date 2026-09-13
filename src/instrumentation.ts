@@ -1,3 +1,4 @@
+import { redactTelemetry } from "@/lib/telemetry-privacy";
 import * as Sentry from "@sentry/nextjs";
 
 /**
@@ -10,7 +11,8 @@ export async function register() {
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
     enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
     environment: process.env.NODE_ENV,
-    tracesSampleRate: 0.1,
+    tracesSampleRate: 0,
+    beforeSend: redactTelemetry,
     sendDefaultPii: false,
   });
 }

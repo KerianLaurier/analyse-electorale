@@ -283,6 +283,6 @@ export const config = {
   // couvre public/sw.js — un service worker ne peut pas être servi derrière
   // une redirection (les bundles applicatifs vivent sous _next/static).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:parquet|pmtiles|json|svg|png|jpg|jpeg|gif|webp|ico|woff2?|wasm|js)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:parquet|pmtiles|geojson|json|svg|png|jpg|jpeg|gif|webp|ico|woff2?|wasm|m?js)$).*)",
   ],
 };

@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
-import { getIdentity, onIdentityChange } from "@/lib/identity";
-import { getQueryClient } from "@/providers/query-provider";
+import { getIdentity } from "@/lib/identity";
+import {
+  getPrivateQueryClient as getQueryClient,
+  usePrivateQuery as useQuery,
+} from "@/lib/private-query";
 import { toast } from "@/components/toaster";
 
 /**
@@ -17,7 +19,12 @@ import { toast } from "@/components/toaster";
  * inchangée.
  */
 
-export type CampaignTarget = { type: string; id: string; label: string; href: string };
+export type CampaignTarget = {
+  type: string;
+  id: string;
+  label: string;
+  href: string;
+};
 
 export type Campaign = {
   target: CampaignTarget | null;
@@ -70,11 +77,19 @@ type SectorRow = {
   address: string | null;
 };
 
-type CampaignData = { campaign: Campaign | null; sectors: Sector[]; hasTeam: boolean };
+type CampaignData = {
+  campaign: Campaign | null;
+  sectors: Sector[];
+  hasTeam: boolean;
+};
 
 const CAMPAIGN_KEY = ["campaign"] as const;
 const EMPTY_SECTORS: Sector[] = [];
-const EMPTY_DATA: CampaignData = { campaign: null, sectors: EMPTY_SECTORS, hasTeam: false };
+const EMPTY_DATA: CampaignData = {
+  campaign: null,
+  sectors: EMPTY_SECTORS,
+  hasTeam: false,
+};
 
 const campaignQuery = {
   queryKey: CAMPAIGN_KEY,
@@ -98,14 +113,15 @@ function mapSector(r: SectorRow): Sector {
 
 function mapCampaign(r: CampaignRow): Campaign {
   return {
-    target: r.target_type && r.target_id
-      ? {
-          type: r.target_type,
-          id: r.target_id,
-          label: r.target_label ?? r.target_id,
-          href: r.target_href ?? "#",
-        }
-      : null,
+    target:
+      r.target_type && r.target_id
+        ? {
+            type: r.target_type,
+            id: r.target_id,
+            label: r.target_label ?? r.target_id,
+            href: r.target_href ?? "#",
+          }
+        : null,
     election: r.election,
     registered: r.registered,
     turnoutTarget: r.turnout_target != null ? Number(r.turnout_target) : null,
@@ -121,7 +137,11 @@ async function fetchCampaign(): Promise<CampaignData> {
   const supabase = createClient();
   const [{ data: c, error: e1 }, { data: s, error: e2 }] = await Promise.all([
     supabase.from("campaigns").select("*").eq("team_id", teamId).maybeSingle(),
-    supabase.from("campaign_sectors").select("*").eq("team_id", teamId).order("created_at", { ascending: true }),
+    supabase
+      .from("campaign_sectors")
+      .select("*")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: true }),
   ]);
   if (e1 || e2) throw e1 ?? e2; // remonte l'échec de lecture → état d'erreur
   return {
@@ -131,24 +151,21 @@ async function fetchCampaign(): Promise<CampaignData> {
   };
 }
 
-let identityWired = false;
-function ensureIdentityWired() {
-  if (identityWired || typeof window === "undefined") return;
-  identityWired = true;
-  onIdentityChange(() => {
-    void getQueryClient().invalidateQueries({ queryKey: CAMPAIGN_KEY });
-  });
+function currentData(client = getQueryClient()): CampaignData {
+  return client.getQueryData<CampaignData>(CAMPAIGN_KEY) ?? EMPTY_DATA;
 }
-
-function currentData(): CampaignData {
-  return getQueryClient().getQueryData<CampaignData>(CAMPAIGN_KEY) ?? EMPTY_DATA;
-}
-function patchData(fn: (d: CampaignData) => CampaignData) {
-  getQueryClient().setQueryData<CampaignData>(CAMPAIGN_KEY, (old) => fn(old ?? EMPTY_DATA));
+function patchData(
+  fn: (d: CampaignData) => CampaignData,
+  client = getQueryClient(),
+) {
+  client.setQueryData<CampaignData>(CAMPAIGN_KEY, (old) =>
+    fn(old ?? EMPTY_DATA),
+  );
 }
 
 export async function reloadCampaign(): Promise<void> {
-  await getQueryClient().refetchQueries({ queryKey: CAMPAIGN_KEY, type: "all" });
+  const privateClient = getQueryClient();
+  await privateClient.refetchQueries({ queryKey: CAMPAIGN_KEY, type: "all" });
 }
 
 export type CampaignPatch = {
@@ -161,16 +178,27 @@ export type CampaignPatch = {
 
 export async function saveCampaign(patch: CampaignPatch): Promise<void> {
   const { teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!teamId) return;
-  const prev = currentData().campaign;
+  const prev = currentData(privateClient).campaign;
   const next: Campaign = {
-    target: patch.target !== undefined ? patch.target : prev?.target ?? null,
-    election: patch.election !== undefined ? patch.election : prev?.election ?? null,
-    registered: patch.registered !== undefined ? patch.registered : prev?.registered ?? null,
-    turnoutTarget: patch.turnoutTarget !== undefined ? patch.turnoutTarget : prev?.turnoutTarget ?? null,
-    scoreTarget: patch.scoreTarget !== undefined ? patch.scoreTarget : prev?.scoreTarget ?? null,
+    target: patch.target !== undefined ? patch.target : (prev?.target ?? null),
+    election:
+      patch.election !== undefined ? patch.election : (prev?.election ?? null),
+    registered:
+      patch.registered !== undefined
+        ? patch.registered
+        : (prev?.registered ?? null),
+    turnoutTarget:
+      patch.turnoutTarget !== undefined
+        ? patch.turnoutTarget
+        : (prev?.turnoutTarget ?? null),
+    scoreTarget:
+      patch.scoreTarget !== undefined
+        ? patch.scoreTarget
+        : (prev?.scoreTarget ?? null),
   };
-  patchData((d) => ({ ...d, campaign: next, hasTeam: true }));
+  patchData((d) => ({ ...d, campaign: next, hasTeam: true }), privateClient);
 
   const supabase = createClient();
   const { error } = await supabase.from("campaigns").upsert(
@@ -189,7 +217,7 @@ export async function saveCampaign(patch: CampaignPatch): Promise<void> {
     { onConflict: "team_id" },
   );
   if (error) {
-    patchData((d) => ({ ...d, campaign: prev }));
+    patchData((d) => ({ ...d, campaign: prev }), privateClient);
     toast.error("Campagne non enregistrée — réessayez.");
   }
 }
@@ -203,11 +231,16 @@ export type NewSector = {
 
 export async function addSector(input: NewSector): Promise<boolean> {
   const { teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!teamId) return false;
   const supabase = createClient();
   const { data, error } = await supabase
     .from("campaign_sectors")
-    .insert({ team_id: teamId, name: input.name, registered: input.registered ?? null })
+    .insert({
+      team_id: teamId,
+      name: input.name,
+      registered: input.registered ?? null,
+    })
     .select("*")
     .single();
   if (error || !data) {
@@ -215,7 +248,10 @@ export async function addSector(input: NewSector): Promise<boolean> {
     return false;
   }
   if (data) {
-    patchData((d) => ({ ...d, sectors: [...d.sectors, mapSector(data as SectorRow)] }));
+    patchData(
+      (d) => ({ ...d, sectors: [...d.sectors, mapSector(data as SectorRow)] }),
+      privateClient,
+    );
   }
   return true;
 }
@@ -224,12 +260,19 @@ export async function addSector(input: NewSector): Promise<boolean> {
  *  code bureau si présent, sinon par nom. Renvoie le nombre réellement ajouté. */
 export async function addSectorsBulk(items: NewSector[]): Promise<number> {
   const { teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!teamId || items.length === 0) return 0;
-  const sectors = currentData().sectors;
-  const existingCodes = new Set(sectors.map((s) => s.bureauCode).filter(Boolean));
+  const sectors = currentData(privateClient).sectors;
+  const existingCodes = new Set(
+    sectors.map((s) => s.bureauCode).filter(Boolean),
+  );
   const existingNames = new Set(sectors.map((s) => s.name));
-  const fresh = items.filter((i) =>
-    i.name && (i.bureauCode ? !existingCodes.has(i.bureauCode) : !existingNames.has(i.name)),
+  const fresh = items.filter(
+    (i) =>
+      i.name &&
+      (i.bureauCode
+        ? !existingCodes.has(i.bureauCode)
+        : !existingNames.has(i.name)),
   );
   if (fresh.length === 0) return 0;
   const supabase = createClient();
@@ -246,7 +289,13 @@ export async function addSectorsBulk(items: NewSector[]): Promise<number> {
     )
     .select("*");
   if (data) {
-    patchData((d) => ({ ...d, sectors: [...d.sectors, ...(data as SectorRow[]).map(mapSector)] }));
+    patchData(
+      (d) => ({
+        ...d,
+        sectors: [...d.sectors, ...(data as SectorRow[]).map(mapSector)],
+      }),
+      privateClient,
+    );
   }
   if (error) toast.error("Secteurs non enregistrés — réessayez.");
   return data?.length ?? 0;
@@ -261,41 +310,64 @@ export type SectorPatch = {
   address?: string | null;
 };
 
-export async function updateSector(id: string, patch: SectorPatch): Promise<void> {
-  const qc = getQueryClient();
-  const sectors = currentData().sectors;
+export async function updateSector(
+  id: string,
+  patch: SectorPatch,
+): Promise<void> {
+  const privateClient = getQueryClient();
+  const qc = privateClient;
+  const sectors = currentData(privateClient).sectors;
   const idx = sectors.findIndex((s) => s.id === id);
   if (idx < 0) return;
   const next = { ...sectors[idx], ...patch };
-  patchData((d) => ({
-    ...d,
-    sectors: [...d.sectors.slice(0, idx), next, ...d.sectors.slice(idx + 1)],
-  }));
+  patchData(
+    (d) => ({
+      ...d,
+      sectors: [...d.sectors.slice(0, idx), next, ...d.sectors.slice(idx + 1)],
+    }),
+    privateClient,
+  );
   const supabase = createClient();
   const { error } = await supabase
     .from("campaign_sectors")
     .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", id).select("id").single();
+    .eq("id", id)
+    .select("id")
+    .single();
   if (error) {
-    patchData((d) => ({ ...d, sectors: d.sectors.map((s) => s.id === id ? sectors[idx] : s) }));
+    patchData(
+      (d) => ({
+        ...d,
+        sectors: d.sectors.map((s) => (s.id === id ? sectors[idx] : s)),
+      }),
+      privateClient,
+    );
     void qc.invalidateQueries({ queryKey: CAMPAIGN_KEY });
     toast.error("Modification du secteur non enregistrée — réessayez.");
   }
 }
 
 export async function deleteSector(id: string): Promise<void> {
-  const previous = currentData().sectors;
-  patchData((d) => ({ ...d, sectors: d.sectors.filter((s) => s.id !== id) }));
+  const privateClient = getQueryClient();
+  const previous = currentData(privateClient).sectors;
+  patchData(
+    (d) => ({ ...d, sectors: d.sectors.filter((s) => s.id !== id) }),
+    privateClient,
+  );
   const supabase = createClient();
-  const { error } = await supabase.from("campaign_sectors").delete().eq("id", id).select("id").single();
+  const { error } = await supabase
+    .from("campaign_sectors")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .single();
   if (error) {
-    patchData((d) => ({ ...d, sectors: previous }));
+    patchData((d) => ({ ...d, sectors: previous }), privateClient);
     toast.error("Suppression du secteur impossible — réessayez.");
   }
 }
 
 function useCampaignQuery() {
-  ensureIdentityWired();
   return useQuery(campaignQuery);
 }
 
@@ -313,7 +385,13 @@ export function useHasTeam(): boolean {
 
 /** Voix nécessaires = inscrits × participation cible × score cible. */
 export function voteGoal(c: Campaign | null): number | null {
-  if (!c || c.registered == null || c.turnoutTarget == null || c.scoreTarget == null) return null;
+  if (
+    !c ||
+    c.registered == null ||
+    c.turnoutTarget == null ||
+    c.scoreTarget == null
+  )
+    return null;
   return Math.round(c.registered * c.turnoutTarget * c.scoreTarget);
 }
 
@@ -321,7 +399,13 @@ export function voteGoal(c: Campaign | null): number | null {
 export function useLoadState() {
   const q = useCampaignQuery();
   const hydrated = useHydrated();
-  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+  return {
+    loaded: q.isSuccess && hydrated,
+    error: q.isError,
+    retry: () => {
+      void q.refetch();
+    },
+  };
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */

@@ -407,6 +407,9 @@ export function Map({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    // Le worker ESM importe son module partagé relatif. Turbopack ne copie
+    // pas automatiquement ce second fichier ; predev/prebuild préparent les deux.
+    maplibregl.setWorkerUrl(`/maplibre/${maplibregl.getVersion()}/maplibre-gl-worker.mjs`);
     registerPmtilesProtocol();
 
     const map = new maplibregl.Map({

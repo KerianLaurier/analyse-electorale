@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient, serviceRoleConfigured } from "@/lib/supabase/admin";
-import { getStripe, resolvePriceId, stripeEnabled, SELF_SERVICE_TIERS } from "@/lib/stripe";
+import {
+  createServiceClient,
+  serviceRoleConfigured,
+} from "@/lib/supabase/admin";
+import {
+  getStripe,
+  resolvePriceId,
+  stripeEnabled,
+  SELF_SERVICE_TIERS,
+} from "@/lib/stripe";
 import type { Cycle, Tier } from "@/lib/billing";
 import { env } from "@/lib/env";
+import {
+  CheckoutPendingError,
+  getOrCreateCheckout,
+} from "@/lib/checkout-session";
 
 /**
  * Démarre un paiement par carte : crée une session Stripe Checkout (hébergée)
@@ -11,9 +23,16 @@ import { env } from "@/lib/env";
  * fait au retour du webhook `checkout.session.completed` — jamais ici.
  */
 export async function POST(request: Request) {
-  if (!stripeEnabled() || !serviceRoleConfigured() || !process.env.STRIPE_WEBHOOK_SECRET) {
+  if (
+    !stripeEnabled() ||
+    !serviceRoleConfigured() ||
+    !process.env.STRIPE_WEBHOOK_SECRET
+  ) {
     return NextResponse.json(
-      { error: "Le paiement par carte n'est pas configuré sur cet environnement." },
+      {
+        error:
+          "Le paiement par carte n'est pas configuré sur cet environnement.",
+      },
       { status: 503 },
     );
   }
@@ -23,7 +42,10 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Authentification requise." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Authentification requise." },
+      { status: 401 },
+    );
   }
 
   let body: unknown;
@@ -38,27 +60,42 @@ export async function POST(request: Request) {
   const input = body as Record<string, unknown>;
   const tier = input.tier as Tier;
   const cycle = input.cycle as Cycle;
-  if (!SELF_SERVICE_TIERS.includes(tier) || (cycle !== "monthly" && cycle !== "yearly")) {
-    return NextResponse.json({ error: "Formule ou cycle invalide." }, { status: 400 });
+  if (
+    !SELF_SERVICE_TIERS.includes(tier) ||
+    (cycle !== "monthly" && cycle !== "yearly")
+  ) {
+    return NextResponse.json(
+      { error: "Formule ou cycle invalide." },
+      { status: 400 },
+    );
   }
 
   try {
     const admin = createServiceClient();
     const { data: prof, error: profileError } = await admin
       .from("profiles")
-      .select("subscription_status, stripe_customer_id, stripe_subscription_id, full_name, organisation")
+      .select(
+        "subscription_status, stripe_customer_id, stripe_subscription_id, full_name, organisation",
+      )
       .eq("id", user.id)
       .single();
     if (profileError) throw profileError;
     if (!prof) {
-      return NextResponse.json({ error: "Profil introuvable." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Profil introuvable." },
+        { status: 404 },
+      );
     }
 
     // Déjà abonné via Stripe : le changement de formule passe par le portail
     // (sinon Checkout créerait une SECONDE subscription facturée en parallèle).
     if (prof.subscription_status === "active" && prof.stripe_subscription_id) {
       return NextResponse.json(
-        { error: "Abonnement déjà actif — gérez votre formule depuis le portail de facturation.", portal: true },
+        {
+          error:
+            "Abonnement déjà actif — gérez votre formule depuis le portail de facturation.",
+          portal: true,
+        },
         { status: 409 },
       );
     }
@@ -68,13 +105,24 @@ export async function POST(request: Request) {
 
     let customerId = (prof.stripe_customer_id as string | null) ?? null;
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email ?? undefined,
-        name: (prof.organisation as string | null) || (prof.full_name as string | null) || undefined,
-        metadata: { user_id: user.id },
-      }, { idempotencyKey: `customer:${user.id}` });
+      const customer = await stripe.customers.create(
+        {
+          email: user.email ?? undefined,
+          name:
+            (prof.organisation as string | null) ||
+            (prof.full_name as string | null) ||
+            undefined,
+          metadata: { user_id: user.id },
+        },
+        { idempotencyKey: `customer:${user.id}` },
+      );
       customerId = customer.id;
-      const { error } = await admin.from("profiles").update({ stripe_customer_id: customerId }).eq("id", user.id).select("id").single();
+      const { error } = await admin
+        .from("profiles")
+        .update({ stripe_customer_id: customerId })
+        .eq("id", user.id)
+        .select("id")
+        .single();
       if (error) throw error;
     }
 
@@ -82,7 +130,7 @@ export async function POST(request: Request) {
     // `Origin` (contrôlable par le client) → pas de redirection Stripe forgée.
     // En local/preview : origine de la requête serveur, jamais l’en-tête Origin.
     const origin = env.APP_URL ?? new URL(request.url).origin;
-    const session = await stripe.checkout.sessions.create({
+    const session = await getOrCreateCheckout(admin, stripe, user.id, {
       mode: "subscription",
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
@@ -100,7 +148,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
+    if (error instanceof CheckoutPendingError)
+      return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("[stripe-checkout]", error);
-    return NextResponse.json({ error: "Le service de paiement est indisponible — réessayez." }, { status: 502 });
+    return NextResponse.json(
+      { error: "Le service de paiement est indisponible — réessayez." },
+      { status: 502 },
+    );
   }
 }

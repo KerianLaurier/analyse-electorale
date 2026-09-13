@@ -25,10 +25,10 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
-      - name: Installer duckdb
-        run: pip install duckdb
+      - name: Installer les dépendances verrouillées
+        run: python -m pip install --require-hashes -r scripts/pipeline/requirements.txt
 
       - name: Télécharger les sources brutes (data.gouv, électoral uniquement)
         # --only-electoral : le géo et l'INSEE ne servent pas aux agrégats, et

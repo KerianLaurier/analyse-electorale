@@ -1,3 +1,4 @@
+import { redactTelemetry } from "@/lib/telemetry-privacy";
 import * as Sentry from "@sentry/nextjs";
 
 /**
@@ -10,8 +11,9 @@ Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
   environment: process.env.NODE_ENV,
-  // Traces légères : assez pour voir les pages lentes, sans gonfler le quota.
-  tracesSampleRate: 0.1,
+  // Traces désactivées tant que leurs attributs métier ne sont pas contrôlés.
+  tracesSampleRate: 0,
+  beforeSend: redactTelemetry,
   sendDefaultPii: false,
 });
 
