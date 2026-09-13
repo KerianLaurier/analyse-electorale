@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -70,3 +71,7 @@ next-env.d.ts
 # python caches
 __pycache__/
 *.pyc
+
+# Workers MapLibre reconstruits depuis la version verrouillée avant dev/build
+/public/maplibre/
+.venv/

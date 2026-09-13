@@ -19,6 +19,7 @@
 // exactement ce qui s'est produit du 30/07 au 03/08. Garder ce fichier sans
 // dépendance, c'est garder l'upload indépendant de l'état de node_modules.
 
+import { createHash } from "node:crypto";
 import { readdir, stat, readFile } from "node:fs/promises";
 import { join, relative, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,8 +50,19 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BUCKET = process.env.BUCKET ?? "data";
 const DRY_RUN = process.env.DRY_RUN === "1";
+const RELEASE_ID = process.env.RELEASE_ID ?? "";
+if (RELEASE_ID && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(RELEASE_ID))
+  throw new Error("RELEASE_ID invalide");
 // Restreint l'upload à certains dossiers (ex. ONLY=electoral,tiles).
-const ONLY = (process.env.ONLY ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const ONLY = (process.env.ONLY ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+if (ONLY.some((dir) => !DATA_DIRS.includes(dir)))
+  throw new Error("ONLY contient un dossier inconnu");
+if (RELEASE_ID && ONLY.length)
+  throw new Error("Une release doit contenir toutes les familles de données");
 
 if (!SUPABASE_URL || !SERVICE_ROLE) {
   console.error("✗ SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont requis.");
@@ -97,6 +109,7 @@ async function* walk(dir) {
 async function ensureBucket() {
   const res = await fetch(`${API}/bucket/${encodeURIComponent(BUCKET)}`, {
     headers: authHeaders(),
+    signal: AbortSignal.timeout(30_000),
   });
   if (res.ok) return;
   if (res.status !== 404) {
@@ -108,10 +121,12 @@ async function ensureBucket() {
   }
   const created = await fetch(`${API}/bucket`, {
     method: "POST",
+    signal: AbortSignal.timeout(120_000),
     headers: { ...authHeaders(), "content-type": "application/json" },
     body: JSON.stringify({ id: BUCKET, name: BUCKET, public: true }),
   });
-  if (!created.ok) throw new Error(`createBucket: ${await storageError(created)}`);
+  if (!created.ok)
+    throw new Error(`createBucket: ${await storageError(created)}`);
   console.log(`✓ bucket « ${BUCKET} » créé (public)`);
 }
 
@@ -122,18 +137,21 @@ async function uploadObject(key, body, contentType, cacheControl) {
   const path = key.split("/").map(encodeURIComponent).join("/");
   return fetch(`${API}/object/${encodeURIComponent(BUCKET)}/${path}`, {
     method: "POST",
+    signal: AbortSignal.timeout(120_000),
     headers: {
       ...authHeaders(),
       "content-type": contentType,
       "cache-control": `max-age=${cacheControl}`,
-      "x-upsert": "true",
+      "x-upsert": RELEASE_ID ? "false" : "true",
     },
     body,
   });
 }
 
 async function collectFiles() {
-  const dirs = ONLY.length ? DATA_DIRS.filter((d) => ONLY.includes(d)) : DATA_DIRS;
+  const dirs = ONLY.length
+    ? DATA_DIRS.filter((d) => ONLY.includes(d))
+    : DATA_DIRS;
   const files = [];
   for (const d of dirs) {
     for await (const f of walk(join(PUBLIC, d))) files.push(f);
@@ -152,20 +170,48 @@ async function collectFiles() {
 }
 
 async function main() {
-  await ensureBucket();
   const files = await collectFiles();
+  if (!files.length) throw new Error("Aucun fichier à publier");
+  if (RELEASE_ID) {
+    for (const dir of DATA_DIRS) {
+      if (!files.some((file) => relative(PUBLIC, file).startsWith(`${dir}/`)))
+        throw new Error(`Release incomplète : ${dir} absent`);
+    }
+    for (const file of DATA_FILES)
+      if (!files.includes(join(PUBLIC, file)))
+        throw new Error(`Release incomplète : ${file} absent`);
+  }
+  await ensureBucket();
+  const manifest = {
+    release: RELEASE_ID || null,
+    created_at: new Date().toISOString(),
+    files: [],
+  };
   console.log(`${files.length} fichier(s) à uploader vers ${BUCKET}/…`);
 
   let done = 0;
   let bytes = 0;
   for (const full of files) {
-    const key = relative(PUBLIC, full); // ex. "electoral/agg/x.parquet"
-    const contentType = CONTENT_TYPES[extname(full)] ?? "application/octet-stream";
+    const relativeKey = relative(PUBLIC, full);
+    const key = RELEASE_ID
+      ? `releases/${RELEASE_ID}/${relativeKey}`
+      : relativeKey; // ex. "electoral/agg/x.parquet"
+    const contentType =
+      CONTENT_TYPES[extname(full)] ?? "application/octet-stream";
     const cacheControl = CACHE_CONTROL;
     const body = await readFile(full);
+    if (!body.length) throw new Error(`Fichier vide : ${relativeKey}`);
+    if (extname(full) === ".json") JSON.parse(body.toString("utf8"));
+    manifest.files.push({
+      path: relativeKey,
+      bytes: body.length,
+      sha256: createHash("sha256").update(body).digest("hex"),
+    });
     bytes += body.length;
     if (DRY_RUN) {
-      console.log(`(dry-run) ${key} (${contentType}, cache ${cacheControl}s, ${body.length} o)`);
+      console.log(
+        `(dry-run) ${key} (${contentType}, cache ${cacheControl}s, ${body.length} o)`,
+      );
       done++;
       continue;
     }
@@ -180,6 +226,7 @@ async function main() {
           break;
         }
         lastErr = new Error(await storageError(res));
+        if (res.status < 500 && ![408, 429].includes(res.status)) break;
       } catch (err) {
         // Coupure réseau/DNS : fetch rejette au lieu de répondre. Même
         // traitement que les erreurs HTTP, pour ne pas perdre le retry.
@@ -195,9 +242,23 @@ async function main() {
       if (done % 10 === 0) console.log(`  … ${done}/${files.length}`);
     }
   }
+  if (done !== files.length)
+    throw new Error("Publication incomplète : manifeste non publié");
+  if (RELEASE_ID && !DRY_RUN) {
+    const response = await uploadObject(
+      `releases/${RELEASE_ID}/manifest.json`,
+      JSON.stringify(manifest),
+      "application/json",
+      "31536000",
+    );
+    if (!response.ok)
+      throw new Error(`Manifeste non publié : ${await storageError(response)}`);
+  }
   console.log(
     `✓ ${done}/${files.length} fichier(s) (${(bytes / 1e6).toFixed(1)} Mo)` +
-      (DRY_RUN ? " [dry-run]" : ` → ${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`),
+      (DRY_RUN
+        ? " [dry-run]"
+        : ` → ${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`),
   );
 }
 

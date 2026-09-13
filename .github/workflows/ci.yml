@@ -8,10 +8,23 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qualite:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Aucun accès aux comptes ou paiements réels dans la suite publique.
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      # Valeur fictive pour détecter une sérialisation accidentelle au build.
+      STRIPE_WEBHOOK_SECRET: whsec_build_canary_4c302c8eb944442ab85d4c88
     steps:
       - uses: actions/checkout@v7
 
@@ -31,6 +44,24 @@ jobs:
 
       - name: Tests unitaires
         run: npm test
+
+      - name: Build de production
+        run: npm run build
+
+      - name: Absence de secrets serveur dans les artefacts
+        run: npm run check:build-secrets
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Contrats du pipeline sur données fictives
+        run: python -m unittest discover -s scripts/pipeline/tests -v
+
+      - name: Syntaxe des pipelines
+        run: |
+          bash -n scripts/pipeline/all.sh
+          python3 -m compileall -q scripts/pipeline
 
       - name: Navigateur Playwright
         run: npx playwright install chromium --with-deps

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { billingPhase, computeAccess, daysLeft, nextRenewal } from "@/lib/billing";
+import {
+  billingPhase,
+  computeAccess,
+  daysLeft,
+  nextRenewal,
+} from "@/lib/billing";
 
 const NOW = new Date("2026-07-08T12:00:00Z");
 const FUTURE = "2026-07-20T00:00:00Z";
@@ -12,8 +17,8 @@ describe("computeAccess", () => {
   it("refuse l'essai expiré", () => {
     expect(computeAccess("trial", PAST, null, false, NOW)).toBe(false);
   });
-  it("tolère un essai sans date de fin (legacy)", () => {
-    expect(computeAccess("trial", null, null, false, NOW)).toBe(true);
+  it("refuse un essai sans date de fin, comme les droits SQL", () => {
+    expect(computeAccess("trial", null, null, false, NOW)).toBe(false);
   });
   it("accorde l'accès à un abonnement actif", () => {
     expect(computeAccess("active", null, null, false, NOW)).toBe(true);
@@ -59,9 +64,17 @@ describe("nextRenewal", () => {
     expect(next.toISOString()).toBe("2026-11-02T00:00:00.000Z");
   });
   it("borne les fins de mois comme Postgres (31 janv → 28 févr → 28 mars)", () => {
-    const next = nextRenewal("2026-01-31T00:00:00Z", "monthly", new Date("2026-02-14T00:00:00Z"));
+    const next = nextRenewal(
+      "2026-01-31T00:00:00Z",
+      "monthly",
+      new Date("2026-02-14T00:00:00Z"),
+    );
     expect(next.toISOString()).toBe("2026-02-28T00:00:00.000Z");
-    const after = nextRenewal("2026-01-31T00:00:00Z", "monthly", new Date("2026-03-01T00:00:00Z"));
+    const after = nextRenewal(
+      "2026-01-31T00:00:00Z",
+      "monthly",
+      new Date("2026-03-01T00:00:00Z"),
+    );
     expect(after.toISOString()).toBe("2026-03-28T00:00:00.000Z");
   });
   it("repli sur mensuel sans cycle connu, depuis maintenant sans date de début", () => {
@@ -75,6 +88,7 @@ describe("billingPhase", () => {
   it("distingue les six phases du parcours", () => {
     expect(billingPhase("trial", FUTURE, null, NOW)).toBe("trialing");
     expect(billingPhase("trial", PAST, null, NOW)).toBe("trial_over");
+    expect(billingPhase("trial", null, null, NOW)).toBe("trial_over");
     expect(billingPhase("active", null, null, NOW)).toBe("active");
     expect(billingPhase("active", null, FUTURE, NOW)).toBe("canceling");
     expect(billingPhase("active", null, PAST, NOW)).toBe("ended");

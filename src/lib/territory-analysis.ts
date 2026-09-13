@@ -1,13 +1,17 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { BoundedCache } from "@/lib/bounded-cache";
 import { dataUrl } from "@/lib/data-url";
 import type { Maille } from "@/lib/map-config";
-import { SCRUTIN_META, SCRUTINS_CHRONO, isElection, parseScrutin, type Scrutin } from "@/lib/url-state";
 import {
-  fetchScrutinDetail,
-  type ScrutinDetail,
-} from "@/lib/queries";
+  SCRUTIN_META,
+  SCRUTINS_CHRONO,
+  isElection,
+  parseScrutin,
+  type Scrutin,
+} from "@/lib/url-state";
+import { fetchScrutinDetail, type ScrutinDetail } from "@/lib/queries";
 import {
   BLOCS,
   SOCIO_INDICATORS,
@@ -18,7 +22,10 @@ import {
   type SocioIndicator,
   type SocioUnit,
 } from "@/lib/analysis";
-import { blocSharesFromCandidates, type BlocSharesFull } from "@/lib/projection";
+import {
+  blocSharesFromCandidates,
+  type BlocSharesFull,
+} from "@/lib/projection";
 import { deptFromInsee } from "@/lib/territoire";
 
 // ─── Territoire analysable (les 4 mailles de l'index de recherche) ────────────
@@ -52,18 +59,26 @@ export type TerritoryPoint = ScrutinDetail & { scrutin: Scrutin };
  * Historique électoral complet d'un territoire, quelle que soit sa maille :
  * détail de chaque scrutin couvrant la maille, dans l'ordre chronologique.
  */
-export function useTerritoryHistory(type: TerritoryType | null, code: string | null) {
+export function useTerritoryHistory(
+  type: TerritoryType | null,
+  code: string | null,
+) {
   const maille = type ? TERRITORY_MAILLE[type] : null;
   return useQuery({
     enabled: !!maille && !!code,
     queryKey: ["territory-analysis-history", maille, code],
     queryFn: async (): Promise<TerritoryPoint[]> => {
       const scrutins = CHRONO.filter(
-        (s) => isElection(s) && SCRUTIN_META[s].mailles.includes(maille as Maille),
+        (s) =>
+          isElection(s) && SCRUTIN_META[s].mailles.includes(maille as Maille),
       );
       const results = await Promise.all(
         scrutins.map(async (s) => {
-          const detail = await fetchScrutinDetail(s, maille as Maille, code as string);
+          const detail = await fetchScrutinDetail(
+            s,
+            maille as Maille,
+            code as string,
+          );
           return detail ? { ...detail, scrutin: s } : null;
         }),
       );
@@ -77,23 +92,44 @@ export function useTerritoryHistory(type: TerritoryType | null, code: string | n
 
 // Scrutins de 1er tour utilisés pour les tendances nationales par famille.
 export const NATIONAL_SCRUTINS: Scrutin[] = [
-  "presid-2017-t1", "presid-2022-t1",
-  "legis-2017-t1", "legis-2022-t1", "legis-2024-t1",
+  "presid-2017-t1",
+  "presid-2022-t1",
+  "legis-2017-t1",
+  "legis-2022-t1",
+  "legis-2024-t1",
 ];
 
 type DetailEntry = {
   l: string | null;
-  i: number; v: number; e: number; a: number; b: number; n: number;
+  i: number;
+  v: number;
+  e: number;
+  a: number;
+  b: number;
+  n: number;
   c: [string | null, string | null, number, number][];
 };
 
-const jsonCache = new Map<string, Promise<unknown | null>>();
-function loadJson<T>(path: string): Promise<T | null> {
+const jsonCache = new BoundedCache<string, Promise<unknown | null>>();
+export function loadJson<T>(path: string): Promise<T | null> {
   let p = jsonCache.get(path);
   if (!p) {
     p = fetch(dataUrl(path))
-      .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
-      .catch(() => null);
+      .then((r) => {
+        // Une absence de couverture est normale ; une panne ne doit pas
+        // devenir une analyse vide mise en cache comme un succès.
+        if (r.status === 404) {
+          jsonCache.delete(path);
+          return null;
+        }
+        if (!r.ok)
+          throw new Error(`Données indisponibles (${r.status}) : ${path}`);
+        return r.json() as Promise<T>;
+      })
+      .catch((error) => {
+        jsonCache.delete(path);
+        throw error;
+      });
     jsonCache.set(path, p);
   }
   return p as Promise<T | null>;
@@ -159,27 +195,115 @@ type ColumnFile = Record<string, Record<string, number>>;
 
 /** Région d'appartenance de chaque département (référentiel INSEE 2016, stable). */
 export const REGION_OF_DEPT: Record<string, string> = {
-  "01": "84", "02": "32", "03": "84", "04": "93", "05": "93", "06": "93",
-  "07": "84", "08": "44", "09": "76", "10": "44", "11": "76", "12": "76",
-  "13": "93", "14": "28", "15": "84", "16": "75", "17": "75", "18": "24",
-  "19": "75", "2A": "94", "2B": "94", "21": "27", "22": "53", "23": "75",
-  "24": "75", "25": "27", "26": "84", "27": "28", "28": "24", "29": "53",
-  "30": "76", "31": "76", "32": "76", "33": "75", "34": "76", "35": "53",
-  "36": "24", "37": "24", "38": "84", "39": "27", "40": "75", "41": "24",
-  "42": "84", "43": "84", "44": "52", "45": "24", "46": "76", "47": "75",
-  "48": "76", "49": "52", "50": "28", "51": "44", "52": "44", "53": "52",
-  "54": "44", "55": "44", "56": "53", "57": "44", "58": "27", "59": "32",
-  "60": "32", "61": "28", "62": "32", "63": "84", "64": "75", "65": "76",
-  "66": "76", "67": "44", "68": "44", "69": "84", "70": "27", "71": "27",
-  "72": "52", "73": "84", "74": "84", "75": "11", "76": "28", "77": "11",
-  "78": "11", "79": "75", "80": "32", "81": "76", "82": "76", "83": "93",
-  "84": "93", "85": "52", "86": "75", "87": "75", "88": "44", "89": "27",
-  "90": "27", "91": "11", "92": "11", "93": "11", "94": "11", "95": "11",
-  "971": "01", "972": "02", "973": "03", "974": "04", "976": "06",
+  "01": "84",
+  "02": "32",
+  "03": "84",
+  "04": "93",
+  "05": "93",
+  "06": "93",
+  "07": "84",
+  "08": "44",
+  "09": "76",
+  "10": "44",
+  "11": "76",
+  "12": "76",
+  "13": "93",
+  "14": "28",
+  "15": "84",
+  "16": "75",
+  "17": "75",
+  "18": "24",
+  "19": "75",
+  "2A": "94",
+  "2B": "94",
+  "21": "27",
+  "22": "53",
+  "23": "75",
+  "24": "75",
+  "25": "27",
+  "26": "84",
+  "27": "28",
+  "28": "24",
+  "29": "53",
+  "30": "76",
+  "31": "76",
+  "32": "76",
+  "33": "75",
+  "34": "76",
+  "35": "53",
+  "36": "24",
+  "37": "24",
+  "38": "84",
+  "39": "27",
+  "40": "75",
+  "41": "24",
+  "42": "84",
+  "43": "84",
+  "44": "52",
+  "45": "24",
+  "46": "76",
+  "47": "75",
+  "48": "76",
+  "49": "52",
+  "50": "28",
+  "51": "44",
+  "52": "44",
+  "53": "52",
+  "54": "44",
+  "55": "44",
+  "56": "53",
+  "57": "44",
+  "58": "27",
+  "59": "32",
+  "60": "32",
+  "61": "28",
+  "62": "32",
+  "63": "84",
+  "64": "75",
+  "65": "76",
+  "66": "76",
+  "67": "44",
+  "68": "44",
+  "69": "84",
+  "70": "27",
+  "71": "27",
+  "72": "52",
+  "73": "84",
+  "74": "84",
+  "75": "11",
+  "76": "28",
+  "77": "11",
+  "78": "11",
+  "79": "75",
+  "80": "32",
+  "81": "76",
+  "82": "76",
+  "83": "93",
+  "84": "93",
+  "85": "52",
+  "86": "75",
+  "87": "75",
+  "88": "44",
+  "89": "27",
+  "90": "27",
+  "91": "11",
+  "92": "11",
+  "93": "11",
+  "94": "11",
+  "95": "11",
+  "971": "01",
+  "972": "02",
+  "973": "03",
+  "974": "04",
+  "976": "06",
 };
 
 /** Le code INSEE d'une commune appartient-il au périmètre demandé ? */
-function communeInScope(insee: string, type: TerritoryType, code: string): boolean {
+function communeInScope(
+  insee: string,
+  type: TerritoryType,
+  code: string,
+): boolean {
   if (type === "commune") return insee === code;
   const dept = deptFromInsee(insee);
   if (!dept) return false;
@@ -193,7 +317,10 @@ function communeInScope(insee: string, type: TerritoryType, code: string): boole
  * Commune / département / région : indicateurs communaux, agrégés (moyenne
  * pondérée par la population — approximation assumée pour médianes et taux).
  */
-export function useSocioProfile(type: TerritoryType | null, code: string | null) {
+export function useSocioProfile(
+  type: TerritoryType | null,
+  code: string | null,
+) {
   return useQuery({
     enabled: !!type && !!code,
     queryKey: ["territory-socio-profile", type, code],
@@ -201,7 +328,9 @@ export function useSocioProfile(type: TerritoryType | null, code: string | null)
       if (!type || !code) return null;
 
       if (type === "circo") {
-        const data = await loadJson<ColumnFile>("/electoral/choro/socio_circo.json");
+        const data = await loadJson<ColumnFile>(
+          "/electoral/choro/socio_circo.json",
+        );
         if (!data) return null;
         const rows: SocioProfileRow[] = [];
         for (const meta of SOCIO_INDICATORS) {
@@ -211,9 +340,18 @@ export function useSocioProfile(type: TerritoryType | null, code: string | null)
           let sum = 0;
           let n = 0;
           for (const v of Object.values(col)) {
-            if (Number.isFinite(v)) { sum += v; n += 1; }
+            if (Number.isFinite(v)) {
+              sum += v;
+              n += 1;
+            }
           }
-          rows.push({ id: meta.id, label: meta.label, unit: meta.unit, value, national: n ? sum / n : 0 });
+          rows.push({
+            id: meta.id,
+            label: meta.label,
+            unit: meta.unit,
+            value,
+            national: n ? sum / n : 0,
+          });
         }
         return rows.length ? rows : null;
       }
@@ -228,7 +366,10 @@ export function useSocioProfile(type: TerritoryType | null, code: string | null)
       const rows: SocioProfileRow[] = [];
       for (const meta of SOCIO_INDICATORS) {
         const col = (meta.source === "rp" ? rp : filosofi)[meta.column] ?? {};
-        let locSum = 0, locW = 0, natSum = 0, natW = 0;
+        let locSum = 0,
+          locW = 0,
+          natSum = 0,
+          natW = 0;
         for (const [insee, v] of Object.entries(col)) {
           if (!Number.isFinite(v)) continue;
           const w = population[insee] ?? 0;
@@ -279,7 +420,10 @@ export type PotentielBlocRow = {
  * « 1710 % » sur toute maille autre que la circonscription.
  */
 const PCT_POINTS_TO_FRACTION = 1 / 100;
-export function usePotentielTerritory(type: TerritoryType | null, code: string | null) {
+export function usePotentielTerritory(
+  type: TerritoryType | null,
+  code: string | null,
+) {
   return useQuery({
     enabled: !!type && !!code && type !== "circo",
     queryKey: ["territory-potentiel", type, code],
@@ -299,17 +443,26 @@ export function usePotentielTerritory(type: TerritoryType | null, code: string |
           affinite: pot[`aff_${b.id}`] ?? {},
           potentiel: pot[`pot_${b.id}`] ?? {},
         };
-        const agg: Record<keyof typeof cols, number | null> = { reel: null, affinite: null, potentiel: null };
+        const agg: Record<keyof typeof cols, number | null> = {
+          reel: null,
+          affinite: null,
+          potentiel: null,
+        };
         for (const key of Object.keys(cols) as (keyof typeof cols)[]) {
           const col = cols[key];
           if (type === "commune") {
             const v = col[code];
-            agg[key] = v != null && Number.isFinite(v) ? v * PCT_POINTS_TO_FRACTION : null;
+            agg[key] =
+              v != null && Number.isFinite(v)
+                ? v * PCT_POINTS_TO_FRACTION
+                : null;
             continue;
           }
-          let sum = 0, w = 0;
+          let sum = 0,
+            w = 0;
           for (const [insee, v] of Object.entries(col)) {
-            if (!Number.isFinite(v) || !communeInScope(insee, type, code)) continue;
+            if (!Number.isFinite(v) || !communeInScope(insee, type, code))
+              continue;
             const p = population[insee] ?? 0;
             if (!(p > 0)) continue;
             sum += v * p;
@@ -325,7 +478,10 @@ export function usePotentielTerritory(type: TerritoryType | null, code: string |
   });
 }
 
-export type PotentielCircoResult = { rows: PotentielBlocRow[]; r2: Record<BlocId, number> };
+export type PotentielCircoResult = {
+  rows: PotentielBlocRow[];
+  r2: Record<BlocId, number>;
+};
 
 /**
  * Potentiel des 5 blocs pour UNE circonscription : régression ridge

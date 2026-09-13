@@ -2,12 +2,22 @@
 
 import { useMemo, useState } from "react";
 import { RotateCcw, Sparkles } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@appica/ui-react/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@appica/ui-react/select";
 import { Slider } from "@appica/ui-react/slider";
 import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
 import { BLOCS, blocById, type BlocId } from "@/lib/analysis";
-import { SCRUTIN_META, parseScrutin, type ScrutinFamily } from "@/lib/url-state";
+import {
+  SCRUTIN_META,
+  parseScrutin,
+  type ScrutinFamily,
+} from "@/lib/url-state";
 import {
   applyProportionalSwing,
   blocSharesFromCandidates,
@@ -85,16 +95,27 @@ export function ProjectionSection({
   });
   function changeBloc(v: BlocId | "") {
     setBloc(v);
-    try { localStorage.setItem(BLOC_KEY, v); } catch { /* quota / indispo */ }
+    try {
+      localStorage.setItem(BLOC_KEY, v);
+    } catch {
+      /* quota / indispo */
+    }
   }
 
   const target = FAMILY_TARGET[family];
-  const local = useMemo(() => familyHistory(history, family), [history, family]);
+  const local = useMemo(
+    () => familyHistory(history, family),
+    [history, family],
+  );
   const localLast = local.length ? local[local.length - 1] : null;
 
   // Projection tendancielle locale (droite par bloc, normalisée).
   const localProj = useMemo(
-    () => projectBlocShares(local.map(({ year, shares }) => ({ year, shares })), target.year),
+    () =>
+      projectBlocShares(
+        local.map(({ year, shares }) => ({ year, shares })),
+        target.year,
+      ),
     [local, target.year],
   );
 
@@ -105,7 +126,10 @@ export function ProjectionSection({
       .sort((a, b) => a.year - b.year);
     if (pts.length === 0) return null;
     const ref = pts[pts.length - 1];
-    const proj = projectBlocShares(pts.map(({ year, shares }) => ({ year, shares })), target.year);
+    const proj = projectBlocShares(
+      pts.map(({ year, shares }) => ({ year, shares })),
+      target.year,
+    );
     return { ref, proj };
   }, [national.data, family, target.year]);
 
@@ -114,7 +138,8 @@ export function ProjectionSection({
     const out = {} as Record<BlocId, number>;
     for (const b of BLOCS) {
       const p = nat?.proj?.find((r) => r.bloc === b.id);
-      out[b.id] = Math.round(((p?.projected ?? nat?.ref.shares[b.id] ?? 0) * 100) * 2) / 2;
+      out[b.id] =
+        Math.round((p?.projected ?? nat?.ref.shares[b.id] ?? 0) * 100 * 2) / 2;
     }
     return out;
   }, [nat]);
@@ -124,12 +149,18 @@ export function ProjectionSection({
 
   // Participation projetée (tendance locale, bornée à un couloir plausible).
   const projectedParticipation = useMemo(() => {
-    const pts: Array<[number, number]> = local.map((p) => [p.year, p.participation]);
+    const pts: Array<[number, number]> = local.map((p) => [
+      p.year,
+      p.participation,
+    ]);
     const fit = fitLinear(pts);
-    const raw = fit ? fit.slope * target.year + fit.intercept : localLast?.participation ?? 0.5;
+    const raw = fit
+      ? fit.slope * target.year + fit.intercept
+      : (localLast?.participation ?? 0.5);
     return Math.min(0.9, Math.max(0.25, raw));
   }, [local, localLast, target.year]);
-  const effParticipation = (participationPct ?? Math.round(projectedParticipation * 100)) / 100;
+  const effParticipation =
+    (participationPct ?? Math.round(projectedParticipation * 100)) / 100;
 
   // Scénario appliqué au territoire (swing proportionnel sur la dernière photo).
   const scenarioShares = useMemo<BlocSharesFull | null>(() => {
@@ -144,15 +175,20 @@ export function ProjectionSection({
   // Classement scénario + grandeurs de campagne (voix, bascule).
   const outcome = useMemo(() => {
     if (!scenarioShares || !localLast) return null;
-    const ranked = BLOCS
-      .map((b) => ({ bloc: b.id as BlocId | "autre", share: scenarioShares[b.id] }))
+    const ranked = BLOCS.map((b) => ({
+      bloc: b.id as BlocId | "autre",
+      share: scenarioShares[b.id],
+    }))
       .concat([{ bloc: "autre", share: scenarioShares.autre }])
       .sort((a, b) => b.share - a.share);
     const [first, second] = ranked;
     const margin = first && second ? first.share - second.share : null;
     // Exprimés estimés : inscrits × participation × (exprimés/votants observés).
-    const expRatio = localLast.votants > 0 ? localLast.exprimes / localLast.votants : 0.95;
-    const exprimes = Math.round(localLast.inscrits * effParticipation * expRatio);
+    const expRatio =
+      localLast.votants > 0 ? localLast.exprimes / localLast.votants : 0.95;
+    const exprimes = Math.round(
+      localLast.inscrits * effParticipation * expRatio,
+    );
     return { ranked, first, second, margin, exprimes };
   }, [scenarioShares, localLast, effParticipation]);
 
@@ -161,7 +197,11 @@ export function ProjectionSection({
     if (!outcome?.first || outcome.margin == null || !localProj) return null;
     const slopeOf = (b: BlocId | "autre") =>
       localProj.find((p) => p.bloc === b)?.slopePerYear ?? 0;
-    return fragilityIndex(outcome.margin, slopeOf(outcome.first.bloc), slopeOf(outcome.second.bloc));
+    return fragilityIndex(
+      outcome.margin,
+      slopeOf(outcome.first.bloc),
+      slopeOf(outcome.second.bloc),
+    );
   }, [outcome, localProj]);
 
   // Écart du bloc suivi à la tête (voix manquantes ou avance).
@@ -172,10 +212,18 @@ export function ProjectionSection({
     if (best == null) return null;
     const lead = outcome.ranked[0];
     if (lead.bloc === bloc) {
-      return { leading: true, pts: mine - best.share, votes: votesToFlip(mine - best.share, outcome.exprimes) };
+      return {
+        leading: true,
+        pts: mine - best.share,
+        votes: votesToFlip(mine - best.share, outcome.exprimes),
+      };
     }
     const gap = lead.share - mine;
-    return { leading: false, pts: gap, votes: votesToFlip(gap, outcome.exprimes) };
+    return {
+      leading: false,
+      pts: gap,
+      votes: votesToFlip(gap, outcome.exprimes),
+    };
   }, [bloc, outcome, scenarioShares]);
 
   if (local.length === 0) {
@@ -183,7 +231,8 @@ export function ProjectionSection({
       <section className="rounded-lg bg-surface p-4 shadow-card">
         <SectionHeader />
         <p className="mt-3 text-[12.5px] text-muted-foreground">
-          Pas de données de 1er tour disponibles pour cette famille de scrutins sur ce territoire.
+          Pas de données de 1er tour disponibles pour cette famille de scrutins
+          sur ce territoire.
         </p>
       </section>
     );
@@ -204,14 +253,21 @@ export function ProjectionSection({
             <Button
               key={f}
               type="button"
-              onClick={() => { setFamily(f); setScenario(null); setParticipationPct(null); }}
+              onClick={() => {
+                setFamily(f);
+                setScenario(null);
+                setParticipationPct(null);
+              }}
               aria-pressed={family === f}
               className={cn(
                 "rounded-pill px-2.5 py-1 text-[11.5px] font-medium transition-colors",
                 family === f
                   ? "bg-surface text-foreground shadow-[0_1px_2px_rgba(10,10,12,0.06)]"
                   : "text-muted-foreground hover:text-foreground",
-              )} variant="ghost" size="sm">
+              )}
+              variant="ghost"
+              size="sm"
+            >
               {f === "presidentielle" ? "Présidentielle 2027" : "Législatives"}
             </Button>
           ))}
@@ -226,8 +282,10 @@ export function ProjectionSection({
               Projection tendancielle · {target.label}
             </p>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Prolongement de la tendance locale ({local.map((p) => p.year).join(" → ")}), fourchette d&apos;incertitude incluse.
-              Le scénario national (à droite) s&apos;affiche en repère.
+              Prolongement de la tendance locale (
+              {local.map((p) => p.year).join(" → ")}), plage indicative incluse,
+              sans validation prédictive. Le scénario national (à droite)
+              s&apos;affiche en repère.
             </p>
           </div>
           <div className="flex flex-col gap-2.5">
@@ -245,16 +303,19 @@ export function ProjectionSection({
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/60 pt-2.5 text-[10.5px] text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-3 rounded-sm bg-foreground/70" /> Projection
+              <span className="h-2 w-3 rounded-sm bg-foreground/70" />{" "}
+              Projection
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-3 rounded-sm bg-foreground/15" /> Fourchette
+              <span className="h-2 w-3 rounded-sm bg-foreground/15" />{" "}
+              Fourchette
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-px bg-foreground/60" /> Dernier score
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rotate-45 border border-foreground/60" /> Scénario
+              <span className="h-2 w-2 rotate-45 border border-foreground/60" />{" "}
+              Scénario
             </span>
           </div>
         </div>
@@ -267,24 +328,39 @@ export function ProjectionSection({
                 Scénario national
               </p>
               <p className="mt-0.5 text-[12px] text-muted-foreground">
-                Hypothèse de score national par bloc, répercutée sur le territoire (swing proportionnel).
+                Hypothèse de score national par bloc, répercutée sur le
+                territoire (swing proportionnel).
               </p>
             </div>
             <Button
               type="button"
-              onClick={() => { setScenario(null); setParticipationPct(null); }}
+              onClick={() => {
+                setScenario(null);
+                setParticipationPct(null);
+              }}
               className="shrink-0 gap-1 rounded-pill bg-surface-soft/70 text-[10.5px]"
-              title="Revenir au scénario tendanciel" variant="soft" size="sm">
+              title="Revenir au scénario tendanciel"
+              variant="soft"
+              size="sm"
+            >
               <RotateCcw className="h-3 w-3" /> Tendanciel
             </Button>
           </div>
 
           <div className="flex flex-col gap-2">
             {BLOCS.map((b) => (
-              <label key={b.id} className="grid grid-cols-[110px_1fr_44px] items-center gap-2 text-[11.5px]">
+              <label
+                key={b.id}
+                className="grid grid-cols-[110px_1fr_44px] items-center gap-2 text-[11.5px]"
+              >
                 <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: b.color }} />
-                  <span className="truncate text-muted-foreground">{b.label}</span>
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: b.color }}
+                  />
+                  <span className="truncate text-muted-foreground">
+                    {b.label}
+                  </span>
                 </span>
                 <Slider
                   min={0}
@@ -292,14 +368,20 @@ export function ProjectionSection({
                   step={0.5}
                   value={effScenario[b.id]}
                   onValueChange={(v: number | readonly number[]) =>
-                    setScenario({ ...effScenario, [b.id]: Array.isArray(v) ? v[0] : (v as number) })
+                    setScenario({
+                      ...effScenario,
+                      [b.id]: Array.isArray(v) ? v[0] : (v as number),
+                    })
                   }
                   className="w-full"
                   aria-label={`Score national supposé · ${b.label}`}
                   thumbAriaLabel={`Score national supposé · ${b.label}`}
                 />
                 <span className="text-right font-medium tabular-nums">
-                  {effScenario[b.id].toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %
+                  {effScenario[b.id].toLocaleString("fr-FR", {
+                    maximumFractionDigits: 1,
+                  })}{" "}
+                  %
                 </span>
               </label>
             ))}
@@ -325,14 +407,24 @@ export function ProjectionSection({
 
           <label className="flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-[11.5px]">
             <span className="text-muted-foreground">Mon positionnement</span>
-            <Select value={bloc} onValueChange={(appicaValue) => changeBloc(String(appicaValue ?? "") as BlocId | "")} size="sm">
-              <SelectTrigger className="text-[12px]"><SelectValue /></SelectTrigger>
+            <Select
+              value={bloc}
+              onValueChange={(appicaValue) =>
+                changeBloc(String(appicaValue ?? "") as BlocId | "")
+              }
+              size="sm"
+            >
+              <SelectTrigger className="text-[12px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-              <SelectItem value="">—</SelectItem>
-              {BLOCS.map((b) => (
-                <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
-              ))}
-            </SelectContent>
+                <SelectItem value="">—</SelectItem>
+                {BLOCS.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </label>
         </div>
@@ -354,7 +446,11 @@ export function ProjectionSection({
                 ? `≈ ${fmtInt(votesToFlip(outcome.margin, outcome.exprimes))} voix à faire basculer`
                 : undefined
             }
-            accent={outcome.margin != null && outcome.margin < 0.05 ? "negative" : undefined}
+            accent={
+              outcome.margin != null && outcome.margin < 0.05
+                ? "negative"
+                : undefined
+            }
           />
           <KpiCard
             label="Fragilité de la position"
@@ -377,29 +473,41 @@ export function ProjectionSection({
             myGap.leading ? "bg-success/10" : "bg-warm/10",
           )}
         >
-          <Sparkles className={cn("h-4 w-4", myGap.leading ? "text-success" : "text-warm")} />
+          <Sparkles
+            className={cn(
+              "h-4 w-4",
+              myGap.leading ? "text-success" : "text-warm",
+            )}
+          />
           {myGap.leading ? (
             <span>
-              Dans ce scénario, <strong>{blocById(bloc).label}</strong> est en tête avec{" "}
-              <strong>{fmtPts(myGap.pts)}</strong> d&apos;avance — ne pas perdre plus de{" "}
-              <strong>{fmtInt(myGap.votes)} voix</strong> au profit du poursuivant.
+              Dans ce scénario, <strong>{blocById(bloc).label}</strong> est en
+              tête avec <strong>{fmtPts(myGap.pts)}</strong> d&apos;avance — ne
+              pas perdre plus de <strong>{fmtInt(myGap.votes)} voix</strong> au
+              profit du poursuivant.
             </span>
           ) : (
             <span>
               Dans ce scénario, il manque <strong>{fmtPts(myGap.pts)}</strong> à{" "}
-              <strong>{blocById(bloc).label}</strong> pour prendre la tête — soit{" "}
-              <strong>≈ {fmtInt(myGap.votes)} voix</strong> à convaincre
-              {type === "circo" ? " sur la circonscription" : " sur le territoire"}.
+              <strong>{blocById(bloc).label}</strong> pour prendre la tête —
+              soit <strong>≈ {fmtInt(myGap.votes)} voix</strong> à convaincre
+              {type === "circo"
+                ? " sur la circonscription"
+                : " sur le territoire"}
+              .
             </span>
           )}
         </div>
       )}
 
       <p className="px-1 text-[10.5px] leading-relaxed text-muted-foreground/70">
-        Méthode : projection = droite de tendance par bloc sur les 1ers tours locaux, normalisée à 100 % ;
-        scénario = dernière photo locale ajustée proportionnellement à l&apos;hypothèse nationale
-        (référence {nat ? SCRUTIN_META[nat.ref.scrutin].short : "—"}) ; voix estimées = inscrits × participation × part d&apos;exprimés.
-        Modèle indicatif fondé uniquement sur les résultats passés — il n&apos;anticipe ni candidatures, ni alliances, ni événements de campagne.
+        Méthode : projection = droite de tendance par bloc sur les 1ers tours
+        locaux, normalisée à 100 % ; scénario = dernière photo locale ajustée
+        proportionnellement à l&apos;hypothèse nationale (référence{" "}
+        {nat ? SCRUTIN_META[nat.ref.scrutin].short : "—"}) ; voix estimées =
+        inscrits × participation × part d&apos;exprimés. Modèle indicatif fondé
+        uniquement sur les résultats passés — il n&apos;anticipe ni
+        candidatures, ni alliances, ni événements de campagne.
       </p>
     </section>
   );
@@ -409,10 +517,11 @@ function SectionHeader() {
   return (
     <div>
       <h2 className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        <Sparkles className="h-3.5 w-3.5" /> Analyse prédictive
+        <Sparkles className="h-3.5 w-3.5" /> Projection exploratoire
       </h2>
       <p className="mt-0.5 text-[12px] text-muted-foreground">
-        Projections tendancielles et scénarios ajustables pour la prochaine échéance.
+        Extrapolations de tendances historiques. Les plages affichées ne sont
+        pas des intervalles de confiance statistiquement validés.
       </p>
     </div>
   );
@@ -433,14 +542,23 @@ function ProjBar({
   return (
     <div className="grid grid-cols-[110px_1fr_110px] items-center gap-2 text-[11.5px] sm:grid-cols-[130px_1fr_130px]">
       <span className="inline-flex min-w-0 items-center gap-1.5">
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
-        <span className="truncate text-foreground/80">{labelOf(proj.bloc)}</span>
+        <span
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ background: color }}
+        />
+        <span className="truncate text-foreground/80">
+          {labelOf(proj.bloc)}
+        </span>
       </span>
       <div className="relative h-4 rounded-pill bg-surface-soft/60">
         {/* fourchette */}
         <span
           className="absolute top-0 h-full rounded-pill"
-          style={{ left: x(proj.low), width: `calc(${x(proj.high)} - ${x(proj.low)})`, background: `${color}26` }}
+          style={{
+            left: x(proj.low),
+            width: `calc(${x(proj.high)} - ${x(proj.low)})`,
+            background: `${color}26`,
+          }}
         />
         {/* projection */}
         <span
@@ -456,14 +574,19 @@ function ProjBar({
         {scenario != null && (
           <span
             className="absolute top-[4px] h-2 w-2 -translate-x-1/2 rotate-45 border"
-            style={{ left: x(scenario), borderColor: color, background: "var(--surface)" }}
+            style={{
+              left: x(scenario),
+              borderColor: color,
+              background: "var(--surface)",
+            }}
           />
         )}
       </div>
       <span className="text-right tabular-nums">
         <span className="font-semibold">{fmtPct(proj.projected)}</span>
         <span className="text-[10px] text-muted-foreground">
-          {" "}[{fmtPct(proj.low, 0)}–{fmtPct(proj.high, 0)}]
+          {" "}
+          [{fmtPct(proj.low, 0)}–{fmtPct(proj.high, 0)}]
         </span>
       </span>
     </div>

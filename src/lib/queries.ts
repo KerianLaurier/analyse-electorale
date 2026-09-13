@@ -3,11 +3,17 @@
 // serveur (préfetch SSR des fiches) ET par les hooks côté client définis ici.
 // Les hooks `useQuery` ne sont invoqués que depuis des composants clients.
 import { queryOptions, useQuery } from "@tanstack/react-query";
+import { BoundedCache } from "@/lib/bounded-cache";
 import { dataUrl } from "@/lib/data-url";
 import type { Maille } from "@/lib/map-config";
 // Catalogue importé depuis le module ISOMORPHE : `url-state` est une frontière
 // client, dont le serveur ne recevrait qu'une référence vide (cf. scrutins.ts).
-import { SCRUTIN_META, isElection, type BlocMetricKey, type Scrutin } from "@/lib/scrutins";
+import {
+  SCRUTIN_META,
+  isElection,
+  type BlocMetricKey,
+  type Scrutin,
+} from "@/lib/scrutins";
 import { blocById, type BlocId } from "@/lib/analysis";
 
 // ─── Types partagés ───────────────────────────────────────────────────────────
@@ -78,7 +84,7 @@ type FrozenChoro = {
 type ColumnChoro = Record<string, Record<string, number>>;
 
 // Mémoïsé par fichier : une coloration = un fichier, partagé entre query keys.
-const choroCache = new Map<string, Promise<unknown>>();
+const choroCache = new BoundedCache<string, Promise<unknown>>();
 
 function loadChoroFile<T>(name: string): Promise<T> {
   let p = choroCache.get(name);
@@ -87,7 +93,10 @@ function loadChoroFile<T>(name: string): Promise<T> {
     // mémorisée jusqu'au rechargement de la page (promesse rejetée figée).
     p = fetch(dataUrl(`/electoral/choro/${name}.json`))
       .then((r) => {
-        if (!r.ok) throw new Error(`choroplèthe figée introuvable: ${name} (HTTP ${r.status})`);
+        if (!r.ok)
+          throw new Error(
+            `choroplèthe figée introuvable: ${name} (HTTP ${r.status})`,
+          );
         return r.json();
       })
       .catch((e) => {
@@ -100,7 +109,10 @@ function loadChoroFile<T>(name: string): Promise<T> {
 }
 
 /** Lit une colonne d'un fichier choroplèthe thématique → lignes {code, value}. */
-async function fetchColumnRows(file: string, column: string): Promise<NumericRow[]> {
+async function fetchColumnRows(
+  file: string,
+  column: string,
+): Promise<NumericRow[]> {
   const data = await loadChoroFile<ColumnChoro>(file);
   const col = data[column] ?? {};
   return Object.entries(col).map(([code, value]) => ({ code, value }));
@@ -132,13 +144,20 @@ async function fetchColumnRecord(
  * Nuance gagnante par territoire pour un scrutin × maille donné (vainqueur
  * précalculé : somme des voix par nuance puis top, départage déterministe).
  */
-export function useScrutinWinner(scrutin: Scrutin, maille: Maille, enabled = true) {
+export function useScrutinWinner(
+  scrutin: Scrutin,
+  maille: Maille,
+  enabled = true,
+) {
   return useQuery({
     enabled,
     queryKey: ["scrutin-winner", scrutin, maille],
     queryFn: async (): Promise<WinningNuanceRow[]> => {
       const frozen = await loadChoroFile<FrozenChoro>(`${scrutin}_${maille}`);
-      return Object.entries(frozen.vainqueur).map(([code, nuance]) => ({ code, nuance }));
+      return Object.entries(frozen.vainqueur).map(([code, nuance]) => ({
+        code,
+        nuance,
+      }));
     },
     staleTime: 60 * 60 * 1000,
   });
@@ -176,17 +195,27 @@ export function useScrutinMetric(
 // poids ; candidats = tuples [label, nuance, voix, élu(0/1)] triés voix desc.
 type DetailEntry = {
   l: string | null;
-  i: number; v: number; e: number; a: number; b: number; n: number;
+  i: number;
+  v: number;
+  e: number;
+  a: number;
+  b: number;
+  n: number;
   c: [string | null, string | null, number, number][];
 };
 type DetailFile = Record<string, DetailEntry>;
 
-const detailCache = new Map<string, Promise<DetailFile | null>>();
+const detailCache = new BoundedCache<string, Promise<DetailFile | null>>();
 
 /** Nom du fichier détail (shardé par département pour communes/bureaux). */
-function detailFileName(scrutin: Scrutin, maille: Maille, code: string): string {
+function detailFileName(
+  scrutin: Scrutin,
+  maille: Maille,
+  code: string,
+): string {
   if (maille === "communes") return `${scrutin}_communes/${code.slice(0, 2)}`;
-  if (maille === "bureaux") return `${scrutin}_bureaux/${code.split("_")[0].slice(0, 2)}`;
+  if (maille === "bureaux")
+    return `${scrutin}_bureaux/${code.split("_")[0].slice(0, 2)}`;
   return `${scrutin}_${maille}`;
 }
 
@@ -205,7 +234,10 @@ function loadDetailFile(name: string): Promise<DetailFile | null> {
     p = fetch(dataUrl(`/electoral/detail/${name}.json`))
       .then((r) => {
         if (r.status === 404) return null;
-        if (!r.ok) throw new Error(`détail territoire indisponible: ${name} (HTTP ${r.status})`);
+        if (!r.ok)
+          throw new Error(
+            `détail territoire indisponible: ${name} (HTTP ${r.status})`,
+          );
         return r.json() as Promise<DetailFile>;
       })
       .catch((e) => {
@@ -228,18 +260,21 @@ export async function fetchScrutinDetail(
 
   const exprimes = e.e;
   const inscrits = e.i;
-  const rawCandidates: ScrutinCandidate[] = e.c.map(([label, nuance, voix, elu]) => ({
-    label: label ?? "",
-    nuance: nuance ?? null,
-    voix,
-    pct: exprimes > 0 ? voix / exprimes : 0,
-    elu: Boolean(elu),
-  }));
+  const rawCandidates: ScrutinCandidate[] = e.c.map(
+    ([label, nuance, voix, elu]) => ({
+      label: label ?? "",
+      nuance: nuance ?? null,
+      voix,
+      pct: exprimes > 0 ? voix / exprimes : 0,
+      elu: Boolean(elu),
+    }),
+  );
 
   // Législatives au niveau commune : une commune peut relever de plusieurs
   // circonscriptions → l'agrégat mélange des candidats de courses différentes.
   // On regroupe alors par nuance (seule unité comparable à cette maille).
-  const legislativeCommune = SCRUTIN_META[scrutin].family === "legislative" && maille === "communes";
+  const legislativeCommune =
+    SCRUTIN_META[scrutin].family === "legislative" && maille === "communes";
   const { candidates, multiCirco } = legislativeCommune
     ? collapseByNuance(rawCandidates, exprimes)
     : { candidates: rawCandidates, multiCirco: false };
@@ -261,7 +296,11 @@ export async function fetchScrutinDetail(
 
 // ─── Bureaux de vote d'un territoire (pour générer le plan de terrain) ─────────
 
-export type TerritoryBureau = { code: string; name: string; registered: number };
+export type TerritoryBureau = {
+  code: string;
+  name: string;
+  registered: number;
+};
 
 /** Garde-fou : un code INSEE / circo ne contient que des alphanum. */
 const sanitizeCode = (s: string) => s.replace(/[^0-9A-Za-z]/g, "");
@@ -368,10 +407,14 @@ async function communesOfCirco(circo: string): Promise<string[]> {
  * Données brutes : le scoring (dépendant du positionnement) se fait ensuite
  * côté client via `scoreBureaux`, ce qui permet de re-scorer instantanément.
  */
-export async function fetchCircoBureaux(circo: string): Promise<CircoBureauRaw[]> {
+export async function fetchCircoBureaux(
+  circo: string,
+): Promise<CircoBureauRaw[]> {
   const communes = new Set(await communesOfCirco(circo));
   if (communes.size === 0) return [];
-  const data = await loadDetailFile(`legis-2024-t1_bureaux/${sanitizeCode(circo).slice(0, 2)}`);
+  const data = await loadDetailFile(
+    `legis-2024-t1_bureaux/${sanitizeCode(circo).slice(0, 2)}`,
+  );
   if (!data) return [];
 
   return Object.entries(data)
@@ -414,30 +457,46 @@ function pickBlocReason(blocShare: number, deficit: number): TargetReason {
  * - taille (inscrits) — 20 %
  * Sans bloc (« indifférent »), score générique (abstention + marginalité + taille).
  */
-export function scoreBureaux(raw: CircoBureauRaw[], blocId: BlocId | null): TargetBureau[] {
+export function scoreBureaux(
+  raw: CircoBureauRaw[],
+  blocId: BlocId | null,
+): TargetBureau[] {
   const blocCodes = blocId ? new Set(blocById(blocId).codes) : null;
 
   const inter = raw.map((b) => {
     const abstentionRate = b.inscrits > 0 ? b.abstentions / b.inscrits : 0;
     const top1 = b.cands[0]?.voix ?? 0;
     const top2 = b.cands[1]?.voix ?? 0;
-    const marginPct = b.exprimes > 0 && b.cands.length >= 2 ? (top1 - top2) / b.exprimes : null;
+    const marginPct =
+      b.exprimes > 0 && b.cands.length >= 2 ? (top1 - top2) / b.exprimes : null;
     const winnerNuance = b.cands[0]?.nuance ?? null;
     let blocShare: number | null = null;
     let deficit = 0;
     let competitiveness = 0;
     if (blocCodes && b.exprimes > 0) {
-      const blocVoix = b.cands.filter((c) => c.nuance && blocCodes.has(c.nuance)).reduce((s, c) => s + c.voix, 0);
+      const blocVoix = b.cands
+        .filter((c) => c.nuance && blocCodes.has(c.nuance))
+        .reduce((s, c) => s + c.voix, 0);
       blocShare = blocVoix / b.exprimes;
       deficit = Math.max(0, top1 / b.exprimes - blocShare);
       competitiveness = blocShare <= 0.02 ? 0 : clamp01(1 - deficit / 0.2);
     }
-    return { b, abstentionRate, marginPct, winnerNuance, blocShare, deficit, competitiveness };
+    return {
+      b,
+      abstentionRate,
+      marginPct,
+      winnerNuance,
+      blocShare,
+      deficit,
+      competitiveness,
+    };
   });
 
   const sizes = inter.map((x) => x.b.inscrits);
-  const minS = Math.min(...sizes, 0), maxS = Math.max(...sizes, 1);
-  const norm = (v: number, lo: number, hi: number) => (hi > lo ? clamp01((v - lo) / (hi - lo)) : 0);
+  const minS = Math.min(...sizes, 0),
+    maxS = Math.max(...sizes, 1);
+  const norm = (v: number, lo: number, hi: number) =>
+    hi > lo ? clamp01((v - lo) / (hi - lo)) : 0;
 
   const head = (x: (typeof inter)[number]) => ({
     code: x.b.code,
@@ -450,28 +509,49 @@ export function scoreBureaux(raw: CircoBureauRaw[], blocId: BlocId | null): Targ
   });
 
   if (blocCodes) {
-    const maxMob = Math.max(...inter.map((x) => (x.blocShare ?? 0) * x.abstentionRate), 0.0001);
+    const maxMob = Math.max(
+      ...inter.map((x) => (x.blocShare ?? 0) * x.abstentionRate),
+      0.0001,
+    );
     return inter
       .map((x): TargetBureau => {
         const sizeN = norm(x.b.inscrits, minS, maxS);
         const mobN = ((x.blocShare ?? 0) * x.abstentionRate) / maxMob;
-        const priority = Math.round(100 * (0.45 * x.competitiveness + 0.35 * mobN + 0.2 * sizeN));
-        return { ...head(x), blocShare: x.blocShare, reason: pickBlocReason(x.blocShare ?? 0, x.deficit), priority };
+        const priority = Math.round(
+          100 * (0.45 * x.competitiveness + 0.35 * mobN + 0.2 * sizeN),
+        );
+        return {
+          ...head(x),
+          blocShare: x.blocShare,
+          reason: pickBlocReason(x.blocShare ?? 0, x.deficit),
+          priority,
+        };
       })
       .sort((a, b) => b.priority - a.priority);
   }
 
   const absts = inter.map((x) => x.abstentionRate);
-  const minA = Math.min(...absts, 0), maxA = Math.max(...absts, 1);
-  const margins = inter.map((x) => x.marginPct).filter((m): m is number => m != null);
+  const minA = Math.min(...absts, 0),
+    maxA = Math.max(...absts, 1);
+  const margins = inter
+    .map((x) => x.marginPct)
+    .filter((m): m is number => m != null);
   const maxM = margins.length ? Math.max(...margins) : 1;
   return inter
     .map((x): TargetBureau => {
       const abstN = norm(x.abstentionRate, minA, maxA);
       const sizeN = norm(x.b.inscrits, minS, maxS);
-      const marginN = x.marginPct == null ? 0 : 1 - norm(x.marginPct, 0, maxM || 1);
-      const priority = Math.round(100 * (0.45 * abstN + 0.35 * marginN + 0.2 * sizeN));
-      const reason: TargetReason = x.marginPct != null && x.marginPct < 0.05 ? "dispute" : abstN > 0.6 ? "reservoir" : "neutre";
+      const marginN =
+        x.marginPct == null ? 0 : 1 - norm(x.marginPct, 0, maxM || 1);
+      const priority = Math.round(
+        100 * (0.45 * abstN + 0.35 * marginN + 0.2 * sizeN),
+      );
+      const reason: TargetReason =
+        x.marginPct != null && x.marginPct < 0.05
+          ? "dispute"
+          : abstN > 0.6
+            ? "reservoir"
+            : "neutre";
       return { ...head(x), blocShare: null, reason, priority };
     })
     .sort((a, b) => b.priority - a.priority);
@@ -498,10 +578,15 @@ export function useCircoList() {
 export type LngLatBounds = [number, number, number, number]; // [ouest, sud, est, nord]
 
 type GeoPolygon = { coordinates?: number[][][] };
-function bboxFromPolygon(poly: GeoPolygon | null | undefined): LngLatBounds | null {
+function bboxFromPolygon(
+  poly: GeoPolygon | null | undefined,
+): LngLatBounds | null {
   const ring = poly?.coordinates?.[0];
   if (!ring || ring.length === 0) return null;
-  let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+  let w = Infinity,
+    s = Infinity,
+    e = -Infinity,
+    n = -Infinity;
   for (const pt of ring) {
     const [lng, lat] = pt;
     if (lng < w) w = lng;
@@ -512,14 +597,22 @@ function bboxFromPolygon(poly: GeoPolygon | null | undefined): LngLatBounds | nu
   return Number.isFinite(w) ? [w, s, e, n] : null;
 }
 const unionBounds = (a: LngLatBounds, b: LngLatBounds): LngLatBounds => [
-  Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3]),
+  Math.min(a[0], b[0]),
+  Math.min(a[1], b[1]),
+  Math.max(a[2], b[2]),
+  Math.max(a[3], b[3]),
 ];
 
 /** Bornes d'un territoire (commune ou circo) via l'API Géo (data.gouv). */
-export async function fetchTerritoryBounds(target: { type: string; id: string }): Promise<LngLatBounds | null> {
+export async function fetchTerritoryBounds(target: {
+  type: string;
+  id: string;
+}): Promise<LngLatBounds | null> {
   try {
     if (target.type === "commune") {
-      const r = await fetch(`https://geo.api.gouv.fr/communes/${encodeURIComponent(sanitizeCode(target.id))}?fields=bbox`);
+      const r = await fetch(
+        `https://geo.api.gouv.fr/communes/${encodeURIComponent(sanitizeCode(target.id))}?fields=bbox`,
+      );
       if (!r.ok) return null;
       const j = (await r.json()) as { bbox?: GeoPolygon };
       return bboxFromPolygon(j.bbox);
@@ -528,7 +621,9 @@ export async function fetchTerritoryBounds(target: { type: string; id: string })
       const communes = new Set(await communesOfCirco(target.id));
       if (communes.size === 0) return null;
       const dept = target.id.slice(0, Math.max(2, target.id.length - 2));
-      const r = await fetch(`https://geo.api.gouv.fr/departements/${encodeURIComponent(dept)}/communes?fields=code,bbox`);
+      const r = await fetch(
+        `https://geo.api.gouv.fr/departements/${encodeURIComponent(dept)}/communes?fields=code,bbox`,
+      );
       if (!r.ok) return null;
       const arr = (await r.json()) as { code: string; bbox?: GeoPolygon }[];
       let b: LngLatBounds | null = null;
@@ -545,7 +640,9 @@ export async function fetchTerritoryBounds(target: { type: string; id: string })
   return null;
 }
 
-export function useTerritoryBounds(target: { type: string; id: string } | null) {
+export function useTerritoryBounds(
+  target: { type: string; id: string } | null,
+) {
   return useQuery({
     enabled: !!target,
     queryKey: ["territory-bounds", target?.type, target?.id],
@@ -564,7 +661,16 @@ function collapseByNuance(
   rawCandidates: ScrutinCandidate[],
   exprimes: number,
 ): { candidates: ScrutinCandidate[]; multiCirco: boolean } {
-  const groups = new Map<string, { nuance: string | null; voix: number; label: string; count: number; elu: boolean }>();
+  const groups = new Map<
+    string,
+    {
+      nuance: string | null;
+      voix: number;
+      label: string;
+      count: number;
+      elu: boolean;
+    }
+  >();
   for (const c of rawCandidates) {
     const key = c.nuance ?? `__${c.label}`;
     const g = groups.get(key);
@@ -573,7 +679,13 @@ function collapseByNuance(
       g.count += 1;
       g.elu = g.elu || c.elu;
     } else {
-      groups.set(key, { nuance: c.nuance, voix: c.voix, label: c.label, count: 1, elu: c.elu });
+      groups.set(key, {
+        nuance: c.nuance,
+        voix: c.voix,
+        label: c.label,
+        count: 1,
+        elu: c.elu,
+      });
     }
   }
   const ordered = [...groups.values()].sort((a, b) => b.voix - a.voix);
@@ -600,7 +712,9 @@ export function useScrutinDetail(
     enabled: !!scrutin && !!code,
     queryKey: ["scrutin-detail", scrutin, maille, code],
     queryFn: (): Promise<ScrutinDetail | null> =>
-      scrutin && code ? fetchScrutinDetail(scrutin, maille, code) : Promise.resolve(null),
+      scrutin && code
+        ? fetchScrutinDetail(scrutin, maille, code)
+        : Promise.resolve(null),
     staleTime: 30 * 60 * 1000,
   });
 }
@@ -619,7 +733,8 @@ export const circoHistoryOptions = (code: string) =>
     queryKey: ["circo-history", code],
     queryFn: async (): Promise<CircoTimelinePoint[]> => {
       const scrutins = (Object.keys(SCRUTIN_META) as Scrutin[]).filter(
-        (s) => isElection(s) && SCRUTIN_META[s].mailles.includes("circonscriptions"),
+        (s) =>
+          isElection(s) && SCRUTIN_META[s].mailles.includes("circonscriptions"),
       );
       const results = await Promise.all(
         scrutins.map(async (s) => {
@@ -711,13 +826,18 @@ export function useBureauHistory(code: string | null) {
 }
 
 /** Participation nationale (métropole) d'un scrutin — pour les comparaisons. */
-export function useScrutinNationalParticipation(scrutin: Scrutin | null, enabled = true) {
+export function useScrutinNationalParticipation(
+  scrutin: Scrutin | null,
+  enabled = true,
+) {
   return useQuery({
     enabled: enabled && !!scrutin,
     queryKey: ["scrutin-national-participation", scrutin],
     queryFn: async (): Promise<number | null> => {
       if (!scrutin) return null;
-      const res = await fetch(dataUrl("/electoral/detail/national_participation.json"));
+      const res = await fetch(
+        dataUrl("/electoral/detail/national_participation.json"),
+      );
       if (!res.ok) return null;
       const data = (await res.json()) as Record<string, number>;
       const v = data[scrutin];
@@ -751,8 +871,15 @@ export function useTauxPauvreteCommune(enabled = true) {
 
 /** Colonnes Filosofi exposables en choroplèthe (liste blanche — jamais d'entrée libre). */
 const SOCIO_COLUMNS = [
-  "MED_SL", "PR_MD60", "D1_SL", "D9_SL", "IR_D9_D1_SL",
-  "S_RET_PEN_DI", "S_SOC_BEN_DI", "S_EI_DI_UNE", "S_HH_TAX",
+  "MED_SL",
+  "PR_MD60",
+  "D1_SL",
+  "D9_SL",
+  "IR_D9_D1_SL",
+  "S_RET_PEN_DI",
+  "S_SOC_BEN_DI",
+  "S_EI_DI_UNE",
+  "S_HH_TAX",
 ] as const;
 export type SocioColumn = (typeof SOCIO_COLUMNS)[number];
 
@@ -763,14 +890,17 @@ export function useSocioColumnCommune(column: SocioColumn, enabled = true) {
     queryKey: ["choropleth", "socio", column],
     queryFn: () => {
       // Liste blanche : `column` est une union typée, on revérifie par sécurité.
-      const col: SocioColumn = SOCIO_COLUMNS.includes(column) ? column : "MED_SL";
+      const col: SocioColumn = SOCIO_COLUMNS.includes(column)
+        ? column
+        : "MED_SL";
       return fetchColumnRows("socio_filosofi_communes", col);
     },
     staleTime: 24 * 60 * 60 * 1000,
   });
 }
 
-const numOrNull = (v: number | null | undefined) => (v != null ? Number(v) : null);
+const numOrNull = (v: number | null | undefined) =>
+  v != null ? Number(v) : null;
 
 /** Indicateurs sociologie pour une commune (pour la fiche). */
 export const sociologieCommuneOptions = (code: string) =>
@@ -805,18 +935,32 @@ export function useSociologieCommune(code: string | null) {
 
 export type TrendFile = "presid_2017_2022" | "legis_2022_2024";
 const TREND_COLUMNS = [
-  "d_abstention", "d_rn", "d_gauche",
-  "abst_then", "abst_now", "rn_then", "rn_now", "gauche_then", "gauche_now",
+  "d_abstention",
+  "d_rn",
+  "d_gauche",
+  "abst_then",
+  "abst_now",
+  "rn_then",
+  "rn_now",
+  "gauche_then",
+  "gauche_now",
 ] as const;
 export type TrendColumn = (typeof TREND_COLUMNS)[number];
 
 /** Choroplèthe d'une métrique de tendance (fichier × colonne) pour une maille. */
-export function useTrendColumn(file: TrendFile, column: TrendColumn, maille: string, enabled = true) {
+export function useTrendColumn(
+  file: TrendFile,
+  column: TrendColumn,
+  maille: string,
+  enabled = true,
+) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "trend", file, column, maille],
     queryFn: () => {
-      const col: TrendColumn = TREND_COLUMNS.includes(column) ? column : "d_abstention";
+      const col: TrendColumn = TREND_COLUMNS.includes(column)
+        ? column
+        : "d_abstention";
       return fetchColumnRows(`trends_${file}_${maille}`, col);
     },
     staleTime: 24 * 60 * 60 * 1000,
@@ -832,7 +976,11 @@ export type TerritoireTrends = {
   rnNow: number | null;
   gaucheNow: number | null;
 };
-export function useTrendsTerritoire(file: TrendFile, maille: string | null, code: string | null) {
+export function useTrendsTerritoire(
+  file: TrendFile,
+  maille: string | null,
+  code: string | null,
+) {
   return useQuery({
     enabled: !!maille && !!code,
     queryKey: ["trends-territoire", file, maille, code],
@@ -859,17 +1007,28 @@ export function useTrendsTerritoire(file: TrendFile, maille: string | null, code
 // granularité commune, exposée via `grain` pour rester transparent.
 
 // Shard socio par bureau (build-territory-detail.py) : detail/socio_bureaux/{dept}.json.
-type BureauSocioEntry = { ins: string; g: string } & Record<string, number | null>;
-const bureauSocioCache = new Map<string, Promise<Record<string, BureauSocioEntry> | null>>();
+type BureauSocioEntry = { ins: string; g: string } & Record<
+  string,
+  number | null
+>;
+const bureauSocioCache = new BoundedCache<
+  string,
+  Promise<Record<string, BureauSocioEntry> | null>
+>();
 
-function loadBureauSocioShard(dept: string): Promise<Record<string, BureauSocioEntry> | null> {
+function loadBureauSocioShard(
+  dept: string,
+): Promise<Record<string, BureauSocioEntry> | null> {
   let p = bureauSocioCache.get(dept);
   if (!p) {
     // Même distinction absence / échec que `loadDetailFile`.
     p = fetch(dataUrl(`/electoral/detail/socio_bureaux/${dept}.json`))
       .then((r) => {
         if (r.status === 404) return null;
-        if (!r.ok) throw new Error(`socio bureaux indisponible: ${dept} (HTTP ${r.status})`);
+        if (!r.ok)
+          throw new Error(
+            `socio bureaux indisponible: ${dept} (HTTP ${r.status})`,
+          );
         return r.json() as Promise<Record<string, BureauSocioEntry>>;
       })
       .catch((e) => {
@@ -943,8 +1102,12 @@ export type DemographieCommune = {
 
 /** Colonnes RP exposables en choroplèthe (liste blanche). */
 const RP_COLUMNS = [
-  "part65plus", "partMoins15", "tauxChomage",
-  "partCadres", "partOuvriers", "partDiplomeSup",
+  "part65plus",
+  "partMoins15",
+  "tauxChomage",
+  "partCadres",
+  "partOuvriers",
+  "partDiplomeSup",
 ] as const;
 export type RpColumn = (typeof RP_COLUMNS)[number];
 
@@ -974,7 +1137,12 @@ export function usePotentielColumn(bloc: PotentielBloc, enabled = true) {
   });
 }
 
-export type PotentielRow = { bloc: PotentielBloc; affinite: number | null; reel: number | null; potentiel: number | null };
+export type PotentielRow = {
+  bloc: PotentielBloc;
+  affinite: number | null;
+  reel: number | null;
+  potentiel: number | null;
+};
 /** Potentiel des 5 blocs pour une commune (fiche). */
 export function usePotentielTerritoire(code: string | null) {
   return useQuery({
@@ -984,7 +1152,13 @@ export function usePotentielTerritoire(code: string | null) {
       if (!code) return null;
       const r = await fetchColumnRecord("potentiel_communes", code);
       if (!r) return null;
-      const blocs: PotentielBloc[] = ["rn", "gauche", "ecolo", "centre", "droite"];
+      const blocs: PotentielBloc[] = [
+        "rn",
+        "gauche",
+        "ecolo",
+        "centre",
+        "droite",
+      ];
       return blocs.map((b) => ({
         bloc: b,
         affinite: numOrNull(r[`aff_${b}`]),
@@ -1013,7 +1187,10 @@ export function usePotentielMeta() {
 
 // ─── Logement par commune (Palier 3 — base Comparateur de territoires) ────────
 const LOGEMENT_COLUMNS = [
-  "partProprietaires", "partLocataires", "partResSecondaires", "partLogVacants",
+  "partProprietaires",
+  "partLocataires",
+  "partResSecondaires",
+  "partLogVacants",
 ] as const;
 export type LogementColumn = (typeof LOGEMENT_COLUMNS)[number];
 
@@ -1022,12 +1199,17 @@ const STRUCTPOP_COLUMNS = ["densite", "partJeunes", "evoPop"] as const;
 export type StructpopColumn = (typeof STRUCTPOP_COLUMNS)[number];
 
 /** Densité (hab/km²), part des 15-29 ans (%) ou évolution de population 16→22 (%). */
-export function useStructpopColumnCommune(column: StructpopColumn, enabled = true) {
+export function useStructpopColumnCommune(
+  column: StructpopColumn,
+  enabled = true,
+) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "structpop", column],
     queryFn: () => {
-      const col: StructpopColumn = STRUCTPOP_COLUMNS.includes(column) ? column : "densite";
+      const col: StructpopColumn = STRUCTPOP_COLUMNS.includes(column)
+        ? column
+        : "densite";
       return fetchColumnRows("socio_structpop_communes", col);
     },
     staleTime: 24 * 60 * 60 * 1000,
@@ -1035,12 +1217,17 @@ export function useStructpopColumnCommune(column: StructpopColumn, enabled = tru
 }
 
 /** Choroplèthe d'un indicateur logement par commune (statut d'occupation…). */
-export function useLogementColumnCommune(column: LogementColumn, enabled = true) {
+export function useLogementColumnCommune(
+  column: LogementColumn,
+  enabled = true,
+) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "logement", column],
     queryFn: () => {
-      const col: LogementColumn = LOGEMENT_COLUMNS.includes(column) ? column : "partProprietaires";
+      const col: LogementColumn = LOGEMENT_COLUMNS.includes(column)
+        ? column
+        : "partProprietaires";
       return fetchColumnRows("socio_logement_communes", col);
     },
     staleTime: 24 * 60 * 60 * 1000,
@@ -1057,7 +1244,9 @@ export function useFamilleColumnCommune(column: FamilleColumn, enabled = true) {
     enabled,
     queryKey: ["choropleth", "famille", column],
     queryFn: () => {
-      const col: FamilleColumn = FAMILLE_COLUMNS.includes(column) ? column : "partFamMono";
+      const col: FamilleColumn = FAMILLE_COLUMNS.includes(column)
+        ? column
+        : "partFamMono";
       return fetchColumnRows("socio_famille_communes", col);
     },
     staleTime: 24 * 60 * 60 * 1000,
@@ -1071,7 +1260,8 @@ export function useMobiliteColumnCommune(enabled = true) {
   return useQuery({
     enabled,
     queryKey: ["choropleth", "mobilite"],
-    queryFn: () => fetchColumnRows("socio_mobilite_communes", "partNouveauxArrivants"),
+    queryFn: () =>
+      fetchColumnRows("socio_mobilite_communes", "partNouveauxArrivants"),
     staleTime: 24 * 60 * 60 * 1000,
   });
 }
@@ -1098,5 +1288,8 @@ export const demographieCommuneOptions = (code: string) =>
   });
 
 export function useDemographieCommune(code: string | null) {
-  return useQuery({ ...demographieCommuneOptions(code ?? ""), enabled: !!code });
+  return useQuery({
+    ...demographieCommuneOptions(code ?? ""),
+    enabled: !!code,
+  });
 }

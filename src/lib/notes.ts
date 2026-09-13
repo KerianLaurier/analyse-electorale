@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createClient } from "@/lib/supabase/client";
-import { getIdentity, onIdentityChange } from "@/lib/identity";
-import { getQueryClient } from "@/providers/query-provider";
+import { getIdentity } from "@/lib/identity";
+import {
+  getPrivateQueryClient as getQueryClient,
+  usePrivateQuery as useQuery,
+} from "@/lib/private-query";
 import { toast } from "@/components/toaster";
 
 /**
@@ -16,7 +18,12 @@ import { toast } from "@/components/toaster";
  * inchangée ; mutations optimistes via le cache, rollback + toast d'erreur.
  */
 
-export type NoteContext = { type: string; id: string; label: string; href: string };
+export type NoteContext = {
+  type: string;
+  id: string;
+  label: string;
+  href: string;
+};
 
 export type Note = {
   id: string;
@@ -60,14 +67,15 @@ function mapRow(r: Row, myUserId: string | null): Note {
     authorId: r.user_id,
     title: r.title,
     body: r.body,
-    context: r.context_type && r.context_id
-      ? {
-          type: r.context_type,
-          id: r.context_id,
-          label: r.context_label ?? r.context_id,
-          href: r.context_href ?? "#",
-        }
-      : null,
+    context:
+      r.context_type && r.context_id
+        ? {
+            type: r.context_type,
+            id: r.context_id,
+            label: r.context_label ?? r.context_id,
+            href: r.context_href ?? "#",
+          }
+        : null,
     teamId: r.team_id,
     shared: r.team_id != null,
     mine: r.user_id === myUserId,
@@ -88,17 +96,9 @@ async function fetchNotes(): Promise<Note[]> {
   return (data ?? []).map((r) => mapRow(r as Row, userId));
 }
 
-let identityWired = false;
-function ensureIdentityWired() {
-  if (identityWired || typeof window === "undefined") return;
-  identityWired = true;
-  onIdentityChange(() => {
-    void getQueryClient().invalidateQueries({ queryKey: NOTES_KEY });
-  });
-}
-
 export async function reloadNotes(): Promise<void> {
-  await getQueryClient().refetchQueries({ queryKey: NOTES_KEY, type: "all" });
+  const privateClient = getQueryClient();
+  await privateClient.refetchQueries({ queryKey: NOTES_KEY, type: "all" });
 }
 
 export type NewNote = {
@@ -111,6 +111,7 @@ export type NewNote = {
 /** Ajoute une note. Renvoie false en cas d'échec (le formulaire reste rempli). */
 export async function addNote(input: NewNote): Promise<boolean> {
   const { userId, teamId } = await getIdentity();
+  const privateClient = getQueryClient();
   if (!userId) return false;
   const supabase = createClient();
   const team_id = input.shared && teamId ? teamId : null;
@@ -129,18 +130,28 @@ export async function addNote(input: NewNote): Promise<boolean> {
     .select("*")
     .single();
   if (error || !data) {
-    toast.error("Impossible d'ajouter la note — vérifiez votre connexion puis réessayez.");
+    toast.error(
+      "Impossible d'ajouter la note — vérifiez votre connexion puis réessayez.",
+    );
     return false;
   }
-  getQueryClient().setQueryData<Note[]>(NOTES_KEY, (old) => [mapRow(data as Row, userId), ...(old ?? [])]);
+  privateClient.setQueryData<Note[]>(NOTES_KEY, (old) => [
+    mapRow(data as Row, userId),
+    ...(old ?? []),
+  ]);
   return true;
 }
 
-export type NotePatch = { title?: string | null; body?: string; shared?: boolean };
+export type NotePatch = {
+  title?: string | null;
+  body?: string;
+  shared?: boolean;
+};
 
 export async function updateNote(id: string, patch: NotePatch): Promise<void> {
-  const qc = getQueryClient();
   const { teamId } = await getIdentity();
+  const privateClient = getQueryClient();
+  const qc = privateClient;
   const current = qc.getQueryData<Note[]>(NOTES_KEY) ?? [];
   const idx = current.findIndex((n) => n.id === id);
   if (idx < 0) return;
@@ -153,12 +164,19 @@ export async function updateNote(id: string, patch: NotePatch): Promise<void> {
     next.shared = next.teamId != null;
   }
   // Tri par updated_at desc : la note éditée remonte en tête.
-  qc.setQueryData<Note[]>(NOTES_KEY, [next, ...current.slice(0, idx), ...current.slice(idx + 1)]);
+  qc.setQueryData<Note[]>(NOTES_KEY, [
+    next,
+    ...current.slice(0, idx),
+    ...current.slice(idx + 1),
+  ]);
 
-  const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const dbPatch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
   if (patch.title !== undefined) dbPatch.title = patch.title;
   if (patch.body !== undefined) dbPatch.body = patch.body;
-  if (patch.shared !== undefined) dbPatch.team_id = patch.shared && teamId ? teamId : null;
+  if (patch.shared !== undefined)
+    dbPatch.team_id = patch.shared && teamId ? teamId : null;
 
   const supabase = createClient();
   const { error } = await supabase.from("notes").update(dbPatch).eq("id", id);
@@ -169,8 +187,11 @@ export async function updateNote(id: string, patch: NotePatch): Promise<void> {
 }
 
 export async function deleteNote(id: string): Promise<void> {
-  const qc = getQueryClient();
-  qc.setQueryData<Note[]>(NOTES_KEY, (old) => (old ?? []).filter((n) => n.id !== id));
+  const privateClient = getQueryClient();
+  const qc = privateClient;
+  qc.setQueryData<Note[]>(NOTES_KEY, (old) =>
+    (old ?? []).filter((n) => n.id !== id),
+  );
   const supabase = createClient();
   const { error } = await supabase.from("notes").delete().eq("id", id);
   if (error) {
@@ -180,7 +201,6 @@ export async function deleteNote(id: string): Promise<void> {
 }
 
 function useNotesQuery() {
-  ensureIdentityWired();
   return useQuery(notesQuery);
 }
 
@@ -192,7 +212,13 @@ export function useNotes(): Note[] {
 export function useLoadState() {
   const q = useNotesQuery();
   const hydrated = useHydrated();
-  return { loaded: q.isSuccess && hydrated, error: q.isError, retry: () => { void q.refetch(); } };
+  return {
+    loaded: q.isSuccess && hydrated,
+    error: q.isError,
+    retry: () => {
+      void q.refetch();
+    },
+  };
 }
 
 /** True une fois le premier chargement terminé (pour les squelettes). */

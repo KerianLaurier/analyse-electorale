@@ -1,4 +1,8 @@
-import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
+import "server-only";
+import {
+  createClient as createSupabaseClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 
 /**
  * Client Supabase SERVICE ROLE — serveur uniquement (routes API, webhooks).

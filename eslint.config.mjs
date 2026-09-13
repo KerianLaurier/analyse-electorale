@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Bundles DuckDB-WASM copiés depuis node_modules (cf. scripts/copy-duckdb.mjs).
     "public/duckdb/**",
+    // Modules MapLibre générés, déjà construits par leur éditeur.
+    "public/maplibre/**",
   ]),
 ]);
 

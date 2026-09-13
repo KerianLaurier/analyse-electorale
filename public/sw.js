@@ -11,12 +11,13 @@
  * Bump VERSION pour invalider tous les caches à la prochaine activation.
  * Enregistré par src/components/pwa.tsx (production uniquement).
  */
-const VERSION = "mvc-sw-v1";
+const VERSION = "mvc-sw-v2";
 const STATIC_CACHE = `${VERSION}-static`;
 const DATA_CACHE = `${VERSION}-data`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const OFFLINE_URL = "/offline";
 const DATA_MAX_ENTRIES = 120;
+const DATA_MAX_BYTES_PER_ENTRY = 512 * 1024;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -33,7 +34,8 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       for (const key of await caches.keys()) {
-        if (!key.startsWith(VERSION)) await caches.delete(key);
+        if (key.startsWith("mvc-sw-") && !key.startsWith(VERSION))
+          await caches.delete(key);
       }
       await self.clients.claim();
     })(),
@@ -42,7 +44,10 @@ self.addEventListener("activate", (event) => {
 
 function isImmutableAsset(url) {
   if (url.origin === self.location.origin) {
-    return url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/");
+    return (
+      url.pathname.startsWith("/_next/static/") ||
+      url.pathname.startsWith("/icons/")
+    );
   }
   return url.hostname === "fonts.gstatic.com";
 }
@@ -51,7 +56,7 @@ function isImmutableAsset(url) {
 function isFrozenData(url) {
   return (
     url.hostname.endsWith(".supabase.co") &&
-    url.pathname.startsWith("/storage/v1/object/public/") &&
+    url.pathname.startsWith("/storage/v1/object/public/data/") &&
     url.pathname.endsWith(".json")
   );
 }
@@ -64,7 +69,9 @@ async function cacheFirst(event, request) {
     const copy = response.clone();
     // waitUntil : l'écriture survit même si le worker est arrêté juste après
     // la réponse.
-    event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy)));
+    event.waitUntil(
+      caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy)),
+    );
   }
   return response;
 }
@@ -79,13 +86,34 @@ async function trimDataCache(cache) {
 }
 
 async function staleWhileRevalidate(event, request) {
-  const cache = await caches.open(DATA_CACHE);
-  const cached = await cache.match(request);
+  let cache;
+  let cached;
+  try {
+    cache = await caches.open(DATA_CACHE);
+    cached = await cache.match(request);
+  } catch {
+    // Cache indisponible (mode privé, quota, stockage désactivé) : le réseau
+    // reste la source de vérité et doit continuer à fonctionner.
+    return fetch(request);
+  }
   const refresh = fetch(request)
     .then(async (response) => {
       if (response.ok) {
-        await cache.put(request, response.clone());
-        await trimDataCache(cache);
+        // Un quota épuisé ne doit pas transformer un succès réseau en panne.
+        // Sans taille fiable, laisser HTTP/CDN gérer le fichier volumineux.
+        const length = Number(response.headers.get("content-length"));
+        if (
+          length > 0 &&
+          length <= DATA_MAX_BYTES_PER_ENTRY &&
+          !response.headers.get("content-encoding")
+        ) {
+          try {
+            await cache.put(request, response.clone());
+            await trimDataCache(cache);
+          } catch {
+            /* stockage facultatif ; la réponse réseau reste utilisable */
+          }
+        }
       }
       return response;
     })
@@ -110,7 +138,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.pathname.startsWith("/api/")) return;
   // Supabase : seul le storage PUBLIC (données ouvertes) est éligible au cache.
-  if (url.hostname.endsWith(".supabase.co") && !url.pathname.startsWith("/storage/v1/object/public/")) return;
+  if (
+    url.hostname.endsWith(".supabase.co") &&
+    !url.pathname.startsWith("/storage/v1/object/public/")
+  )
+    return;
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirstNavigation(request));

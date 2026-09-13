@@ -34,5 +34,5 @@ export const env = {
    * Optionnelle : si définie (ex. `https://app.mouvancia.fr`), active le split
    * vitrine/app par sous-domaine. Absente en local/preview → host unique.
    */
-  APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  APP_URL: process.env.NEXT_PUBLIC_APP_URL || undefined,
 } as const;
