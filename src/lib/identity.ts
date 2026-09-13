@@ -25,9 +25,11 @@ import { createClient } from "@/lib/supabase/client";
  * à chaque requête indépendamment de ce que le client croit être.
  */
 
+import { parseWorkspaceEntitlement } from "@/lib/workspace-entitlement";
 import type { Cycle, SubscriptionStatus, Tier } from "@/lib/billing";
 
 export type IdentitySubscription = {
+  coveredByTeam?: boolean;
   status: SubscriptionStatus;
   tier: Tier;
   trialEndsAt: string | null;
@@ -41,7 +43,7 @@ export type Identity = {
   fullName: string | null;
   teamId: string | null;
   isSuperAdmin: boolean;
-  /** Abonnement du compte (null tant que non connecté). */
+  /** Abonnement effectif : personnel ou fourni par l’équipe. */
   subscription: IdentitySubscription | null;
 };
 
@@ -75,33 +77,30 @@ async function resolve(): Promise<Identity> {
   }
   const email = session?.user?.email ?? null;
   const { data: prof, error: profileError } = await supabase
-    // `*` à dessein (1 ligne, self) : tolère un front déployé avant/après la
-    // migration billing (un select nommant une colonne absente échouerait).
+    // Une seule ligne personnelle ; les droits effectifs viennent de la RPC.
     .from("profiles")
     .select("*")
     .eq("id", userId)
     .single();
   if (profileError) throw profileError;
   if (!prof) throw new Error("Profil indisponible");
+  const { data: entitlementData, error: entitlementError } = await supabase.rpc(
+    "workspace_entitlement",
+  );
+  if (entitlementError) throw entitlementError;
+  const entitlement = parseWorkspaceEntitlement(entitlementData);
   return {
     userId,
     email,
     fullName: (prof?.full_name as string | null) ?? null,
-    teamId: (prof?.team_id as string | null) ?? null,
-    isSuperAdmin: prof?.is_super_admin === true,
-    subscription: prof
-      ? {
-          status: (prof.subscription_status ??
-            "inactive") as IdentitySubscription["status"],
-          tier: (prof.subscription_tier ??
-            "candidat") as IdentitySubscription["tier"],
-          trialEndsAt: (prof.trial_ends_at as string | null) ?? null,
-          cancelAt: (prof.cancel_at as string | null) ?? null,
-          billingCycle:
-            (prof.billing_cycle as IdentitySubscription["billingCycle"]) ??
-            null,
-        }
+    teamId: entitlement.team_access
+      ? ((prof.team_id as string | null) ?? null)
       : null,
+    isSuperAdmin: prof?.is_super_admin === true,
+    subscription: {
+      ...entitlement.subscription,
+      coveredByTeam: entitlement.covered_by_team,
+    },
   };
 }
 

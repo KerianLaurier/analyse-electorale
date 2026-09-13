@@ -24,6 +24,7 @@ beforeAll(async () => {
     "20260912130000_admin_auth_api.sql",
     "20260912140000_serialize_stripe_sync.sql",
     "20260912150000_task_revisions.sql",
+    "20260913140000_shared_team_seats.sql",
   ]) {
     await db.exec(await readFile(`supabase/migrations/${migration}`, "utf8"));
   }
@@ -91,8 +92,8 @@ it("interdit de s’approprier une ligne partagée ou de retirer son partage", a
 it("une révocation en base coupe immédiatement les données privées", async () => {
   await seed();
   await db.query(
-    "update profiles set subscription_status='inactive' where id=$1",
-    [B],
+    "update profiles set subscription_status='inactive' where id in ($1,$2)",
+    [A, B],
   );
   await asUser(B);
   expect((await db.query("select id from tasks")).rows).toEqual([]);
@@ -288,4 +289,203 @@ it("réserve l’édition du plan au propriétaire tout en permettant sa consult
       )
     ).rows,
   ).toHaveLength(1);
+});
+
+async function paidTeam() {
+  await seed();
+  await db.query(
+    "update profiles set subscription_status='inactive',trial_ends_at=null",
+  );
+  await db.query(
+    "update profiles set subscription_status='active',subscription_tier='equipe' where id=$1",
+    [A],
+  );
+}
+it("un seul abonnement Équipe couvre cinq personnes, même sans paiement personnel", async () => {
+  await paidTeam();
+  const code = (
+    await db.query<{ join_code: string }>(
+      "select join_code from teams where id=$1",
+      [T],
+    )
+  ).rows[0].join_code;
+  await asUser(B);
+  const rights = (
+    await db.query<{ rights: Record<string, unknown> }>(
+      "select workspace_entitlement() rights",
+    )
+  ).rows[0].rights;
+  expect(rights).toMatchObject({
+    has_access: true,
+    covered_by_team: true,
+    billing_owner_id: A,
+    seat_limit: 5,
+    seats_used: 2,
+    subscription: { status: "active", tier: "equipe" },
+  });
+  expect((await db.query("select id from tasks")).rows).toEqual([{ id: TASK }]);
+  for (const n of [3, 4, 5, 6]) {
+    const id = `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
+    await db.exec("reset role");
+    if (n > 3)
+      await db.query("insert into auth.users(id,email) values($1,$2)", [
+        id,
+        `${n}@example.test`,
+      ]);
+    await db.query(
+      "update profiles set subscription_status='inactive',trial_ends_at=null where id=$1",
+      [id],
+    );
+    await asUser(id);
+    if (n === 6)
+      await expect(db.query("select join_team($1)", [code])).rejects.toThrow(
+        /sièges/,
+      );
+    else await db.query("select join_team($1)", [code]);
+  }
+  await asUser(A);
+  expect(
+    (
+      await db.query<{ rights: Record<string, unknown> }>(
+        "select workspace_entitlement() rights",
+      )
+    ).rows[0].rights,
+  ).toMatchObject({ seats_used: 5, covered_by_team: false });
+});
+it("l’expiration du payeur retire le partage mais préserve un abonnement personnel Solo", async () => {
+  await paidTeam();
+  await db.query(
+    "update profiles set cancel_at=now()-interval '1 second' where id=$1",
+    [A],
+  );
+  await db.query(
+    "update profiles set subscription_status='active',subscription_tier='candidat' where id=$1",
+    [B],
+  );
+  await asUser(B);
+  expect((await db.query("select has_workspace_access() ok")).rows).toEqual([
+    { ok: true },
+  ]);
+  expect((await db.query("select id from tasks")).rows).toEqual([]);
+  await db.query("insert into tasks(user_id,title) values($1,'Personnelle')", [
+    B,
+  ]);
+  await expect(
+    db.query(
+      "insert into tasks(user_id,team_id,title) values($1,$2,'Partage interdit')",
+      [B, T],
+    ),
+  ).rejects.toThrow(/row-level security/);
+  await db.exec("reset role");
+  expect(
+    (await db.query("select id from tasks where id=$1", [TASK])).rows,
+  ).toEqual([{ id: TASK }]);
+});
+it("transférer la gestion ne transfère pas le payeur et empêche son départ avant régularisation", async () => {
+  await paidTeam();
+  await asUser(A);
+  await db.query("select transfer_team($1)", [B]);
+  expect(
+    (
+      await db.query(
+        "select created_by,billing_owner_id from teams where id=$1",
+        [T],
+      )
+    ).rows,
+  ).toEqual([{ created_by: B, billing_owner_id: A }]);
+  await expect(db.query("select leave_team()")).rejects.toThrow(/facturation/);
+  await asUser(B);
+  await expect(
+    db.query("update teams set billing_owner_id=$1 where id=$2", [B, T]),
+  ).rejects.toThrow(/permission denied/);
+  await expect(
+    db.query(
+      "insert into teams(name,created_by,billing_owner_id) values('Autre',$1,$2)",
+      [B, A],
+    ),
+  ).rejects.toThrow(/permission denied/);
+});
+it("quitter l’équipe retire immédiatement le siège et permet ensuite un paiement personnel", async () => {
+  await paidTeam();
+  await expect(
+    db.query("select reserve_checkout($1,'{}')", [B]),
+  ).rejects.toThrow(/couvert/);
+  await asUser(B);
+  await db.query("select leave_team()");
+  expect((await db.query("select has_workspace_access() ok")).rows).toEqual([
+    { ok: false },
+  ]);
+  await db.exec("reset role");
+  await db.query("select reserve_checkout($1,'{}')", [B]);
+});
+it("refuse une invitation pendant un paiement personnel en attente", async () => {
+  await paidTeam();
+  const code = (
+    await db.query<{ join_code: string }>(
+      "select join_code from teams where id=$1",
+      [T],
+    )
+  ).rows[0].join_code;
+  await db.query("select reserve_checkout($1,'{}')", [C]);
+  await asUser(C);
+  await expect(db.query("select join_team($1)", [code])).rejects.toThrow(
+    /paiement personnel/,
+  );
+});
+it("le passage à Solo réserve le seul siège au payeur, sans supprimer les données", async () => {
+  await paidTeam();
+  await db.query(
+    "update profiles set subscription_tier='candidat' where id=$1",
+    [A],
+  );
+  await asUser(B);
+  expect((await db.query("select has_workspace_access() ok")).rows).toEqual([
+    { ok: false },
+  ]);
+  expect((await db.query("select id from tasks")).rows).toEqual([]);
+  await asUser(A);
+  expect((await db.query("select id from tasks")).rows).toEqual([{ id: TASK }]);
+});
+it("ne débloque pas une invitation sur la seule expiration locale d’une réservation Stripe", async () => {
+  await paidTeam();
+  const code = (
+    await db.query<{ join_code: string }>(
+      "select join_code from teams where id=$1",
+      [T],
+    )
+  ).rows[0].join_code;
+  await db.query("select reserve_checkout($1,'{}')", [C]);
+  await db.query(
+    "update checkout_reservations set expires_at=now()-interval '1 day' where user_id=$1",
+    [C],
+  );
+  await asUser(C);
+  await expect(db.query("select join_team($1)", [code])).rejects.toThrow(
+    /paiement personnel/,
+  );
+});
+it("un membre couvert ne peut activer une seconde facturation sur facture", async () => {
+  await paidTeam();
+  await db.query("insert into invoice_billing_accounts(user_id) values($1)", [
+    B,
+  ]);
+  await asUser(B);
+  await expect(
+    db.query("select self_set_plan('candidat','monthly')"),
+  ).rejects.toThrow(/couvert/);
+});
+it("signale les équipes affectées par la nouvelle capacité avant la bascule", async () => {
+  await paidTeam();
+  const preflight = await readFile(
+    "supabase/preflight/shared-team-seats.sql",
+    "utf8",
+  );
+  expect((await db.query(preflight)).rows).toEqual([]);
+  await db.query(
+    "update profiles set subscription_tier='candidat' where id=$1",
+    [A],
+  );
+  expect((await db.query(preflight)).rows).toMatchObject([
+    { team_id: T, seats_after_migration: 1, members: 2 },
+  ]);
 });

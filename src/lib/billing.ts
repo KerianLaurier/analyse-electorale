@@ -21,9 +21,8 @@ export type Subscription = {
 
 /**
  * Abonnement valide : actif (sans résiliation échue), ou essai non expiré, ou
- * super-admin. Miroir exact de la règle SQL du gating — c'est LA définition de
- * l'accès à l'application, utilisée par le middleware (claims JWT et repli
- * `profiles`).
+ * super-admin. Vérifie le droit personnel ; la couverture d’équipe est
+ * vérifiée séparément par la RPC has_workspace_access et les règles RLS.
  */
 export function computeAccess(
   status: string | null,
@@ -34,12 +33,15 @@ export function computeAccess(
 ): boolean {
   if (isSuperAdmin) return true;
   if (status === "active") return !cancelAt || new Date(cancelAt) > now;
-  if (status === "trial") return !trialEndsAt || new Date(trialEndsAt) > now;
+  if (status === "trial") return !!trialEndsAt && new Date(trialEndsAt) > now;
   return false;
 }
 
 /** Jours restants (arrondi supérieur, plancher 0), ou null si pas de date. */
-export function daysLeft(iso: string | null, now: Date = new Date()): number | null {
+export function daysLeft(
+  iso: string | null,
+  now: Date = new Date(),
+): number | null {
   if (!iso) return null;
   const ms = new Date(iso).getTime() - now.getTime();
   if (Number.isNaN(ms)) return null;
@@ -83,7 +85,11 @@ export function nextRenewal(
 /** Date longue française (ex. « 8 juillet 2026 »). */
 export function formatDateFr(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  return d.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 /**
@@ -95,7 +101,13 @@ export function formatDateFr(iso: string | Date): string {
  * - `ended`      : abonnement résilié et échu (accès coupé)
  * - `inactive`   : compte désactivé (accès coupé)
  */
-export type BillingPhase = "trialing" | "trial_over" | "active" | "canceling" | "ended" | "inactive";
+export type BillingPhase =
+  | "trialing"
+  | "trial_over"
+  | "active"
+  | "canceling"
+  | "ended"
+  | "inactive";
 
 export function billingPhase(
   status: string | null,
@@ -108,7 +120,9 @@ export function billingPhase(
     return new Date(cancelAt) > now ? "canceling" : "ended";
   }
   if (status === "trial") {
-    return !trialEndsAt || new Date(trialEndsAt) > now ? "trialing" : "trial_over";
+    return !!trialEndsAt && new Date(trialEndsAt) > now
+      ? "trialing"
+      : "trial_over";
   }
   return "inactive";
 }

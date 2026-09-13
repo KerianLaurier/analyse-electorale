@@ -60,6 +60,9 @@ export type Account = {
   billingCycle: Cycle | null;
   startedAt: string | null;
   teamId: string | null;
+  coveredByTeam?: boolean;
+  personalBilling?: boolean;
+  billingOwnerActive?: boolean;
 };
 
 export type Team = {
@@ -67,6 +70,9 @@ export type Team = {
   name: string;
   joinCode: string;
   createdBy: string | null;
+  billingOwnerId?: string | null;
+  seatLimit?: number;
+  seatsUsed?: number;
 };
 export type Member = {
   id: string;
@@ -135,6 +141,9 @@ export function TeamView({
     account.status === "trial" ? daysLeft(account.trialEndsAt) : null;
   const displayName = account.fullName?.trim() || account.email;
   const isOwner = !!team && team.createdBy === account.id;
+
+  const billingDepartureBlocked =
+    team?.billingOwnerId === account.id && account.billingOwnerActive;
 
   // Profil éditable
   const [editingProfile, setEditingProfile] = useState(false);
@@ -255,13 +264,36 @@ export function TeamView({
     e.preventDefault();
     if (busy) return;
     setBusy(true);
-    const supabase = createClient();
-    const { error } = await supabase.rpc("join_team", { p_code: joinCode });
-    setBusy(false);
-    if (error) return flash("Code d’équipe invalide.");
-    setJoinCode("");
-    flash("Vous avez rejoint l’équipe.");
-    await afterTeamChange();
+    try {
+      const { error } = await createClient().rpc("join_team", {
+        p_code: joinCode,
+      });
+      if (error) {
+        const messages: Record<string, string> = {
+          P0003:
+            "Tous les sièges sont occupés. Contactez le titulaire de l’abonnement de l’équipe.",
+          P0005:
+            "L’offre de cette équipe est inactive. Contactez son titulaire pour rétablir l’accès.",
+          P0006:
+            "Un paiement personnel est en attente. Contactez le support pour vérifier son état avant de rejoindre l’équipe.",
+        };
+        return flash(
+          messages[error.code] ??
+            "Impossible de rejoindre l’équipe. Vérifiez le code et réessayez.",
+        );
+      }
+      setJoinCode("");
+      flash(
+        "Vous avez rejoint l’équipe. Votre siège est inclus dans son offre.",
+      );
+      await afterTeamChange();
+    } catch {
+      flash(
+        "Connexion interrompue — rechargez l’équipe pour vérifier votre inscription.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function transferTeam() {
@@ -290,15 +322,21 @@ export function TeamView({
   async function leaveTeam() {
     if (busy) return;
     setBusy(true);
-    const supabase = createClient();
-    const { error } = await supabase.rpc("leave_team");
-    setBusy(false);
-    if (error) {
-      console.error(error);
-      return flash("Échec de l'opération — réessayez.");
+    try {
+      const { error } = await createClient().rpc("leave_team");
+      if (error)
+        return flash(
+          "Départ refusé. Vérifiez la propriété et la facturation de l’équipe, puis rechargez la page.",
+        );
+      flash("Vous avez quitté l’équipe.");
+      await afterTeamChange();
+    } catch {
+      flash(
+        "Connexion interrompue — rechargez l’équipe pour vérifier votre départ.",
+      );
+    } finally {
+      setBusy(false);
     }
-    flash("Vous avez quitté l’équipe.");
-    await afterTeamChange();
   }
 
   function copyCode() {
@@ -441,11 +479,14 @@ export function TeamView({
           <div className="flex flex-col gap-4 rounded-lg bg-surface p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Abonnement actuel
+                {account.coveredByTeam
+                  ? "Accès couvert par l’équipe"
+                  : "Abonnement actuel"}
               </p>
               <p className="mt-1 text-[18px] font-semibold tracking-tight">
                 Formule {currentPlan.name}
-                {(phase === "active" || phase === "canceling") &&
+                {!account.coveredByTeam &&
+                  (phase === "active" || phase === "canceling") &&
                   account.billingCycle && (
                     <span className="ml-2 align-middle text-[12px] font-normal text-muted-foreground">
                       {planPrice(currentPlan, account.billingCycle)} €{" "}
@@ -453,7 +494,15 @@ export function TeamView({
                     </span>
                   )}
               </p>
-              {phase === "trialing" ? (
+              {account.coveredByTeam ? (
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  Votre siège est inclus dans l’abonnement de{" "}
+                  {team?.name ?? "votre équipe"}. Aucun paiement personnel n’est
+                  nécessaire.
+                  {account.personalBilling &&
+                    " Votre ancien compte de facturation reste gérable ; rejoindre l’équipe ne résilie aucun abonnement personnel."}
+                </p>
+              ) : phase === "trialing" ? (
                 <p className="mt-0.5 text-[12px] text-muted-foreground">
                   {trialDays != null
                     ? trialDays > 0
@@ -499,84 +548,88 @@ export function TeamView({
               href="/auth/abonnement"
               className="inline-flex items-center justify-center gap-1.5 rounded-pill bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 sm:self-center"
             >
-              {phase === "active" || phase === "canceling"
-                ? "Gérer l’abonnement"
-                : "Choisir une formule"}
+              {account.coveredByTeam
+                ? "Voir ma couverture"
+                : phase === "active" || phase === "canceling"
+                  ? "Gérer l’abonnement"
+                  : "Choisir une formule"}
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
 
           {/* Formules */}
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {PLANS.map((p) => {
-              const current =
-                p.id === currentPlan.id &&
-                (phase === "active" || phase === "canceling");
-              return (
-                <div
-                  key={p.id}
-                  className={cn(
-                    "flex flex-col rounded-lg border p-5 transition-colors",
-                    current
-                      ? "border-warm bg-warm/[0.06]"
-                      : "border-border/60 bg-surface",
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[14px] font-semibold">{p.name}</p>
-                    {current && (
-                      <span className="rounded-pill bg-warm px-2 py-0.5 text-[10px] font-semibold text-[#0A0A0C]">
-                        Actuelle
+          {!account.coveredByTeam && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {PLANS.map((p) => {
+                const current =
+                  p.id === currentPlan.id &&
+                  (phase === "active" || phase === "canceling");
+                return (
+                  <div
+                    key={p.id}
+                    className={cn(
+                      "flex flex-col rounded-lg border p-5 transition-colors",
+                      current
+                        ? "border-warm bg-warm/[0.06]"
+                        : "border-border/60 bg-surface",
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-[14px] font-semibold">{p.name}</p>
+                      {current && (
+                        <span className="rounded-pill bg-warm px-2 py-0.5 text-[10px] font-semibold text-[#0A0A0C]">
+                          Actuelle
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[20px] font-semibold tracking-tight">
+                      {p.price}
+                      <span className="text-[12px] font-normal text-muted-foreground">
+                        {p.period}
                       </span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {p.seats}
+                      {p.yearly != null && <> · {p.yearly} € / an</>}
+                    </p>
+                    <p className="mt-2 text-[12px] text-muted-foreground">
+                      {p.tagline}
+                    </p>
+                    <ul className="mt-3 flex flex-1 flex-col gap-1.5">
+                      {p.features.map((f) => (
+                        <li
+                          key={f}
+                          className="flex items-start gap-1.5 text-[12px] text-foreground/75"
+                        >
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    {current ? (
+                      <span className="mt-4 rounded-pill bg-surface-soft px-3 py-1.5 text-center text-[12px] font-medium text-muted-foreground">
+                        Formule actuelle
+                      </span>
+                    ) : p.monthly == null ? (
+                      <a
+                        href="mailto:contact@mouvancia.fr?subject=Formule%20Cabinet%20%E2%80%94%20MOUVANCIA"
+                        className="mt-4 rounded-pill border border-border bg-surface px-3 py-1.5 text-center text-[12px] font-medium text-foreground/80 transition-colors hover:bg-surface-soft"
+                      >
+                        Demander un devis
+                      </a>
+                    ) : (
+                      <Link
+                        href={`/auth/abonnement?plan=${p.id}`}
+                        className="mt-4 rounded-pill bg-primary px-3 py-1.5 text-center text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                      >
+                        Choisir
+                      </Link>
                     )}
                   </div>
-                  <p className="mt-1 text-[20px] font-semibold tracking-tight">
-                    {p.price}
-                    <span className="text-[12px] font-normal text-muted-foreground">
-                      {p.period}
-                    </span>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {p.seats}
-                    {p.yearly != null && <> · {p.yearly} € / an</>}
-                  </p>
-                  <p className="mt-2 text-[12px] text-muted-foreground">
-                    {p.tagline}
-                  </p>
-                  <ul className="mt-3 flex flex-1 flex-col gap-1.5">
-                    {p.features.map((f) => (
-                      <li
-                        key={f}
-                        className="flex items-start gap-1.5 text-[12px] text-foreground/75"
-                      >
-                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warm" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  {current ? (
-                    <span className="mt-4 rounded-pill bg-surface-soft px-3 py-1.5 text-center text-[12px] font-medium text-muted-foreground">
-                      Formule actuelle
-                    </span>
-                  ) : p.monthly == null ? (
-                    <a
-                      href="mailto:contact@mouvancia.fr?subject=Formule%20Cabinet%20%E2%80%94%20MOUVANCIA"
-                      className="mt-4 rounded-pill border border-border bg-surface px-3 py-1.5 text-center text-[12px] font-medium text-foreground/80 transition-colors hover:bg-surface-soft"
-                    >
-                      Demander un devis
-                    </a>
-                  ) : (
-                    <Link
-                      href={`/auth/abonnement?plan=${p.id}`}
-                      className="mt-4 rounded-pill bg-primary px-3 py-1.5 text-center text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-                    >
-                      Choisir
-                    </Link>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* ── Équipe ───────────────────────────────────────────────────── */}
@@ -593,14 +646,18 @@ export function TeamView({
                       {team.name}
                     </p>
                     <p className="text-[12px] text-muted-foreground">
-                      {members.length} membre{members.length > 1 ? "s" : ""} ·
-                      épingles partagées visibles par toute l’équipe
+                      {team.seatsUsed ?? members.length} siège
+                      {(team.seatsUsed ?? members.length) > 1 ? "s" : ""} occupé
+                      {(team.seatsUsed ?? members.length) > 1 ? "s" : ""}
+                      {team.seatLimit != null &&
+                        ` sur ${team.seatLimit === 2147483647 ? "un nombre illimité" : team.seatLimit}`}{" "}
+                      · titulaire de l’abonnement inclus
                     </p>
                   </div>
                   <Button
                     type="button"
                     onClick={leaveTeam}
-                    disabled={busy || isOwner}
+                    disabled={busy || isOwner || !!billingDepartureBlocked}
                     className="gap-1.5 rounded-pill text-[12px]"
                     variant="outline"
                     size="sm"
@@ -609,6 +666,22 @@ export function TeamView({
                   </Button>
                 </div>
 
+                {team.seatLimit != null &&
+                  (team.seatsUsed ?? members.length) >= team.seatLimit && (
+                    <p className="text-sm text-muted-foreground">
+                      Aucun siège disponible. Une nouvelle personne pourra
+                      rejoindre l’équipe lorsqu’un siège sera libéré ou la
+                      formule adaptée. Les données existantes sont conservées.
+                    </p>
+                  )}
+                {billingDepartureBlocked && (
+                  <p className="text-sm text-muted-foreground">
+                    Ce compte porte la facturation de l’équipe. Pour partir, il
+                    faut transférer la propriété et attendre la fin de
+                    l’abonnement, ou contacter le support pour organiser la
+                    reprise de facturation.
+                  </p>
+                )}
                 {isOwner && (
                   <div className="flex flex-col gap-2">
                     <label htmlFor="next-owner" className="text-sm font-medium">
@@ -619,7 +692,9 @@ export function TeamView({
                       className="text-sm text-muted-foreground"
                     >
                       Pour quitter l’équipe, confiez-la d’abord à un autre
-                      membre. Cette personne gérera les rôles à votre place.
+                      membre. Cette personne gérera les rôles à votre place. Le
+                      titulaire de l’abonnement et sa facturation restent
+                      inchangés.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <select

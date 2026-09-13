@@ -6,11 +6,23 @@ import { usePathname } from "next/navigation";
 import { ArrowRight, Hourglass, Undo2, X } from "lucide-react";
 import { Button } from "@appica/ui-react/button";
 import { cn } from "@/lib/utils";
-import { getIdentity, onIdentityChange, type IdentitySubscription } from "@/lib/identity";
+import {
+  getIdentity,
+  onIdentityChange,
+  type IdentitySubscription,
+} from "@/lib/identity";
 import { billingPhase, daysLeft, formatDateFr } from "@/lib/billing";
 
 // Pages qui portent déjà leur propre message d'état : pas de bandeau.
-const HIDDEN_ON = new Set(["/", "/auth/login", "/auth/signup", "/auth/abonnement", "/auth/forgot", "/auth/reset", "/bienvenue"]);
+const HIDDEN_ON = new Set([
+  "/",
+  "/auth/login",
+  "/auth/signup",
+  "/auth/abonnement",
+  "/auth/forgot",
+  "/auth/reset",
+  "/bienvenue",
+]);
 const DISMISS_KEY = "mvc:subbanner:dismissed";
 
 /**
@@ -46,7 +58,13 @@ export function SubscriptionBanner() {
     };
   }, []);
 
-  if (!sub || HIDDEN_ON.has(pathname) || pathname.startsWith("/admin")) return null;
+  if (
+    !sub ||
+    sub.coveredByTeam ||
+    HIDDEN_ON.has(pathname) ||
+    pathname.startsWith("/admin")
+  )
+    return null;
 
   const phase = billingPhase(sub.status, sub.trialEndsAt, sub.cancelAt);
   const days = daysLeft(sub.trialEndsAt);
@@ -72,15 +90,26 @@ export function SubscriptionBanner() {
         <span className="min-w-0 truncate">
           Essai gratuit —{" "}
           <strong className="font-semibold">
-            {days == null ? "en cours" : days > 0 ? `${days} jour${days > 1 ? "s" : ""} restant${days > 1 ? "s" : ""}` : "dernier jour"}
+            {days == null
+              ? "en cours"
+              : days > 0
+                ? `${days} jour${days > 1 ? "s" : ""} restant${days > 1 ? "s" : ""}`
+                : "dernier jour"}
           </strong>
-          {sub.trialEndsAt && <span className="hidden sm:inline"> · se termine le {formatDateFr(sub.trialEndsAt)}</span>}
+          {sub.trialEndsAt && (
+            <span className="hidden sm:inline">
+              {" "}
+              · se termine le {formatDateFr(sub.trialEndsAt)}
+            </span>
+          )}
         </span>
         <Link
           href="/auth/abonnement"
           className={cn(
             "ml-auto inline-flex shrink-0 items-center gap-1 rounded-pill px-3 py-1 text-[11.5px] font-semibold transition-opacity hover:opacity-90",
-            urgent ? "bg-destructive text-white" : "bg-primary text-primary-foreground",
+            urgent
+              ? "bg-destructive text-white"
+              : "bg-primary text-primary-foreground",
           )}
         >
           Choisir ma formule <ArrowRight className="h-3 w-3" />
@@ -96,7 +125,9 @@ export function SubscriptionBanner() {
         <Undo2 className="h-3.5 w-3.5 shrink-0" />
         <span className="min-w-0 truncate">
           Abonnement résilié — accès jusqu&apos;au{" "}
-          <strong className="font-semibold">{sub.cancelAt ? formatDateFr(sub.cancelAt) : "terme"}</strong>
+          <strong className="font-semibold">
+            {sub.cancelAt ? formatDateFr(sub.cancelAt) : "terme"}
+          </strong>
         </span>
         <Link
           href="/auth/abonnement"
@@ -112,7 +143,13 @@ export function SubscriptionBanner() {
   return null;
 }
 
-function Shell({ tone, children }: { tone: "info" | "urgent"; children: React.ReactNode }) {
+function Shell({
+  tone,
+  children,
+}: {
+  tone: "info" | "urgent";
+  children: React.ReactNode;
+}) {
   return (
     <div
       role="status"

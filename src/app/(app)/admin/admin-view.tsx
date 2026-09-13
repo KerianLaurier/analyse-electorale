@@ -247,7 +247,8 @@ export function AdminView({
               <ShieldCheck className="h-6 w-6 text-warm" /> Back-office
             </h1>
             <p className="mt-1.5 text-[13px] text-muted-foreground">
-              Gestion des comptes, abonnements et accès super-admin.
+              Gestion des abonnements personnels et accès super-admin. Les
+              sièges couverts par une équipe dépendent de son abonnement.
             </p>
           </div>
           <Button

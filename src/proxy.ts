@@ -62,10 +62,17 @@ const APP_PREFIXES = [
 ];
 // Un compte expiré doit toujours pouvoir payer et consulter ses factures.
 // Ces routes restent authentifiées ; leurs handlers vérifient aussi le compte.
-const BILLING_PATHS = new Set(["/auth/abonnement", "/api/stripe/checkout", "/api/stripe/portal"]);
+const BILLING_PATHS = new Set([
+  "/auth/team",
+  "/auth/abonnement",
+  "/api/stripe/checkout",
+  "/api/stripe/portal",
+]);
 
 function isAppPath(pathname: string): boolean {
-  return APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  return APP_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
 }
 
 /**
@@ -109,7 +116,10 @@ function routeBySubdomain(request: NextRequest): NextResponse | null {
   // Domaine racine (vitrine) : on déporte les routes applicatives vers l'app,
   // on sert les routes vitrine sans gating ni session.
   if (isAppPath(pathname)) {
-    return NextResponse.redirect(`${appUrl.replace(/\/$/, "")}${pathname}${search}`, 308);
+    return NextResponse.redirect(
+      `${appUrl.replace(/\/$/, "")}${pathname}${search}`,
+      308,
+    );
   }
   return NextResponse.next();
 }
@@ -156,7 +166,8 @@ async function readSubscriptionClaims(supabase: ProxyClient): Promise<{
     if (meta && typeof meta.subscription_status === "string") {
       return {
         subscriptionStatus: meta.subscription_status,
-        trialEndsAt: typeof meta.trial_ends_at === "string" ? meta.trial_ends_at : null,
+        trialEndsAt:
+          typeof meta.trial_ends_at === "string" ? meta.trial_ends_at : null,
         cancelAt: typeof meta.cancel_at === "string" ? meta.cancel_at : null,
         isSuperAdmin: meta.is_super_admin === true,
       };
@@ -185,7 +196,10 @@ export async function proxy(request: NextRequest) {
   if (routed) return routed;
 
   // Ces endpoints assurent eux-mêmes leur sécurité, sans session utilisateur.
-  if (request.nextUrl.pathname === "/api/waitlist" || request.nextUrl.pathname === "/api/stripe/webhook") {
+  if (
+    request.nextUrl.pathname === "/api/waitlist" ||
+    request.nextUrl.pathname === "/api/stripe/webhook"
+  ) {
     return NextResponse.next();
   }
 
@@ -204,7 +218,12 @@ export async function proxy(request: NextRequest) {
   // Non connecté → page de connexion (en mémorisant la destination).
   if (!user) {
     if (pathname.startsWith("/api/")) {
-      return withSessionCookies(NextResponse.json({ error: "Authentification requise." }, { status: 401 }));
+      return withSessionCookies(
+        NextResponse.json(
+          { error: "Authentification requise." },
+          { status: 401 },
+        ),
+      );
     }
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
@@ -222,7 +241,12 @@ export async function proxy(request: NextRequest) {
   const claims = await readSubscriptionClaims(supabase);
   if (claims) {
     isSuperAdmin = claims.isSuperAdmin;
-    hasAccess = computeAccess(claims.subscriptionStatus, claims.trialEndsAt, claims.cancelAt, isSuperAdmin);
+    hasAccess = computeAccess(
+      claims.subscriptionStatus,
+      claims.trialEndsAt,
+      claims.cancelAt,
+      isSuperAdmin,
+    );
   } else {
     // Repli (hook non activé / token antérieur) : cache mémoire puis `profiles`.
     const cached = gateCache.get(user.id);
@@ -244,13 +268,26 @@ export async function proxy(request: NextRequest) {
       );
       if (hasAccess) {
         if (gateCache.size > 1000) gateCache.clear(); // borne mémoire, reconstruction lazy
-        const end = profile?.subscription_status === "trial" ? profile?.trial_ends_at : profile?.cancel_at;
-        const expires = !isSuperAdmin && end
-          ? Math.min(Date.now() + GATE_TTL_MS, new Date(end).getTime())
-          : Date.now() + GATE_TTL_MS;
+        const end =
+          profile?.subscription_status === "trial"
+            ? profile?.trial_ends_at
+            : profile?.cancel_at;
+        const expires =
+          !isSuperAdmin && end
+            ? Math.min(Date.now() + GATE_TTL_MS, new Date(end).getTime())
+            : Date.now() + GATE_TTL_MS;
         gateCache.set(user.id, { isSuperAdmin, expires });
       }
     }
+  }
+
+  // Un membre peut être couvert par son équipe malgré son statut personnel
+  // expiré. Le serveur reste la source de vérité ; aucun droit hérité n'est caché.
+  if (!hasAccess) {
+    const { data: teamAccess, error } = await supabase.rpc(
+      "has_workspace_access",
+    );
+    hasAccess = !error && teamAccess === true;
   }
 
   // Back-office : réservé aux super-admins.
@@ -266,7 +303,9 @@ export async function proxy(request: NextRequest) {
 
   if (!hasAccess) {
     if (pathname.startsWith("/api/")) {
-      return withSessionCookies(NextResponse.json({ error: "Abonnement requis." }, { status: 403 }));
+      return withSessionCookies(
+        NextResponse.json({ error: "Abonnement requis." }, { status: 403 }),
+      );
     }
     const url = request.nextUrl.clone();
     url.pathname = "/auth/abonnement";

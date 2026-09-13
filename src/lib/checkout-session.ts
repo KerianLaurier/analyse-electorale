@@ -23,6 +23,10 @@ export async function getOrCreateCheckout(
       p_parameters: parameters,
     });
     if (error) {
+      if (error.code === "P0004")
+        throw new CheckoutPendingError(
+          "Votre accès est déjà couvert par votre équipe. Aucun paiement personnel n’est nécessaire.",
+        );
       if (error.code === "23505")
         throw new CheckoutPendingError(
           "Votre abonnement est déjà actif — ouvrez le portail de facturation.",

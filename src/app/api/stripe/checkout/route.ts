@@ -1,3 +1,4 @@
+import { parseWorkspaceEntitlement } from "@/lib/workspace-entitlement";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -95,6 +96,19 @@ export async function POST(request: Request) {
           error:
             "Abonnement déjà actif — gérez votre formule depuis le portail de facturation.",
           portal: true,
+        },
+        { status: 409 },
+      );
+    }
+
+    const { data: entitlementData, error: entitlementError } =
+      await supabase.rpc("workspace_entitlement");
+    if (entitlementError) throw entitlementError;
+    if (parseWorkspaceEntitlement(entitlementData).covered_by_team) {
+      return NextResponse.json(
+        {
+          error:
+            "Votre accès est couvert par votre équipe. Aucun paiement personnel n’est nécessaire.",
         },
         { status: 409 },
       );

@@ -85,3 +85,9 @@ it("renouvelle uniquement après confirmation Stripe de l’expiration", async (
   });
   expect(create).toHaveBeenCalledTimes(2);
 });
+
+it("bloque la facturation si le compte rejoint une équipe après le contrôle HTTP", async () => {
+  rpc.mockResolvedValue({ error: { code: "P0004" } });
+  await expect(run()).rejects.toBeInstanceOf(CheckoutPendingError);
+  expect(create).not.toHaveBeenCalled();
+});

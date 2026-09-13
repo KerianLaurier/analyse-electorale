@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({
   session: vi.fn(),
   profile: vi.fn(),
+  rpc: vi.fn(),
   callback: null as
     | null
     | ((event: string, session: { user: { id: string } } | null) => void),
@@ -15,6 +16,7 @@ vi.mock("@/lib/supabase/client", () => ({
         mock.callback = fn;
       },
     },
+    rpc: mock.rpc,
     from: () => ({ select: () => ({ eq: () => ({ single: mock.profile }) }) }),
   }),
 }));
@@ -35,6 +37,28 @@ const profile = (team: string) => ({
 });
 
 beforeEach(() => {
+  mock.rpc
+    .mockReset()
+    .mockResolvedValue({
+      data: {
+        has_access: true,
+        team_access: true,
+        covered_by_team: false,
+        billing_owner_id: null,
+        team_name: null,
+        seat_limit: 0,
+        seats_used: 0,
+        subscription: {
+          status: "active",
+          tier: "equipe",
+          trialEndsAt: null,
+          cancelAt: null,
+          billingCycle: "monthly",
+          startedAt: null,
+        },
+      },
+      error: null,
+    });
   vi.resetModules();
   vi.useFakeTimers();
   mock.session.mockReset().mockResolvedValue(session("A"));
@@ -102,4 +126,23 @@ describe("cycle de vie de l'identité", () => {
     await vi.runAllTimersAsync();
     expect(listener).toHaveBeenCalled();
   });
+});
+
+it("utilise la couverture de l’équipe et refuse un contrat de droits absent", async () => {
+  const identity = await import("./identity");
+  const response = await mock.rpc();
+  response.data.covered_by_team = true;
+  mock.rpc.mockResolvedValue(response);
+  expect((await identity.getIdentity()).subscription?.coveredByTeam).toBe(true);
+  mock.rpc.mockResolvedValue({ data: null, error: null });
+  await expect(identity.refreshIdentity()).rejects.toThrow(
+    "Droits indisponibles",
+  );
+});
+it("conserve un périmètre personnel lorsque le compte ne dispose plus d’un siège partagé", async () => {
+  const response = await mock.rpc();
+  response.data.team_access = false;
+  mock.rpc.mockResolvedValue(response);
+  const { getIdentity } = await import("./identity");
+  expect((await getIdentity()).teamId).toBeNull();
 });

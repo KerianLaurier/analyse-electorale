@@ -6,6 +6,7 @@ const mock = vi.hoisted(() => ({
     email: string;
   } | null,
   profile: vi.fn(),
+  rpc: vi.fn(),
   attach: vi.fn(),
   customer: vi.fn(),
   checkout: vi.fn(),
@@ -14,6 +15,7 @@ const mock = vi.hoisted(() => ({
 vi.mock("@/lib/env", () => ({ env: { APP_URL: undefined } }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
+    rpc: mock.rpc,
     auth: { getUser: async () => ({ data: { user: mock.user } }) },
   }),
 }));
@@ -65,6 +67,26 @@ function request(body: unknown = { tier: "equipe", cycle: "monthly" }) {
 beforeEach(() => {
   vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_local_fixture");
   vi.clearAllMocks();
+  mock.rpc.mockResolvedValue({
+    data: {
+      has_access: true,
+      team_access: true,
+      covered_by_team: false,
+      billing_owner_id: null,
+      team_name: null,
+      seat_limit: 0,
+      seats_used: 0,
+      subscription: {
+        status: "active",
+        tier: "equipe",
+        trialEndsAt: null,
+        cancelAt: null,
+        billingCycle: "monthly",
+        startedAt: null,
+      },
+    },
+    error: null,
+  });
   mock.user = { id: "user_1", email: "test@example.test" };
   mock.profile.mockResolvedValue({ data: profile, error: null });
   mock.attach.mockResolvedValue({ data: { id: "user_1" }, error: null });
@@ -165,4 +187,18 @@ describe("création d'un paiement", () => {
     expect((await portal(request())).status).toBe(502);
     expect(mock.portal).not.toHaveBeenCalled();
   });
+});
+
+it("ne crée aucun client ni paiement pour un membre couvert", async () => {
+  const response = await mock.rpc();
+  response.data.covered_by_team = true;
+  mock.rpc.mockResolvedValue(response);
+  expect((await checkout(request())).status).toBe(409);
+  expect(mock.customer).not.toHaveBeenCalled();
+  expect(mock.checkout).not.toHaveBeenCalled();
+});
+it("ne facture pas si les droits de l’équipe ne sont pas vérifiables", async () => {
+  mock.rpc.mockResolvedValue({ data: null, error: new Error("timeout") });
+  expect((await checkout(request())).status).toBe(502);
+  expect(mock.customer).not.toHaveBeenCalled();
 });

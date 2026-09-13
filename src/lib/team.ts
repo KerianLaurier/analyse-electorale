@@ -1,8 +1,7 @@
 // Espace de travail : rôles & grille tarifaire (référence).
 // Le compte, l'abonnement et l'essai réels sont chargés depuis Supabase
 // (table `profiles`) côté page serveur ; voir src/app/auth/team/page.tsx.
-// Le partage d'équipe (membres, invitations) et la facturation Stripe restent
-// à brancher dans un sprint dédié.
+// Les sièges partagés sont vérifiés par workspace_entitlement et les RPC SQL.
 
 import type { Cycle, Tier } from "@/lib/billing";
 
