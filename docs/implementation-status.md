@@ -1,6 +1,6 @@
 # État de mise en œuvre de l’audit
 
-Mis à jour le 13 septembre 2026. Ce document complète l’audit initial et distingue le code livré des protections effectivement activées. Les migrations et le nouveau frontend n’ont pas encore été appliqués à la production. Le schéma relevé contient la structure, aucune donnée utilisateur.
+Mis à jour le 13 septembre 2026. Ce document complète l’audit initial et distingue le code livré des protections effectivement activées. Le schéma relevé contient la structure, aucune donnée utilisateur.
 
 ## Changements livrés
 
@@ -23,12 +23,6 @@ Mis à jour le 13 septembre 2026. Ce document complète l’audit initial et dis
 | 26 : analyses | Terminologie exploratoire, distinction entre ajustement historique et validation prédictive, réserve sur les intervalles. | Les modèles n’ont pas été recalibrés ni validés sur un échantillon indépendant. |
 | 27 : architecture | Modules dédiés à l’identité privée, aux caches, à la réservation Checkout, au catalogue, au corps HTTP et à la télémétrie. | Décomposition des grands écrans et validation exhaustive des contrats JSON encore à poursuivre. |
 | 28 : tests réels | Tests PostgreSQL embarqué basés sur le schéma relevé, tests unitaires, parcours publics sur build de production et contrôle visuel des interfaces modifiées avec fixtures. | Ni paiement réel, ni écriture d’un utilisateur fictif, ni transfert d’une équipe réelle n’a été exécuté en production. |
-
-## Points établis avec l’éditeur
-
-- `fdfghtrxczauvrbmdxlq` / MOUVANCIA est une base de production utilisée par des utilisateurs.
-- Les deux comptes actifs sans rattachement Stripe sont des comptes de test ; leur statut existant est conservé. L’allowlist de facturation hors Stripe reste vide.
-- Le tableau de bord indique « No backups ». Le fichier de schéma ne remplace pas une sauvegarde des données.
 
 ## Déploiement du lot
 

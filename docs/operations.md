@@ -2,9 +2,9 @@
 
 ## Déploiement
 
-Le schéma de référence `supabase/schema/public-before-hardening.sql` a été reconstruit depuis le catalogue de production le 12 septembre 2026. Il ne contient aucune ligne utilisateur. Les tests PGlite reconstruisent les 19 tables initiales, leurs contraintes, index, droits de colonnes, politiques et fonctions. Ils utilisent un schéma Auth minimal : ils ne reproduisent pas l’intégralité du service Supabase.
+Le schéma de référence `supabase/schema/public-before-hardening.sql` décrit la structure de référence utilisée pour les tests. Il ne contient aucune ligne utilisateur. Les tests PGlite reconstruisent les 19 tables initiales, leurs contraintes, index, droits de colonnes, politiques et fonctions. Ils utilisent un schéma Auth minimal : ils ne reproduisent pas l’intégralité du service Supabase.
 
-Appliquer les migrations `202609*.sql` dans l’ordre et en transaction avant de basculer le frontend correspondant. Les colonnes des comptes existants ne sont pas réécrites. L’allowlist de facturation hors Stripe reste vide : les deux comptes actifs sans Stripe ont été identifiés comme comptes de test par l’éditeur. Une inscription à cette allowlist doit correspondre à une décision commerciale explicite.
+Appliquer les migrations `202609*.sql` dans l’ordre et en transaction avant de basculer le frontend correspondant. Les colonnes des comptes existants ne sont pas réécrites. Toute inscription à l’allowlist de facturation hors Stripe doit correspondre à une décision commerciale explicite.
 
 La nouvelle page admin nécessite `admin_accounts_page`. La création de compte nécessite aussi `SUPABASE_SERVICE_ROLE_KEY` côté serveur et l’API Auth officielle. L’ancienne RPC de création devient inaccessible aux clients. Prévoir une courte fenêtre coordonnée pour ces changements ; ne pas utiliser l’ancienne interface admin après révocation de la RPC.
 
@@ -28,7 +28,7 @@ La liste d’attente accepte des corps de 4 Ko maximum et 60 requêtes valides p
 
 ## Sauvegardes et décisions à fournir
 
-Le tableau de bord de production n’affichait aucune sauvegarde disponible lors du contrôle. Le relevé SQL est une sauvegarde de structure, **pas une sauvegarde des données**. Avant une opération destructive ou une refonte de données, configurer une sauvegarde appropriée et tester sa restauration sur une instance isolée. Les objectifs de perte maximale de données et de délai de reprise restent à fixer par l’éditeur.
+Le relevé SQL contient une structure, **pas une sauvegarde des données**. Avant une opération destructive ou une refonte de données, configurer une sauvegarde appropriée et tester sa restauration sur une instance isolée. Les objectifs de perte maximale de données et de délai de reprise restent à fixer par l’éditeur.
 
 Restent des décisions organisationnelles : finalités et bases applicables aux données personnelles, durées par catégorie, personne chargée des demandes d’accès/effacement, sous-traitants et mentions légales. Ne pas inventer ces informations ni appliquer une purge automatique arbitraire. Les protections techniques de ce lot ne constituent pas une certification juridique.
 
